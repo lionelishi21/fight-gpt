@@ -25,7 +25,7 @@ variable "app_name" {
 variable "domain" {
   description = "API domain name"
   type        = string
-  default     = "api.fightinggame.online"
+  default     = "api.fightingames.online"
 }
 
 variable "mongodb_uri" {
