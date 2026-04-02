@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+.next/
+**/.next/
+
+# Environment secrets — NEVER commit
+.env
+**/.env
+.env.local
+.env.production
+.env.*.local
+
+# Terraform secrets
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfstate
+infra/terraform/terraform.tfstate.backup
+infra/terraform/terraform.tfvars
+
+# SSH keys
+*.pem
+infra/*.pem
+
+# Logs
+logs/
+*.log
+**/logs/
+
+# OS
+.DS_Store
+**/.DS_Store
+
+# Uploads
+fight-gpt-node-backend/uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+fight-gpt-ai/.venv/
+fight-gpt-ai/venv/
+
+# Deprecated frontend — never deploy
+fight-gpt-web/

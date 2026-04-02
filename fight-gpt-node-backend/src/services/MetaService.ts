@@ -1,0 +1,355 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { BaseService } from './BaseService';
+import { IMetaRepository } from '../repositories/MetaRepository';
+import { IVectorRepository } from '../repositories/VectorRepository';
+import { IMetaReport, ICharacterMetaStat, IMatchupInsight } from '../models/MetaReport';
+import { ApiResponse } from '../types';
+import { UuidHelper } from '../helpers/uuidHelper';
+
+export interface IMetaService {
+    generateMetaReport(gameId: string, period?: 'weekly' | 'patch' | 'monthly'): Promise<ApiResponse<IMetaReport>>;
+    getLatestMetaReport(gameId: string, period?: string): Promise<ApiResponse<IMetaReport>>;
+    getMetaReportHistory(gameId: string, limit?: number): Promise<ApiResponse<IMetaReport[]>>;
+    queryMetaInsight(gameId: string, query: string): Promise<ApiResponse<{ answer: string; scenarios: unknown[] }>>;
+}
+
+export class MetaService extends BaseService implements IMetaService {
+    private genAI: GoogleGenerativeAI;
+
+    constructor(
+        private readonly metaRepository: IMetaRepository,
+        private readonly vectorRepository: IVectorRepository,
+        private readonly geminiApiKey: string,
+    ) {
+        super();
+        this.genAI = new GoogleGenerativeAI(geminiApiKey);
+    }
+
+    /**
+     * Generate a meta report for a game by synthesizing all stored scenarios
+     * in the vector DB via Gemini
+     */
+    async generateMetaReport(
+        gameId: string,
+        period: 'weekly' | 'patch' | 'monthly' = 'weekly'
+    ): Promise<ApiResponse<IMetaReport>> {
+        const reportId = UuidHelper.generate();
+
+        // Create a placeholder report in 'generating' state
+        const placeholder = await this.metaRepository.createReport({
+            report_id: reportId,
+            game_id: gameId,
+            period,
+            generated_at: new Date(),
+            status: 'generating',
+            tier_list: [],
+            trending_characters: { rising: [], falling: [] },
+            dominant_strategies: [],
+            matchup_insights: [],
+            meta_summary: '',
+            source_scenario_count: 0,
+            source_video_count: 0,
+        });
+
+        try {
+            // Pull all scenarios for this game from MongoDB (not vector search — we want all of them)
+            const scenarios = await this.getAllScenariosForGame(gameId);
+
+            if (scenarios.length === 0) {
+                await this.metaRepository.updateReport(reportId, {
+                    status: 'error',
+                    error_message: 'No scenarios found for this game. Ingest some videos first.',
+                } as any);
+                return {
+                    success: false,
+                    error: 'No scenarios found. Run video ingestion first.',
+                };
+            }
+
+            // Build raw stats from scenario data
+            const { tierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+
+            // Generate narrative meta summary via Gemini
+            const metaSummary = await this.generateMetaSummaryWithGemini(
+                gameId,
+                scenarios,
+                tierList,
+                dominantStrategies
+            );
+
+            // Detect trends (compare with previous report if available)
+            const previousReport = await this.metaRepository.getLatestReport(gameId, period);
+            const tierListWithTrends = this.applyTrends(tierList, previousReport?.tier_list || []);
+
+            const reportData: Partial<IMetaReport> = {
+                status: 'ready',
+                tier_list: tierListWithTrends,
+                trending_characters: {
+                    rising: tierListWithTrends.filter(c => c.trend === 'rising').map(c => c.character_id),
+                    falling: tierListWithTrends.filter(c => c.trend === 'falling').map(c => c.character_id),
+                },
+                dominant_strategies: dominantStrategies,
+                matchup_insights: matchupInsights,
+                meta_summary: metaSummary,
+                source_scenario_count: scenarios.length,
+                source_video_count: new Set(scenarios.flatMap((s: any) => s.match_references || [])).size,
+                generated_at: new Date(),
+            };
+
+            const updated = await this.metaRepository.updateReport(reportId, reportData as any);
+
+            return {
+                success: true,
+                data: updated as unknown as IMetaReport,
+                message: `Meta report generated from ${scenarios.length} scenarios`,
+            };
+        } catch (error) {
+            await this.metaRepository.updateReport(reportId, {
+                status: 'error',
+                error_message: error instanceof Error ? error.message : 'Unknown error',
+            } as any);
+            throw this.handleError(error, 'generateMetaReport');
+        }
+    }
+
+    /**
+     * Get the latest ready meta report for a game
+     */
+    async getLatestMetaReport(gameId: string, period?: string): Promise<ApiResponse<IMetaReport>> {
+        try {
+            const report = await this.metaRepository.getLatestReport(gameId, period);
+            if (!report) {
+                return {
+                    success: false,
+                    error: `No meta report found for game: ${gameId}. Trigger generation first.`,
+                };
+            }
+            return { success: true, data: report as unknown as IMetaReport };
+        } catch (error) {
+            throw this.handleError(error, 'getLatestMetaReport');
+        }
+    }
+
+    /**
+     * Get meta report history for a game
+     */
+    async getMetaReportHistory(gameId: string, limit: number = 10): Promise<ApiResponse<IMetaReport[]>> {
+        try {
+            const reports = await this.metaRepository.getReportHistory(gameId, limit);
+            return { success: true, data: reports as unknown as IMetaReport[] };
+        } catch (error) {
+            throw this.handleError(error, 'getMetaReportHistory');
+        }
+    }
+
+    /**
+     * Semantic meta query — ask a natural language question about the current meta
+     * Uses vector similarity search to find relevant scenarios, then Gemini to answer
+     */
+    async queryMetaInsight(
+        gameId: string,
+        query: string
+    ): Promise<ApiResponse<{ answer: string; scenarios: unknown[] }>> {
+        try {
+            // Embed the query
+            const embeddingModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+            const embeddingResult = await embeddingModel.embedContent(query);
+            const queryVector = embeddingResult.embedding.values;
+
+            // Find similar scenarios via Atlas Vector Search
+            const similarScenarios = await this.vectorRepository.findSimilarScenarios(queryVector, gameId, 10);
+
+            if (similarScenarios.length === 0) {
+                return {
+                    success: true,
+                    data: {
+                        answer: 'Not enough data yet. More videos need to be analyzed for this game before meta insights are available.',
+                        scenarios: [],
+                    },
+                };
+            }
+
+            // Build context from scenarios for Gemini
+            const scenarioContext = similarScenarios.map((s: any, i: number) =>
+                `Scenario ${i + 1}: ${s.description}\nAdvice: ${s.context}\nCharacters: ${(s.characters_involved || []).join(' vs ')}`
+            ).join('\n\n');
+
+            const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const prompt = `You are a fighting game meta analyst. Based on the following match scenarios from real gameplay data, answer this question concisely and specifically:
+
+Question: ${query}
+
+Relevant scenarios from the data:
+${scenarioContext}
+
+Provide a direct, actionable answer focused on the current meta. Mention specific characters, moves, or strategies by name where relevant.`;
+
+            const result = await model.generateContent(prompt);
+            const answer = result.response.text();
+
+            return {
+                success: true,
+                data: { answer, scenarios: similarScenarios },
+            };
+        } catch (error) {
+            throw this.handleError(error, 'queryMetaInsight');
+        }
+    }
+
+    // --- Private helpers ---
+
+    /**
+     * Fetch all scenarios for a game directly from MongoDB (not vector search)
+     */
+    private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
+        // VectorRepository uses BaseRepository which has findMany
+        return (this.vectorRepository as any).model
+            ? (this.vectorRepository as any).model.find({ game_id: gameId }, { embedding: 0 }).lean().exec()
+            : [];
+    }
+
+    /**
+     * Build raw character stats and matchup data from scenarios
+     */
+    private buildRawStats(scenarios: any[]): {
+        tierList: ICharacterMetaStat[];
+        matchupInsights: IMatchupInsight[];
+        dominantStrategies: string[];
+    } {
+        const characterMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
+        const matchupMap = new Map<string, { wins_a: number; total: number; strategies: string[] }>();
+        const allStrategies: string[] = [];
+
+        for (const scenario of scenarios) {
+            const chars: string[] = scenario.characters_involved || [];
+            const tags: string[] = scenario.tags || [];
+
+            // Count character usage
+            for (const char of chars) {
+                if (!char) continue;
+                if (!characterMap.has(char)) {
+                    characterMap.set(char, { usage: 0, wins: 0, strategies: [] });
+                }
+                const entry = characterMap.get(char)!;
+                entry.usage++;
+                if (tags.includes('pro_move')) {
+                    entry.wins++;
+                    entry.strategies.push(scenario.description);
+                }
+            }
+
+            // Track matchups (pair of characters)
+            if (chars.length === 2 && chars[0] && chars[1]) {
+                const key = [chars[0], chars[1]].sort().join('|');
+                if (!matchupMap.has(key)) {
+                    matchupMap.set(key, { wins_a: 0, total: 0, strategies: [] });
+                }
+                const mu = matchupMap.get(key)!;
+                mu.total++;
+                // If p1 (chars[0] sorted) has a pro_move it counts as a win for them
+                if (tags.includes('pro_move')) {
+                    mu.wins_a++;
+                    mu.strategies.push(scenario.description);
+                }
+            }
+
+            // Collect dominant strategies from context
+            if (scenario.context) {
+                allStrategies.push(scenario.context);
+            }
+        }
+
+        // Build tier list
+        const tierList: ICharacterMetaStat[] = Array.from(characterMap.entries())
+            .map(([char_id, stats]) => ({
+                character_id: char_id,
+                character_name: char_id,
+                usage_count: stats.usage,
+                win_count: stats.wins,
+                win_rate: stats.usage > 0 ? Math.round((stats.wins / stats.usage) * 100) : 0,
+                trend: 'stable' as const,
+                top_strategies: [...new Set(stats.strategies)].slice(0, 3),
+            }))
+            .sort((a, b) => b.win_rate - a.win_rate);
+
+        // Build matchup insights
+        const matchupInsights: IMatchupInsight[] = Array.from(matchupMap.entries())
+            .filter(([, mu]) => mu.total >= 2)
+            .map(([key, mu]) => {
+                const [char_a, char_b] = key.split('|');
+                return {
+                    character_a: char_a,
+                    character_b: char_b,
+                    win_rate_a: mu.total > 0 ? Math.round((mu.wins_a / mu.total) * 100) : 50,
+                    dominant_strategy: mu.strategies[0] || 'Insufficient data',
+                    sample_size: mu.total,
+                };
+            })
+            .sort((a, b) => b.sample_size - a.sample_size)
+            .slice(0, 20);
+
+        // Deduplicate and pick top dominant strategies
+        const strategyFrequency = new Map<string, number>();
+        for (const s of allStrategies) {
+            const key = s.slice(0, 80); // Use first 80 chars as key
+            strategyFrequency.set(key, (strategyFrequency.get(key) || 0) + 1);
+        }
+        const dominantStrategies = Array.from(strategyFrequency.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([s]) => s);
+
+        return { tierList, matchupInsights, dominantStrategies };
+    }
+
+    /**
+     * Compare current tier list to previous to detect rising/falling characters
+     */
+    private applyTrends(
+        current: ICharacterMetaStat[],
+        previous: ICharacterMetaStat[]
+    ): ICharacterMetaStat[] {
+        const prevMap = new Map(previous.map((c, i) => [c.character_id, i]));
+        return current.map((char, currentRank) => {
+            const prevRank = prevMap.get(char.character_id);
+            if (prevRank === undefined) return { ...char, trend: 'stable' as const };
+            if (currentRank < prevRank) return { ...char, trend: 'rising' as const };
+            if (currentRank > prevRank) return { ...char, trend: 'falling' as const };
+            return { ...char, trend: 'stable' as const };
+        });
+    }
+
+    /**
+     * Use Gemini to write a human-readable meta summary from the raw stats
+     */
+    private async generateMetaSummaryWithGemini(
+        gameId: string,
+        scenarios: unknown[],
+        tierList: ICharacterMetaStat[],
+        dominantStrategies: string[]
+    ): Promise<string> {
+        try {
+            const topChars = tierList.slice(0, 5).map(c =>
+                `${c.character_name} (win rate: ${c.win_rate}%, usage: ${c.usage_count})`
+            ).join(', ');
+
+            const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const prompt = `You are a professional fighting game meta analyst. Based on ${scenarios.length} analyzed matches for ${gameId}, write a concise 2-3 paragraph meta report covering:
+
+1. The current top tier characters and why they dominate
+2. Key dominant strategies and win conditions
+3. What players should know going into ranked play right now
+
+Data:
+- Top characters: ${topChars}
+- Dominant strategies observed: ${dominantStrategies.join('; ')}
+
+Write in a professional, direct tone like a tier list article. Be specific about characters and strategies.`;
+
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch {
+            return `Meta report generated from ${scenarios.length} analyzed scenarios. Top characters by win rate: ${tierList.slice(0, 3).map(c => c.character_name).join(', ')}.`;
+        }
+    }
+}

@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in real values
+# terraform.tfvars is gitignored — never commit it
+
+aws_region  = "us-east-1"
+aws_profile = "test-automation-deploy"
+
+instance_type = "t3.small"
+app_name      = "fightgpt"
+domain        = "api.fightinggame.online"
+
+# MongoDB Atlas — get from Atlas dashboard → Connect → Drivers
+mongodb_uri = "mongodb+srv://app_user:PASSWORD@cluster0.f7ssjug.mongodb.net/fight_gpt?retryWrites=true&w=majority"
+
+# Google AI Studio — https://aistudio.google.com/app/apikey
+gemini_api_key = "YOUR_GEMINI_API_KEY"
+
+# GitHub — owner/repo format
+github_repo   = "lionelishi21/fight-gpt"
+github_token  = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"

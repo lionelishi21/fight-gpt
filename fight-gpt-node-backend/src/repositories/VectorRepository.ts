@@ -1,0 +1,50 @@
+import { BaseRepository } from './BaseRepository';
+import { IScenarioDocument, Scenario } from '../models/Scenario';
+
+export interface IVectorRepository {
+    createScenario(data: Partial<IScenarioDocument>): Promise<IScenarioDocument>;
+    findSimilarScenarios(vector: number[], gameId: string, limit?: number): Promise<IScenarioDocument[]>;
+}
+
+export class VectorRepository extends BaseRepository<IScenarioDocument> implements IVectorRepository {
+    constructor() {
+        super(Scenario);
+    }
+
+    public async createScenario(data: Partial<IScenarioDocument>): Promise<IScenarioDocument> {
+        const doc = await this.model.create(data);
+        return doc;
+    }
+
+    /**
+     * Performs an Atlas Vector Search to find similar pro-match scenarios
+     * based on the provided embedding vector representing the player's mistake/state.
+     * 
+     * Pre-requisite: An Atlas Vector Search index needs to be created on the `Scenario` collection.
+     */
+    public async findSimilarScenarios(vector: number[], gameId: string, limit: number = 5): Promise<IScenarioDocument[]> {
+        // Uses MongoDB Atlas `$vectorSearch` operator (Requires MongoDB v6.0.11+ / Atlas)
+        return this.model.aggregate([
+            {
+                $vectorSearch: {
+                    index: 'vector_index', // Needs to match the index name created in Atlas
+                    path: 'embedding',
+                    queryVector: vector,
+                    numCandidates: limit * 10, // Recommended 10x the limit
+                    limit: limit,
+                    filter: {
+                        game_id: gameId // Pre-filtering by game
+                    }
+                }
+            },
+            {
+                $project: {
+                    embedding: 0, // Exclude the heavy vector array from results
+                    score: { $meta: 'vectorSearchScore' } // Include similarity score if needed
+                }
+            }
+        ]).exec() as unknown as Promise<IScenarioDocument[]>;
+    }
+}
+
+export default VectorRepository;

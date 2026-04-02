@@ -1,0 +1,12 @@
+---
+description: Rules for Node.js AI Backend
+globs: ["fight-gpt-node-backend/**/*.ts"]
+---
+
+# AI & Scraper Rules
+
+1.  **Unified Stack**: All AI interactions (Gemini API) and Web Scraping must happen in the Node.js backend.
+2.  **Scraping**: Use `playwright` for all scraping tasks. Logic resides in `src/services/ScraperService.ts`.
+3.  **AI Service**: Use `@google/generative-ai` SDK. Logic resides in `src/services/AiService.ts`.
+4.  **Versioning**: Use `VersionResolver` (`src/helpers/VersionResolver.ts`) to manage prompt versions.
+5.  **Direct Calls**: Do NOT delegate to external Python services for AI or Scraping.

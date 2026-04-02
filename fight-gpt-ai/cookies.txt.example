@@ -1,0 +1,7 @@
+# Example cookies.txt format (Netscape cookie format)
+# Replace with your actual exported cookies from browser
+# 
+# Format: domain, flag, path, secure, expiration, name, value
+# 
+# .youtube.com	TRUE	/	TRUE	1234567890	VISITOR_INFO1_LIVE	your_cookie_value_here
+# .youtube.com	TRUE	/	TRUE	1234567890	LOGIN_INFO	your_cookie_value_here
