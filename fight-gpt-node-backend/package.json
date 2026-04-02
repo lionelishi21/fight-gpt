@@ -4,7 +4,7 @@
   "description": "Fight GPT API Gateway - Express.js backend with TypeScript",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --skipLibCheck",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "node run-jest.js",
