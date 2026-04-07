@@ -30,6 +30,7 @@ import { TheoryController } from './controllers/TheoryController';
 import { NotificationController } from './controllers/NotificationController';
 import { RivalController } from './controllers/RivalController';
 import { UserController } from './controllers/UserController';
+import { AdminController } from './controllers/AdminController';
 
 // Import services
 import { AnalysisService } from './services/AnalysisService';
@@ -44,6 +45,7 @@ import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
 import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
+import { AdminService } from './services/AdminService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -123,6 +125,7 @@ export class App {
     const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
     const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
+    const adminService = AppConfig.MONGODB_URI ? new AdminService() : null as any;
     const chatService = new ChatService();
 
     // Initialize controllers (ChatController works without MongoDB)
@@ -141,6 +144,7 @@ export class App {
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
     const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
+    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService) : null;
 
     // Setup routes
     this.routes = new Routes(
@@ -155,7 +159,8 @@ export class App {
       theoryController,
       notificationController,
       rivalController,
-      userController
+      userController,
+      adminController
     );
     this.setupRoutes();
 

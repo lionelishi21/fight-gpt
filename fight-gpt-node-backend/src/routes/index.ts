@@ -15,6 +15,8 @@ import { TheoryRoutes } from './theoryRoutes';
 import { NotificationRoutes } from './notificationRoutes';
 import { RivalRoutes } from './rivalRoutes';
 import { UserRoutes } from './userRoutes';
+import { AdminRoutes } from './adminRoutes';
+import { AdminController } from '../controllers/AdminController';
 import matchRouter from './matchRoutes';
 import analyticsRouter from './analyticsRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
@@ -53,6 +55,7 @@ export class Routes {
   private notificationRoutes: NotificationRoutes | null;
   private rivalRoutes: RivalRoutes | null;
   private userRoutes: UserRoutes | null;
+  private adminRoutes: AdminRoutes | null;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -67,6 +70,7 @@ export class Routes {
     notificationController?: NotificationController | null,
     rivalController?: RivalController | null,
     userController?: UserController | null,
+    adminController?: AdminController | null,
   ) {
     this.router = Router();
     this.analysisRoutes = analysisController ? new AnalysisRoutes(analysisController) : null as any;
@@ -86,6 +90,7 @@ export class Routes {
     this.notificationRoutes = notificationController ? new NotificationRoutes(notificationController) : null;
     this.rivalRoutes = rivalController ? new RivalRoutes(rivalController) : null;
     this.userRoutes = userController ? new UserRoutes(userController) : null;
+    this.adminRoutes = adminController ? new AdminRoutes(adminController) : null;
     this.setupRoutes();
   }
 
@@ -163,6 +168,11 @@ export class Routes {
     // User/Slot management routes
     if (this.userRoutes) {
       this.router.use('/users', this.userRoutes.getRouter());
+    }
+
+    // Admin routes
+    if (this.adminRoutes) {
+      this.router.use('/admin', this.adminRoutes.getRouter());
     }
 
     // Match routes (team-based match analysis - Priority 7)

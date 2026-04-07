@@ -1,0 +1,101 @@
+import { IngestionJob } from '../models/IngestionJob';
+import { Analysis } from '../models/Analysis';
+import User from '../models/User';
+import { Scenario } from '../models/Scenario';
+import { ApiResponse } from '../types';
+import { BaseService } from './BaseService';
+
+export interface IAdminService {
+    getSystemStats(): Promise<ApiResponse<any>>;
+    getIngestionJobs(limit: number, status?: string): Promise<ApiResponse<any[]>>;
+    retryJob(jobId: string): Promise<ApiResponse<boolean>>;
+    triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
+}
+
+export class AdminService extends BaseService implements IAdminService {
+    async getSystemStats(): Promise<ApiResponse<any>> {
+        try {
+            const [
+                totalUsers,
+                totalAnalyses,
+                totalScenarios,
+                pendingJobs,
+                failedJobs
+            ] = await Promise.all([
+                User.countDocuments(),
+                Analysis.countDocuments(),
+                Scenario.countDocuments(),
+                IngestionJob.countDocuments({ status: 'pending' }),
+                IngestionJob.countDocuments({ status: 'failed' })
+            ]);
+
+            return {
+                success: true,
+                data: {
+                    users: totalUsers,
+                    analyses: totalAnalyses,
+                    scenarios: totalScenarios,
+                    queue: {
+                        pending: pendingJobs,
+                        failed: failedJobs
+                    }
+                }
+            };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Unknown systems error' };
+        }
+    }
+
+    async getIngestionJobs(limit: number = 20, status?: string): Promise<ApiResponse<any[]>> {
+        try {
+            const query = status ? { status } : {};
+            const jobs = await IngestionJob.find(query)
+                .sort({ created_at: -1 })
+                .limit(limit)
+                .exec();
+            
+            return { success: true, data: jobs };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch jobs' };
+        }
+    }
+
+    async retryJob(jobId: string): Promise<ApiResponse<boolean>> {
+        try {
+            const job = await IngestionJob.findOne({ job_id: jobId });
+            if (!job) return { success: false, error: 'Job not found' };
+
+            job.status = 'pending';
+            job.retry_count = (job.retry_count || 0) + 1;
+            job.error_message = undefined;
+            await job.save();
+
+            return { success: true, data: true };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to retry job' };
+        }
+    }
+
+    async triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>> {
+        try {
+            // Check if already exists
+            const existing = await IngestionJob.findOne({ youtube_url: youtubeUrl });
+            if (existing) return { success: false, error: 'Video already in system' };
+
+            const jobId = `manual_${Date.now()}`;
+            const newJob = new IngestionJob({
+                job_id: jobId,
+                game_id: gameId,
+                youtube_url: youtubeUrl,
+                search_query: 'MANUAL_TRIGGER',
+                source: 'manual',
+                status: 'pending'
+            });
+
+            await newJob.save();
+            return { success: true, data: newJob };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger job' };
+        }
+    }
+}

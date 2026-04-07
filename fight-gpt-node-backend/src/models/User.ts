@@ -21,6 +21,7 @@ export interface IUser extends Document {
     };
     onboardingCompleted: boolean;
     tier: 'FREE' | 'COMPETITOR' | 'PRO';
+    role: 'user' | 'admin';
     activeSlotIndex: number;
     slots: ISlot[];
     preferences: {
@@ -62,6 +63,11 @@ const UserSchema: Schema = new Schema(
             type: String,
             enum: ['FREE', 'COMPETITOR', 'PRO'],
             default: 'FREE',
+        },
+        role: {
+            type: String,
+            enum: ['user', 'admin'],
+            default: 'user',
         },
         activeSlotIndex: { type: Number, default: 0 },
         slots: [

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import User from '../models/User';
 
 interface JwtPayload {
     user: {
@@ -26,5 +27,30 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
         next();
     } catch (err) {
         res.status(401).json({ success: false, error: 'Token is not valid' });
+    }
+};
+
+/**
+ * Middleware to check if user is an admin
+ * Must be used AFTER authMiddleware
+ */
+export const adminMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        // @ts-ignore
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, error: 'Not authorized' });
+            return;
+        }
+
+        const user = await User.findById(userId);
+        if (!user || user.role !== 'admin') {
+            res.status(403).json({ success: false, error: 'Access denied: Admin only' });
+            return;
+        }
+
+        next();
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Server validation error' });
     }
 };
