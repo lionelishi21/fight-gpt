@@ -1,6 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+export interface ISlot {
+    gameId: string;
+    characterId?: string;
+    rank?: string;
+    notificationsEnabled: boolean;
+    proficiencyLevel?: 'newbie' | 'intermediate' | 'pro';
+}
+
 export interface IUser extends Document {
     name: string;
     email: string;
@@ -12,6 +20,9 @@ export interface IUser extends Document {
         city: string;
     };
     onboardingCompleted: boolean;
+    tier: 'FREE' | 'COMPETITOR' | 'PRO';
+    activeSlotIndex: number;
+    slots: ISlot[];
     preferences: {
         favoriteGames: string[];
         skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'pro';
@@ -47,6 +58,24 @@ const UserSchema: Schema = new Schema(
             city: { type: String }
         },
         onboardingCompleted: { type: Boolean, default: false },
+        tier: {
+            type: String,
+            enum: ['FREE', 'COMPETITOR', 'PRO'],
+            default: 'FREE',
+        },
+        activeSlotIndex: { type: Number, default: 0 },
+        slots: [
+            {
+                gameId: { type: String },
+                characterId: { type: String },
+                rank: { type: String },
+                notificationsEnabled: { type: Boolean, default: true },
+                proficiencyLevel: {
+                    type: String,
+                    enum: ['newbie', 'intermediate', 'pro'],
+                },
+            },
+        ],
         preferences: {
             favoriteGames: [{ type: String }],
             skillLevel: {

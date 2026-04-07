@@ -70,11 +70,27 @@ export class OnboardingController extends BaseController {
                 await userGame.save();
             }
 
-            // 4. Update User Profile
+            // 4. Update User Profile with V2 Slot Architecture
+            const proficiencyMap: Record<string, 'newbie' | 'intermediate' | 'pro'> = {
+                'beginner': 'newbie',
+                'intermediate': 'intermediate',
+                'advanced': 'pro',
+                'pro': 'pro'
+            };
+
             await User.findByIdAndUpdate(userId, {
                 onboardingCompleted: true,
+                tier: 'FREE',
+                activeSlotIndex: 0,
+                slots: [{
+                    gameId: gameId,
+                    characterId: characterId,
+                    rank: 'Rookie',
+                    notificationsEnabled: true,
+                    proficiencyLevel: proficiencyMap[skillLevel] || 'newbie'
+                }],
                 $set: {
-                    'preferences.skillLevel': skillLevel || 'beginner',
+                    'preferences.skillLevel': skillLevel || 'beginner', // Backward compat
                     'location.country': country,
                     'location.city': city
                 },
@@ -83,7 +99,7 @@ export class OnboardingController extends BaseController {
 
             this.sendResponse(res, {
                 success: true,
-                message: 'Onboarding completed successfully',
+                message: 'Onboarding completed successfully with Slot 0 initialized',
             });
 
         } catch (error) {

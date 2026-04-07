@@ -12,6 +12,9 @@ import { GamificationRoutes } from './gamificationRoutes';
 import { TrainingRoutes } from './trainingRoutes';
 import { MetaRoutes, IngestionRoutes } from './metaRoutes';
 import { TheoryRoutes } from './theoryRoutes';
+import { NotificationRoutes } from './notificationRoutes';
+import { RivalRoutes } from './rivalRoutes';
+import { UserRoutes } from './userRoutes';
 import matchRouter from './matchRoutes';
 import analyticsRouter from './analyticsRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
@@ -23,6 +26,9 @@ import { CharacterEncyclopediaController } from '../controllers/CharacterEncyclo
 import { ChatController } from '../controllers/ChatController';
 import { MetaController } from '../controllers/MetaController';
 import { TheoryController } from '../controllers/TheoryController';
+import { NotificationController } from '../controllers/NotificationController';
+import { RivalController } from '../controllers/RivalController';
+import { UserController } from '../controllers/UserController';
 
 /**
  * Routes configuration
@@ -44,6 +50,9 @@ export class Routes {
   private metaRoutes: MetaRoutes | null;
   private ingestionRoutes: IngestionRoutes | null;
   private theoryRoutes: TheoryRoutes | null;
+  private notificationRoutes: NotificationRoutes | null;
+  private rivalRoutes: RivalRoutes | null;
+  private userRoutes: UserRoutes | null;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -55,6 +64,9 @@ export class Routes {
     chatController: ChatController,
     metaController?: MetaController | null,
     theoryController?: TheoryController | null,
+    notificationController?: NotificationController | null,
+    rivalController?: RivalController | null,
+    userController?: UserController | null,
   ) {
     this.router = Router();
     this.analysisRoutes = analysisController ? new AnalysisRoutes(analysisController) : null as any;
@@ -71,6 +83,9 @@ export class Routes {
     this.metaRoutes = metaController ? new MetaRoutes(metaController) : null;
     this.ingestionRoutes = metaController ? new IngestionRoutes(metaController) : null;
     this.theoryRoutes = theoryController ? new TheoryRoutes(theoryController) : null;
+    this.notificationRoutes = notificationController ? new NotificationRoutes(notificationController) : null;
+    this.rivalRoutes = rivalController ? new RivalRoutes(rivalController) : null;
+    this.userRoutes = userController ? new UserRoutes(userController) : null;
     this.setupRoutes();
   }
 
@@ -133,6 +148,21 @@ export class Routes {
     // Theory generation routes (requires MongoDB)
     if (this.theoryRoutes) {
       this.router.use('/theory', this.theoryRoutes.getRouter());
+    }
+
+    // Notification routes (requires MongoDB)
+    if (this.notificationRoutes) {
+      this.router.use('/notifications', this.notificationRoutes.getRouter());
+    }
+
+    // Rival Watch routes
+    if (this.rivalRoutes) {
+      this.router.use('/rivals', this.rivalRoutes.getRouter());
+    }
+
+    // User/Slot management routes
+    if (this.userRoutes) {
+      this.router.use('/users', this.userRoutes.getRouter());
     }
 
     // Match routes (team-based match analysis - Priority 7)

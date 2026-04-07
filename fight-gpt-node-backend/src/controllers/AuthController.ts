@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { BaseController } from './BaseController';
 import User, { IUser } from '../models/User';
+import { emailService } from '../services/EmailService';
 
 export class AuthController extends BaseController {
     /**
@@ -32,6 +33,9 @@ export class AuthController extends BaseController {
             });
 
             await user.save();
+
+            // Send welcome email (non-blocking)
+            emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
 
             // Generate JWT
             const token = this.generateToken(user);

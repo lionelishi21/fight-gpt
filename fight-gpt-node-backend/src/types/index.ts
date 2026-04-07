@@ -27,6 +27,8 @@ export interface AnalysisRequest {
   game_id?: string;
   p1_character_id?: string;
   p2_character_id?: string;
+  p1_name?: string;
+  p2_name?: string;
   game_metadata?: {
     global_mechanics?: unknown[];
     constants?: Record<string, unknown>;
@@ -49,6 +51,8 @@ export interface AnalysisResponse {
   game_title?: string;
   p1_character?: string;
   p2_character?: string;
+  p1_name?: string;
+  p2_name?: string;
   match_winner?: string;
   timeline?: TimelineEvent[];
   top_3_tips?: string[];

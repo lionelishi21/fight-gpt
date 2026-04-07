@@ -27,6 +27,9 @@ import { CharacterEncyclopediaController } from './controllers/CharacterEncyclop
 import { ChatController } from './controllers/ChatController';
 import { MetaController } from './controllers/MetaController';
 import { TheoryController } from './controllers/TheoryController';
+import { NotificationController } from './controllers/NotificationController';
+import { RivalController } from './controllers/RivalController';
+import { UserController } from './controllers/UserController';
 
 // Import services
 import { AnalysisService } from './services/AnalysisService';
@@ -39,6 +42,8 @@ import { ChatService } from './services/ChatService';
 import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
+import { RivalService } from './services/RivalService';
+import { UserService } from './services/UserService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -51,6 +56,8 @@ import { VectorRepository } from './repositories/VectorRepository';
 import { MetaRepository } from './repositories/MetaRepository';
 import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
+import { NotificationRepository } from './repositories/NotificationRepository';
+import { RivalRepository } from './repositories/RivalRepository';
 
 // Import middleware
 import { errorMiddleware } from './middleware/errorMiddleware';
@@ -88,6 +95,8 @@ export class App {
     const metaRepository = AppConfig.MONGODB_URI ? new MetaRepository() : null as any;
     const ingestionRepository = AppConfig.MONGODB_URI ? new IngestionRepository() : null as any;
     const theoryRepository = AppConfig.MONGODB_URI ? new TheoryRepository() : null as any;
+    const notificationRepository = AppConfig.MONGODB_URI ? new NotificationRepository() : null as any;
+    const rivalRepository = AppConfig.MONGODB_URI ? new RivalRepository() : null as any;
     // Only initialize services that need MongoDB if MongoDB is available
     const gameMetadataService = AppConfig.MONGODB_URI ? new GameMetadataService(gameMetadataRepository) : null as any;
     const characterEncyclopediaService = AppConfig.MONGODB_URI ? new CharacterEncyclopediaService(characterEncyclopediaRepository) : null as any;
@@ -104,12 +113,16 @@ export class App {
       gameMetadataService,
       characterEncyclopediaService,
       characterService, // Pass characterService for character name lookup
-      vectorRepository
+      vectorRepository,
+      notificationRepository,
+      rivalRepository
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
     this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService) : null;
     const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
+    const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
+    const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
     const chatService = new ChatService();
 
     // Initialize controllers (ChatController works without MongoDB)
@@ -125,6 +138,9 @@ export class App {
     const chatController = new ChatController(chatService, auditLogRepository || null as any);
     const metaController = AppConfig.MONGODB_URI ? new MetaController(metaService, this.ingestionService!) : null;
     const theoryController = AppConfig.MONGODB_URI ? new TheoryController(theoryService) : null;
+    const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
+    const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
+    const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
 
     // Setup routes
     this.routes = new Routes(
@@ -137,6 +153,9 @@ export class App {
       chatController,
       metaController,
       theoryController,
+      notificationController,
+      rivalController,
+      userController
     );
     this.setupRoutes();
 
