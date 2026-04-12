@@ -11,6 +11,8 @@ export class TheoryRoutes {
 
     private setupRoutes(): void {
         // Character theory
+        // Character theory
+        this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters/:characterId', this.theoryController.getCharacterTheory);
         this.router.post('/:gameId/characters/:characterId/generate', this.theoryController.generateCharacterTheory);

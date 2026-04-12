@@ -19,6 +19,9 @@ export class AuthRoutes {
 
         // Protected routes
         this.router.get('/me', authMiddleware, this.authController.getMe);
+
+        // Internal route — called by Stripe webhook (protected by INTERNAL_WEBHOOK_SECRET)
+        this.router.post('/internal/update-tier', this.authController.updateTierFromStripe);
     }
 
     public getRouter(): Router {

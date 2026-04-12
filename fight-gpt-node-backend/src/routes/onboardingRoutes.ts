@@ -16,6 +16,8 @@ export class OnboardingRoutes {
         // Protected routes
         // @ts-ignore
         this.router.post('/complete', authMiddleware, this.controller.completeOnboarding);
+        // @ts-ignore
+        this.router.get('/status', authMiddleware, this.controller.getOnboardingStatus);
     }
 
     public getRouter(): Router {

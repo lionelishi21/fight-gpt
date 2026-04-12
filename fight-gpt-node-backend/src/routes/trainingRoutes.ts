@@ -17,6 +17,8 @@ export class TrainingRoutes {
         // @ts-ignore
         this.router.get('/missions', authMiddleware, this.controller.getMissions);
         // @ts-ignore
+        this.router.get('/plan', authMiddleware, this.controller.getMissions);
+        // @ts-ignore
         this.router.post('/missions/:id/complete', authMiddleware, this.controller.completeMission);
     }
 

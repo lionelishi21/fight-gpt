@@ -106,4 +106,25 @@ export class OnboardingController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Onboarding failed', 500);
         }
     };
+    
+    /**
+     * GET /api/onboarding/status
+     * Check if user has initialized their first game/character slot
+     */
+    public getOnboardingStatus = async (req: Request, res: Response): Promise<void> => {
+        try {
+            // @ts-ignore
+            const userId = req.user.id;
+            const user = await User.findById(userId).select('onboardingCompleted');
+
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    initialized: user ? user.onboardingCompleted : false
+                }
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch onboarding status', 500);
+        }
+    };
 }

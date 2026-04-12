@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder');
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'MetaPunish <noreply@metapunish.com>';
 const APP_URL = process.env.APP_URL || 'https://metapunish.com';

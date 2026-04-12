@@ -15,6 +15,8 @@ export interface IUser extends Document {
     password?: string;
     googleId?: string;
     avatar?: string;
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
     location?: {
         country: string;
         city: string;
@@ -54,6 +56,8 @@ const UserSchema: Schema = new Schema(
         password: { type: String },
         googleId: { type: String },
         avatar: { type: String },
+        stripeCustomerId: { type: String, index: true },
+        stripeSubscriptionId: { type: String },
         location: {
             country: { type: String },
             city: { type: String }

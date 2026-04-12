@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { BaseController } from './BaseController';
 import User, { IUser } from '../models/User';
+import UserGame from '../models/UserGame';
 import { emailService } from '../services/EmailService';
 
 export class AuthController extends BaseController {
@@ -100,7 +101,7 @@ export class AuthController extends BaseController {
     };
 
     /**
-     * Get current user
+     * Get current user — returns tier + planType so all premium gates work
      */
     public getMe = async (req: Request, res: Response): Promise<void> => {
         try {
@@ -113,12 +114,82 @@ export class AuthController extends BaseController {
                 return;
             }
 
+            // Fetch the primary active game slot for this user to determine planType and main character
+            const activeGame = await UserGame.findOne({ user: userId, isActive: true }).sort({ createdAt: -1 });
+
+            // Map tier → planType so web + mobile premium gates work
+            // Prefer planType from UserGame if available, fallback to user.tier mapping
+            const planType = activeGame ? activeGame.planType : (user.tier === 'FREE' ? 'free' : 'premium');
+
             this.sendResponse(res, {
                 success: true,
-                data: { user },
+                data: {
+                    user: {
+                        ...user.toObject(),
+                        planType,
+                        // Ensure mainCharacter is reactive for the web frontend
+                        preferences: {
+                            ...user.preferences,
+                            mainCharacter: activeGame?.character || user.preferences?.mainCharacter
+                        }
+                    },
+                },
             });
         } catch (error) {
             this.sendError(res, 'Failed to fetch user', 500);
+        }
+    };
+
+    /**
+     * Internal endpoint called by Stripe webhook to update a user's tier
+     * Protected by INTERNAL_WEBHOOK_SECRET header — not user JWT
+     */
+    public updateTierFromStripe = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const secret = process.env.INTERNAL_WEBHOOK_SECRET;
+            if (secret && req.headers['x-internal-secret'] !== secret) {
+                this.sendError(res, 'Unauthorized', 401);
+                return;
+            }
+
+            const { stripeCustomerId, stripeSubscriptionId, tier, email } = req.body;
+
+            if (!tier || (!stripeCustomerId && !email)) {
+                this.sendError(res, 'tier and (stripeCustomerId or email) are required', 400);
+                return;
+            }
+
+            // Find user by stripeCustomerId first, fall back to email
+            let user = stripeCustomerId
+                ? await User.findOne({ stripeCustomerId })
+                : null;
+
+            if (!user && email) {
+                user = await User.findOne({ email });
+            }
+
+            if (!user) {
+                this.sendError(res, 'User not found', 404);
+                return;
+            }
+
+            const validTiers = ['FREE', 'COMPETITOR', 'PRO'];
+            if (!validTiers.includes(tier)) {
+                this.sendError(res, `Invalid tier. Must be one of: ${validTiers.join(', ')}`, 400);
+                return;
+            }
+
+            user.tier = tier as IUser['tier'];
+            if (stripeCustomerId) user.stripeCustomerId = stripeCustomerId;
+            if (stripeSubscriptionId) user.stripeSubscriptionId = stripeSubscriptionId;
+            await user.save();
+
+            this.sendResponse(res, {
+                success: true,
+                data: { userId: user._id, tier: user.tier },
+            });
+        } catch (error) {
+            this.sendError(res, 'Failed to update tier', 500);
         }
     };
 

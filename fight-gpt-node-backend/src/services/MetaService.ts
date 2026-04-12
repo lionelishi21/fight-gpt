@@ -152,9 +152,18 @@ export class MetaService extends BaseService implements IMetaService {
     ): Promise<ApiResponse<{ answer: string; scenarios: unknown[] }>> {
         try {
             // Embed the query
-            const embeddingModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
-            const embeddingResult = await embeddingModel.embedContent(query);
-            const queryVector = embeddingResult.embedding.values;
+            let queryVector;
+            try {
+                const embeddingModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+                const embeddingResult = await embeddingModel.embedContent(query);
+                queryVector = embeddingResult.embedding.values;
+            } catch (embedError) {
+                console.warn('[MetaService] Gemini embedding failed, falling back to basic search or error message', embedError);
+                return {
+                    success: false,
+                    error: 'Semantic search quota exceeded or service unavailable. Please try again later or use specific keywords.',
+                };
+            }
 
             // Find similar scenarios via Atlas Vector Search
             const similarScenarios = await this.vectorRepository.findSimilarScenarios(queryVector, gameId, 10);
