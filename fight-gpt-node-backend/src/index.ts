@@ -13,6 +13,7 @@ import rateLimit from 'express-rate-limit';
 import { AppConfig } from './config/app';
 import { Database } from './config/database';
 import { Logger } from './helpers/logger';
+import { SystemInitializer } from './helpers/SystemInitializer';
 
 // Import routes
 import { Routes } from './routes';
@@ -247,6 +248,9 @@ export class App {
     try {
       // Connect to database
       await Database.connect();
+
+      // Run system initialization (auto-seeding & admin setup)
+      await SystemInitializer.run();
 
       // Start ingestion scheduler (every 6 hours)
       if (this.ingestionService) {
