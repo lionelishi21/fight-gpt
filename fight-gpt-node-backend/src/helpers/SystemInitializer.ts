@@ -86,6 +86,36 @@ export class SystemInitializer {
                 meta_summary: 'Jin Kazama dominates the early T8 meta with versatile Heat pressure. Kazuya is rising as legacy players adapt.',
                 source_scenario_count: 40,
                 source_video_count: 8
+            },
+            {
+                report_id: 'ggst-meta-initial',
+                game_id: 'ggst',
+                period: 'weekly',
+                generated_at: new Date(),
+                status: 'ready',
+                tier_list: [
+                    { character_id: 'sol', character_name: 'Sol Badguy', usage_count: 550, win_count: 300, win_rate: 54, trend: 'stable', top_strategies: ['Wild Assault combos'] },
+                    { character_id: 'nago', character_name: 'Nagoriyuki', usage_count: 410, win_count: 221, win_rate: 53, trend: 'rising', top_strategies: ['Blood gauge management'] },
+                ],
+                trending_characters: { rising: ['Nagoriyuki'], falling: ['May'] },
+                meta_summary: 'Sol and Nago continue to dominate high-level play with high explosive damage.',
+                source_scenario_count: 30,
+                source_video_count: 6
+            },
+            {
+                report_id: 'mk1-meta-initial',
+                game_id: 'mk1',
+                period: 'weekly',
+                generated_at: new Date(),
+                status: 'ready',
+                tier_list: [
+                    { character_id: 'johnny', character_name: 'Johnny Cage', usage_count: 650, win_count: 350, win_rate: 53, trend: 'stable', top_strategies: ['Plus frame pressure'] },
+                    { character_id: 'raiden', character_name: 'Raiden', usage_count: 400, win_count: 212, win_rate: 53, trend: 'falling', top_strategies: ['Storm Cell chip'] },
+                ],
+                trending_characters: { rising: ['Sindel'], falling: ['Raiden'] },
+                meta_summary: 'Johnny Cage remains a top-tier threat in close quarters.',
+                source_scenario_count: 35,
+                source_video_count: 7
             }
         ];
 
