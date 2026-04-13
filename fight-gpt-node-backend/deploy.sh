@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/home/ubuntu/fight-gpt-node-backend"
+# Dynamically determine the app directory from the script location
+APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LOG_DIR="/var/log/fightgpt"
 NODE_ENV="production"
 
