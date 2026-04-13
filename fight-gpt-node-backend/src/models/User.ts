@@ -31,6 +31,7 @@ export interface IUser extends Document {
         skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'pro';
         mainCharacter?: string;
     };
+    pushTokens: string[];
     gamification: {
         xp: number;
         level: number;
@@ -95,6 +96,7 @@ const UserSchema: Schema = new Schema(
             },
             mainCharacter: { type: String },
         },
+        pushTokens: [{ type: String }],
         gamification: {
             xp: { type: Number, default: 0 },
             level: { type: Number, default: 1 },

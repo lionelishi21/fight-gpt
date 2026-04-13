@@ -6,6 +6,7 @@ export interface IUserService {
     updateSlot(userId: string, index: number, slotData: Partial<ISlot>): Promise<ApiResponse<IUser>>;
     switchActiveSlot(userId: string, index: number): Promise<ApiResponse<IUser>>;
     getUserProfile(userId: string): Promise<ApiResponse<IUser>>;
+    registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>>;
 }
 
 export class UserService extends BaseService implements IUserService {
@@ -78,6 +79,24 @@ export class UserService extends BaseService implements IUserService {
             return { success: true, data: user };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch profile' };
+        }
+    public async registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>> {
+        try {
+            const user = await User.findById(userId);
+            if (!user) return { success: false, error: 'User not found' };
+
+            // Initialize if missing (defensive)
+            if (!user.pushTokens) user.pushTokens = [];
+
+            // Only add if it doesn't already exist to prevent duplicates
+            if (!user.pushTokens.includes(token)) {
+                user.pushTokens.push(token);
+                await user.save();
+            }
+
+            return { success: true, data: user };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to register push token' };
         }
     }
 }

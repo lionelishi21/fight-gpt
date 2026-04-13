@@ -15,6 +15,7 @@ export class UserRoutes {
         this.router.get('/me', authMiddleware, this.userController.getMe);
         this.router.patch('/slots/active', authMiddleware, this.userController.switchActiveSlot);
         this.router.patch('/slots/:index', authMiddleware, this.userController.updateSlot);
+        this.router.post('/push-token', authMiddleware, this.userController.registerPushToken);
     }
 
     public getRouter(): Router {

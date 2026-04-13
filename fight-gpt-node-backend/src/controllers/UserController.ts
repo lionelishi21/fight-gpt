@@ -70,6 +70,28 @@ export class UserController extends BaseController {
             this.sendError(res, 'Failed to fetch profile', 500);
         }
     };
+
+    /**
+     * POST /api/users/push-token
+     * Register an FCM push notification token for the user
+     */
+    public registerPushToken = async (req: Request, res: Response): Promise<void> => {
+        try {
+            // @ts-ignore - user added by auth middleware
+            const userId = req.user.id;
+            const { token } = req.body;
+
+            if (!token) {
+                this.sendError(res, 'Token is required', 400);
+                return;
+            }
+
+            const result = await this.userService.registerPushToken(userId, token);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to register push token', 500);
+        }
+    };
 }
 
 export default UserController;
