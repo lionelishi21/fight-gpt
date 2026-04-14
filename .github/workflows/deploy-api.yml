@@ -28,7 +28,15 @@ jobs:
           port:     22
           timeout:  300s
           script: |
-            bash -l -c 'cd /home/ubuntu/fight-gpt-ai-project/fight-gpt-node-backend && bash deploy.sh'
+            TARGET_DIR=$(find /home/ubuntu -name "deploy.sh" -path "*/fight-gpt-node-backend/*" | head -n 1 | xargs dirname)
+            echo "Directing deployment to: $TARGET_DIR"
+            if [ -n "$TARGET_DIR" ]; then
+              cd "$TARGET_DIR"
+              bash deploy.sh
+            else
+              echo "❌ Could not find fight-gpt-node-backend directory"
+              exit 1
+            fi
 
       - name: Notify success
         if: success()
