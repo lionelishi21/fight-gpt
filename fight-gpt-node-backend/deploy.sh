@@ -48,8 +48,8 @@ fi
 
 # 7. Health check
 echo "→ Health check..."
-sleep 3
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health)
+sleep 5
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/)
 if [ "$STATUS" = "200" ]; then
     echo "✓ API is healthy (HTTP $STATUS)"
 else
