@@ -61,3 +61,8 @@ fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Deploy complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# 8. Forensic Log Dump (Always run for this debugging session)
+echo "→ Post-Deploy Diagnostics..."
+pm2 info fightgpt-api | grep uptime
+tail -n 50 $LOG_DIR/error.log
