@@ -93,6 +93,7 @@ export class AuthController extends BaseController {
                         role: user.role,
                         onboardingCompleted: user.onboardingCompleted,
                         preferences: user.preferences,
+                        slots: user.slots || [],
                     },
                     token,
                 },
@@ -129,6 +130,7 @@ export class AuthController extends BaseController {
                     user: {
                         ...user.toObject(),
                         planType,
+                        slots: user.slots || [],
                         // Ensure mainCharacter is reactive for the web frontend
                         preferences: {
                             ...user.preferences,

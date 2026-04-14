@@ -76,10 +76,18 @@ export class UserService extends BaseService implements IUserService {
         try {
             const user = await User.findById(userId).select('-password');
             if (!user) return { success: false, error: 'User not found' };
+            
+            // Defensive check for slots (especially for legacy users)
+            if (!user.slots) {
+                user.slots = [];
+            }
+            
             return { success: true, data: user };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch profile' };
         }
+    }
+
     public async registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>> {
         try {
             const user = await User.findById(userId);
