@@ -34,12 +34,13 @@ npx tsc --noEmit
 
 # 5. Build
 echo "→ Building TypeScript..."
+rm -rf dist
 npm run build
 
-# 6. Reload or start PM2
-echo "→ Reloading PM2..."
+# 6. Restart PM2
+echo "→ Restarting PM2..."
 if pm2 list | grep -q "fightgpt-api"; then
-    pm2 reload ecosystem.config.js --env production
+    pm2 restart ecosystem.config.js --env production
 else
     pm2 start ecosystem.config.js --env production
     pm2 save
