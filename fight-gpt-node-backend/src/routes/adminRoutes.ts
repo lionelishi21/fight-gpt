@@ -18,6 +18,10 @@ export class AdminRoutes {
         // Stats & Monitoring
         this.router.get('/stats', this.adminController.getSystemStats);
 
+        // Data Management
+        this.router.get('/analyses', this.adminController.getRecentAnalyses);
+        this.router.delete('/analyses/:id', this.adminController.deleteAnalysis);
+
         // Job Management
         this.router.get('/jobs', this.adminController.getRecentJobs);
         this.router.post('/jobs/retry', this.adminController.retryJob);

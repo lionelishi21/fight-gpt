@@ -36,6 +36,39 @@ export class AdminController extends BaseController {
     };
 
     /**
+     * GET /api/admin/analyses
+     * List recent analyses
+     */
+    getRecentAnalyses = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const limit = parseInt(req.query.limit as string) || 20;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const result = await this.adminService.getAnalyses(limit, offset);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * DELETE /api/admin/analyses/:id
+     * Delete a specific analysis
+     */
+    deleteAnalysis = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            if (!id) {
+                res.status(400).json({ success: false, error: 'id is required' });
+                return;
+            }
+            const result = await this.adminService.deleteAnalysis(id);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
      * POST /api/admin/jobs/retry
      * Force retry a failed job
      */

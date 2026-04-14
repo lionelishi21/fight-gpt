@@ -8,6 +8,8 @@ import { BaseService } from './BaseService';
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
     getIngestionJobs(limit: number, status?: string): Promise<ApiResponse<any[]>>;
+    getAnalyses(limit: number, offset: number): Promise<ApiResponse<any[]>>;
+    deleteAnalysis(analysisId: string): Promise<ApiResponse<boolean>>;
     retryJob(jobId: string): Promise<ApiResponse<boolean>>;
     triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
 }
@@ -57,6 +59,29 @@ export class AdminService extends BaseService implements IAdminService {
             return { success: true, data: jobs };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch jobs' };
+        }
+    }
+
+    async getAnalyses(limit: number = 20, offset: number = 0): Promise<ApiResponse<any[]>> {
+        try {
+            const analyses = await Analysis.find()
+                .sort({ created_at: -1 })
+                .skip(offset)
+                .limit(limit)
+                .exec();
+            
+            return { success: true, data: analyses };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch analyses' };
+        }
+    }
+
+    async deleteAnalysis(analysisId: string): Promise<ApiResponse<boolean>> {
+        try {
+            const result = await Analysis.deleteOne({ analysis_id: analysisId });
+            return { success: true, data: result.deletedCount > 0 };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to delete analysis' };
         }
     }
 
