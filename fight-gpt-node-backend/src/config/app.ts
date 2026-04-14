@@ -7,7 +7,7 @@ export class AppConfig {
   public static get NODE_ENV(): string { return process.env.NODE_ENV || 'development'; }
   public static get AI_SERVICE_URL(): string { return process.env.AI_SERVICE_URL || 'http://localhost:8000'; }
   public static get AI_SERVICE_TIMEOUT(): number { return parseInt(process.env.AI_SERVICE_TIMEOUT || '600000', 10); }
-  public static get MONGODB_URI(): string { return process.env.MONGODB_URI || ''; }
+  public static get MONGODB_URI(): string { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
   public static get RATE_LIMIT_WINDOW_MS(): number { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
   public static get RATE_LIMIT_MAX_REQUESTS(): number { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10); }
   public static get CORS_ORIGIN(): string { return process.env.CORS_ORIGIN || 'http://localhost:5174'; }
