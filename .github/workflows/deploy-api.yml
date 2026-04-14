@@ -28,7 +28,7 @@ jobs:
           port:     22
           timeout:  300s
           script: |
-            cd /home/ubuntu/fight-gpt/fight-gpt-node-backend
+            cd /home/ubuntu/fight-gpt-ai-project/fight-gpt-node-backend
             bash deploy.sh
 
       - name: Notify success
