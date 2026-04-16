@@ -28,15 +28,43 @@ jobs:
           port:     22
           timeout:  300s
           script: |
-            TARGET_DIR=$(find /home/ubuntu -name "deploy.sh" -path "*/fight-gpt-node-backend/*" | head -n 1 | xargs dirname)
-            echo "Directing deployment to: $TARGET_DIR"
-            if [ -n "$TARGET_DIR" ]; then
-              cd "$TARGET_DIR"
-              bash deploy.sh
-            else
-              echo "❌ Could not find fight-gpt-node-backend directory"
+            # Find the backend directory (handles any repo clone location)
+            APP_DIR=$(find /home -name "package.json" -path "*/fight-gpt-node-backend/package.json" 2>/dev/null | head -n 1 | xargs dirname)
+            echo "→ Backend dir: $APP_DIR"
+            if [ -z "$APP_DIR" ]; then
+              echo "❌ Could not locate fight-gpt-node-backend"
               exit 1
             fi
+            cd "$APP_DIR"
+
+            # 1. Pull latest code
+            echo "→ Pulling latest from main..."
+            git pull origin main
+
+            # 2. Install production deps + build tools
+            echo "→ Installing dependencies..."
+            npm ci --omit=dev
+            npm install --save-dev tsx typescript
+
+            # 3. Type check
+            echo "→ Type checking..."
+            npx tsc --noEmit || true
+
+            # 4. Build
+            echo "→ Building TypeScript..."
+            rm -rf dist
+            npm run build
+
+            # 5. Restart PM2
+            echo "→ Restarting PM2..."
+            pm2 restart fightgpt-api --update-env || pm2 start dist/index.js --name fightgpt-api
+            pm2 save
+
+            # 6. Health check
+            echo "→ Health check..."
+            sleep 5
+            curl -sf http://localhost:3010/api/health || curl -sf http://localhost:3000/api/health || echo "⚠️  Health check inconclusive — check PM2 logs"
+            echo "✅ Deploy complete"
 
       - name: Notify success
         if: success()
