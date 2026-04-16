@@ -2,6 +2,10 @@ import dotenv from 'dotenv';
 // Load environment variables before other imports
 dotenv.config();
 
+// Sentry must init before any other imports so it can instrument them
+import { initSentry } from './helpers/sentry';
+initSentry();
+
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -236,6 +240,12 @@ export class App {
   private setupErrorHandling(): void {
     // 404 handler
     this.app.use(notFoundMiddleware);
+
+    // Sentry error handler (must come before custom error handler)
+    const { Sentry } = require('./helpers/sentry');
+    if (process.env.SENTRY_DSN) {
+      this.app.use(Sentry.expressErrorHandler());
+    }
 
     // Error handler (must be last)
     this.app.use(errorMiddleware);

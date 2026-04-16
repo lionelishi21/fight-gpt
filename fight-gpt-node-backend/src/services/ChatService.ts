@@ -44,10 +44,8 @@ export class ChatService extends BaseService implements IChatService {
     }
 
     this.genAI = new GoogleGenerativeAI(AppConfig.GEMINI_API_KEY);
-    // Use gemini-pro as default if gemini-1.5-flash is not available
-    // Valid models: gemini-pro, gemini-1.5-pro, gemini-1.5-flash-latest
-    // Valid models: gemini-pro, gemini-1.5-pro, gemini-1.5-flash-latest
-    const modelName = AppConfig.GEMINI_MODEL || 'gemini-pro';
+    // Primary model from env — falls back through the list on 503/overload
+    const modelName = AppConfig.GEMINI_MODEL || 'gemini-2.0-flash';
     this.model = this.genAI.getGenerativeModel({ model: modelName });
 
     // Custom system prompt specialized for fighting games
@@ -140,34 +138,40 @@ Help players improve their skills, understand game mechanics, learn characters, 
         });
       });
 
-      const chat = this.model.startChat({
-        history: historyItems,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
-        },
-      });
-
-      // Send the message
-      const result = await chat.sendMessage(message);
-      const response = await result.response;
-      const text = response.text();
-
-      return {
-        success: true,
-        message: text,
+      const generationConfig = {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
       };
+
+      // Try primary model, fall back to gemini-2.0-flash on 503/overload
+      const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      let lastError: Error | null = null;
+
+      const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
+
+      for (const modelInstance of modelsToTry) {
+        try {
+          const chat = modelInstance.startChat({ history: historyItems, generationConfig });
+          const result = await chat.sendMessage(message);
+          const text = result.response.text();
+          return { success: true, message: text };
+        } catch (e: any) {
+          lastError = e;
+          // Only retry on 503 overload — other errors bubble up immediately
+          const is503 = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('high demand');
+          if (!is503) break;
+        }
+      }
+
+      const errorMessage = lastError?.message || 'Unknown error occurred';
+      console.error('[ChatService] All models failed:', errorMessage);
+      return { success: false, message: '', error: `Failed to get response: ${errorMessage}` };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('[ChatService] Error sending message:', errorMessage);
-
-      return {
-        success: false,
-        message: '',
-        error: `Failed to get response: ${errorMessage}`,
-      };
+      return { success: false, message: '', error: `Failed to get response: ${errorMessage}` };
     }
   }
 
