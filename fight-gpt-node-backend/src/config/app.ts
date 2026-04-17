@@ -13,7 +13,7 @@ export class AppConfig {
   public static get CORS_ORIGIN(): string { return process.env.CORS_ORIGIN || 'http://localhost:5174'; }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
-  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-1.5-flash'; }
+  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.0-flash'; }
 
   /**
    * Validate required configuration

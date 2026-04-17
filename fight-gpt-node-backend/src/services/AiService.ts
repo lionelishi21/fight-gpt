@@ -99,51 +99,52 @@ export class AiService extends BaseService implements IAiService {
   }
 
   private async generateAnalysis(fileResponse: any | null, request: AnalysisRequest): Promise<AnalysisResponse> {
-    const model = this.genAI.getGenerativeModel({ 
-      model: this.modelName,
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
-    });
+    const prompt = VersionResolver.resolvePrompt('v1');
 
-    const prompt = VersionResolver.resolvePrompt('v1'); // Use VersionResolver
-
-    // Enhance prompt with context if available
     let fullPrompt = prompt;
     if (request.ai_context) {
       fullPrompt += `\n\nContext:\n${request.ai_context}`;
     }
-
-    // Inject YouTube URL into the prompt instructions if provided
     if (request.youtube_url) {
       fullPrompt += `\n\nWatch this video and analyze it: ${request.youtube_url}`;
     }
 
     const contentParts: any[] = [];
-
-    // Add local uploaded video file if available
     if (fileResponse) {
       contentParts.push({
-        fileData: {
-          mimeType: fileResponse.mimeType,
-          fileUri: fileResponse.uri,
-        },
+        fileData: { mimeType: fileResponse.mimeType, fileUri: fileResponse.uri },
       });
     }
-
     contentParts.push({ text: fullPrompt });
 
-    const result = await model.generateContent(contentParts);
+    // Try primary model, fall back on 503/overload
+    const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = [this.modelName, ...FALLBACK_MODELS.filter(m => m !== this.modelName)];
+    let lastError: Error | null = null;
 
-    let responseText = result.response.text();
-    try {
-      // Clean up markdown code blocks if present (Gemini sometimes still adds these even with application/json)
-      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(responseText) as AnalysisResponse;
-    } catch (e) {
-      console.error('Failed to parse Gemini response', responseText);
-      throw new Error('Invalid JSON response from AI');
+    for (const modelName of modelsToTry) {
+      try {
+        const model = this.genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        const result = await model.generateContent(contentParts);
+        let responseText = result.response.text();
+        responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try {
+          return JSON.parse(responseText) as AnalysisResponse;
+        } catch (e) {
+          console.error('Failed to parse Gemini response', responseText);
+          throw new Error('Invalid JSON response from AI');
+        }
+      } catch (e: any) {
+        lastError = e;
+        const is503 = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('high demand');
+        if (!is503) throw e; // non-transient errors bubble immediately
+      }
     }
+
+    throw lastError ?? new Error('All Gemini models failed');
   }
 
   /**
