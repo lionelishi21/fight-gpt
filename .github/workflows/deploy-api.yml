@@ -37,6 +37,15 @@ jobs:
             fi
             cd "$APP_DIR"
 
+            # 0. Inject secrets into .env (idempotent — safe to re-run)
+            echo "→ Updating .env secrets..."
+            sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
+            sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${{ secrets.JWT_SECRET }}|" .env || true
+            sed -i "s|^INTERNAL_WEBHOOK_SECRET=.*|INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}|" .env || true
+            grep -q "^GEMINI_API_KEY=" .env || echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            grep -q "^JWT_SECRET=" .env || echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            grep -q "^INTERNAL_WEBHOOK_SECRET=" .env || echo "INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}" >> .env
+
             # 1. Pull latest code
             echo "→ Pulling latest from main..."
             git pull origin main
