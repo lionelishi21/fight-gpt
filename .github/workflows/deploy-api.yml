@@ -42,9 +42,13 @@ jobs:
             sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
             sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${{ secrets.JWT_SECRET }}|" .env || true
             sed -i "s|^INTERNAL_WEBHOOK_SECRET=.*|INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}|" .env || true
+            sed -i "s|^MASTER_ADMIN_EMAIL=.*|MASTER_ADMIN_EMAIL=${{ secrets.MASTER_ADMIN_EMAIL }}|" .env || true
+            sed -i "s|^DEFAULT_ADMIN_PASSWORD=.*|DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}|" .env || true
             grep -q "^GEMINI_API_KEY=" .env || echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
             grep -q "^JWT_SECRET=" .env || echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
             grep -q "^INTERNAL_WEBHOOK_SECRET=" .env || echo "INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}" >> .env
+            grep -q "^MASTER_ADMIN_EMAIL=" .env || echo "MASTER_ADMIN_EMAIL=${{ secrets.MASTER_ADMIN_EMAIL }}" >> .env
+            grep -q "^DEFAULT_ADMIN_PASSWORD=" .env || echo "DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}" >> .env
 
             # 1. Pull latest code
             echo "→ Pulling latest from main..."
