@@ -28,6 +28,7 @@ export class AdminRoutes {
 
         // Manual Intervention
         this.router.post('/ingestion/trigger', this.adminController.triggerManualUrl);
+        this.router.post('/ingestion/seed', this.adminController.seedUrls);
     }
 
     public getRouter(): Router {

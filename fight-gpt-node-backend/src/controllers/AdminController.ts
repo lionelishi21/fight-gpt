@@ -103,4 +103,23 @@ export class AdminController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
         }
     };
+
+    /**
+     * POST /api/admin/ingestion/seed
+     * Bulk queue an array of known tournament YouTube URLs — bypasses yt-dlp search
+     * Body: { gameId: string, youtubeUrls: string[] }
+     */
+    seedUrls = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId, youtubeUrls } = req.body;
+            if (!gameId || !Array.isArray(youtubeUrls) || youtubeUrls.length === 0) {
+                res.status(400).json({ success: false, error: 'gameId and youtubeUrls[] are required' });
+                return;
+            }
+            const result = await this.adminService.seedUrls(gameId, youtubeUrls);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
 }

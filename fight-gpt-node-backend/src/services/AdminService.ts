@@ -12,6 +12,7 @@ export interface IAdminService {
     deleteAnalysis(analysisId: string): Promise<ApiResponse<boolean>>;
     retryJob(jobId: string): Promise<ApiResponse<boolean>>;
     triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
+    seedUrls(gameId: string, youtubeUrls: string[]): Promise<ApiResponse<{ queued: number; skipped: number }>>;
 }
 
 export class AdminService extends BaseService implements IAdminService {
@@ -122,5 +123,29 @@ export class AdminService extends BaseService implements IAdminService {
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger job' };
         }
+    }
+
+    async seedUrls(gameId: string, youtubeUrls: string[]): Promise<ApiResponse<{ queued: number; skipped: number }>> {
+        let queued = 0;
+        let skipped = 0;
+        for (const url of youtubeUrls) {
+            try {
+                const existing = await IngestionJob.findOne({ youtube_url: url });
+                if (existing) { skipped++; continue; }
+                await new IngestionJob({
+                    job_id: `seed_${Date.now()}_${queued}`,
+                    game_id: gameId,
+                    youtube_url: url,
+                    search_query: 'MANUAL_SEED',
+                    source: 'manual',
+                    status: 'pending',
+                    retry_count: 0,
+                }).save();
+                queued++;
+            } catch {
+                skipped++;
+            }
+        }
+        return { success: true, data: { queued, skipped }, message: `Seeded ${queued} URLs for ${gameId}` };
     }
 }

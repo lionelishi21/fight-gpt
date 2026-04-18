@@ -50,30 +50,42 @@ jobs:
             grep -q "^MASTER_ADMIN_EMAIL=" .env || echo "MASTER_ADMIN_EMAIL=${{ secrets.MASTER_ADMIN_EMAIL }}" >> .env
             grep -q "^DEFAULT_ADMIN_PASSWORD=" .env || echo "DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}" >> .env
 
-            # 1. Pull latest code
+            # 1. Ensure yt-dlp is installed (required for ingestion pipeline)
+            echo "→ Checking yt-dlp..."
+            if ! command -v yt-dlp &>/dev/null; then
+              echo "→ Installing yt-dlp..."
+              curl -sSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+              chmod a+rx /usr/local/bin/yt-dlp
+              echo "✅ yt-dlp installed: $(yt-dlp --version)"
+            else
+              echo "✅ yt-dlp already installed: $(yt-dlp --version)"
+              yt-dlp -U || true
+            fi
+
+            # 2. Pull latest code
             echo "→ Pulling latest from main..."
             git pull origin main
 
-            # 2. Install production deps + build tools
+            # 3. Install production deps + build tools
             echo "→ Installing dependencies..."
             npm ci --omit=dev
             npm install --save-dev tsx typescript
 
-            # 3. Type check
+            # 4. Type check
             echo "→ Type checking..."
             npx tsc --noEmit || true
 
-            # 4. Build
+            # 5. Build
             echo "→ Building TypeScript..."
             rm -rf dist
             npm run build
 
-            # 5. Restart PM2
+            # 6. Restart PM2
             echo "→ Restarting PM2..."
             pm2 restart fightgpt-api --update-env || pm2 start dist/index.js --name fightgpt-api
             pm2 save
 
-            # 6. Health check
+            # 7. Health check
             echo "→ Health check..."
             sleep 5
             curl -sf http://localhost:3010/api/health || curl -sf http://localhost:3000/api/health || echo "⚠️  Health check inconclusive — check PM2 logs"

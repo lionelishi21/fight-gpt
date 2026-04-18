@@ -117,12 +117,12 @@ export class AuthController extends BaseController {
                 return;
             }
 
-            // Fetch the primary active game slot for this user to determine planType and main character
+            // Fetch the primary active game slot for this user to determine main character
             const activeGame = await UserGame.findOne({ user: userId, isActive: true }).sort({ createdAt: -1 });
 
-            // Map tier → planType so web + mobile premium gates work
-            // Prefer planType from UserGame if available, fallback to user.tier mapping
-            const planType = activeGame ? activeGame.planType : (user.tier === 'FREE' ? 'free' : 'premium');
+            // Derive planType from user.tier — this is the single source of truth updated by Stripe.
+            // UserGame.planType is NOT used here because it is never synced on upgrade and would return stale 'free'.
+            const planType = user.tier === 'FREE' ? 'free' : 'premium';
 
             this.sendResponse(res, {
                 success: true,
@@ -187,6 +187,10 @@ export class AuthController extends BaseController {
             if (stripeCustomerId) user.stripeCustomerId = stripeCustomerId;
             if (stripeSubscriptionId) user.stripeSubscriptionId = stripeSubscriptionId;
             await user.save();
+
+            // Sync UserGame.planType so it stays consistent with user.tier
+            const userGamePlanType = tier === 'FREE' ? 'free' : 'premium';
+            await UserGame.updateMany({ user: user._id }, { planType: userGamePlanType });
 
             this.sendResponse(res, {
                 success: true,
