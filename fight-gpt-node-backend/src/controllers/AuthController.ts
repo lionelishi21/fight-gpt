@@ -122,7 +122,8 @@ export class AuthController extends BaseController {
 
             // Derive planType from user.tier — this is the single source of truth updated by Stripe.
             // UserGame.planType is NOT used here because it is never synced on upgrade and would return stale 'free'.
-            const planType = user.tier === 'FREE' ? 'free' : 'premium';
+            // Admins always get premium access regardless of their Stripe tier.
+            const planType = (user.role === 'admin' || user.tier !== 'FREE') ? 'premium' : 'free';
 
             this.sendResponse(res, {
                 success: true,
