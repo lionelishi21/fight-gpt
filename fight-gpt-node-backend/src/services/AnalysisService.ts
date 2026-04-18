@@ -210,10 +210,19 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async getRecentAnalyses(limit: number = 10): Promise<ApiResponse<AnalysisResponse[]>> {
+  async getRecentAnalyses(limit: number = 10): Promise<ApiResponse<any[]>> {
     try {
       const analyses = await this.analysisRepository.getRecentAnalyses(limit);
-      return { success: true, data: analyses.map(a => a.analysis as AnalysisResponse) };
+      return {
+        success: true,
+        data: analyses.map(a => ({
+          analysis_id: a.analysis_id,
+          youtube_url: a.youtube_url,
+          game_id: a.game_id,
+          created_at: a.created_at,
+          ...(a.analysis as object),
+        })),
+      };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
