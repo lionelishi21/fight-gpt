@@ -8,6 +8,12 @@ import { IGameMetadata, GameRule, GameRule as CharacterGameRule } from '../types
 import { VersionResolver } from '../helpers/VersionResolver';
 
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * AI Service interface
@@ -50,34 +56,80 @@ export class AiService extends BaseService implements IAiService {
    * Analyze video using Gemini Native API
    */
   async analyzeVideo(request: AnalysisRequest): Promise<AnalysisResponse> {
+    let localVideoPath: string | null = null;
+    let uploadResponse = null;
+
     try {
       if (!request.video_path && !request.youtube_url) {
         throw new Error('Video path or YouTube URL is required for analysis');
       }
 
-      let uploadResponse = null;
+      const videoFilePath = request.video_path ?? (
+        request.youtube_url ? await this.downloadYouTubeVideo(request.youtube_url) : null
+      );
 
-      if (request.video_path) {
-        // 1. Upload Video to Gemini
-        uploadResponse = await this.uploadToGemini(request.video_path);
-
-        // 2. Wait for Processing
+      if (videoFilePath) {
+        if (request.youtube_url) localVideoPath = videoFilePath;
+        uploadResponse = await this.uploadToGemini(videoFilePath);
         await this.waitForProcessing(uploadResponse.file.name);
       }
 
-      // 3. Generate Content
       const result = await this.generateAnalysis(uploadResponse, request);
 
       if (uploadResponse) {
-        // 4. Cleanup
         await this.fileManager.deleteFile(uploadResponse.file.name);
       }
 
       return result;
 
     } catch (error) {
+      if (uploadResponse) {
+        try { await this.fileManager.deleteFile(uploadResponse.file.name); } catch {}
+      }
       throw this.handleError(error, 'analyzeVideo');
+    } finally {
+      if (localVideoPath && fs.existsSync(localVideoPath)) {
+        try { fs.unlinkSync(localVideoPath); } catch {}
+      }
     }
+  }
+
+  private async downloadYouTubeVideo(url: string): Promise<string> {
+    const tmpDir = os.tmpdir();
+    const outTemplate = path.join(tmpDir, 'fgpt_%(id)s.%(ext)s');
+
+    const strategies = [
+      `yt-dlp -f "best[ext=mp4]/best" --no-playlist -o "${outTemplate}" "${url}"`,
+      `yt-dlp -f "worst[ext=mp4]/best" --no-playlist --extractor-args "youtube:player_client=android" -o "${outTemplate}" "${url}"`,
+      `yt-dlp -f "best" --no-playlist --extractor-args "youtube:player_client=ios,web" -o "${outTemplate}" "${url}"`,
+    ];
+
+    let lastError: Error | null = null;
+    for (const cmd of strategies) {
+      try {
+        const { stdout } = await execAsync(cmd, { timeout: 120_000 });
+        // yt-dlp prints the final path — parse it
+        const match = stdout.match(/\[download\] Destination: (.+)|Merging formats into "(.+)"/);
+        if (match) {
+          const p = (match[1] || match[2]).trim();
+          if (fs.existsSync(p)) return p;
+        }
+        // Fallback: search tmpdir for recent fgpt_ file
+        const files = fs.readdirSync(tmpDir)
+          .filter(f => f.startsWith('fgpt_'))
+          .map(f => ({ name: f, mtime: fs.statSync(path.join(tmpDir, f)).mtimeMs }))
+          .sort((a, b) => b.mtime - a.mtime);
+        if (files.length > 0) return path.join(tmpDir, files[0].name);
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error(String(e));
+      }
+    }
+
+    throw new Error(
+      lastError?.message?.includes('available') || lastError?.message?.includes('removed')
+        ? 'This video is unavailable or has been removed from YouTube.'
+        : `Failed to download video: ${lastError?.message}`
+    );
   }
 
   private async uploadToGemini(filePath: string) {
@@ -104,9 +156,6 @@ export class AiService extends BaseService implements IAiService {
     let fullPrompt = prompt;
     if (request.ai_context) {
       fullPrompt += `\n\nContext:\n${request.ai_context}`;
-    }
-    if (request.youtube_url) {
-      fullPrompt += `\n\nWatch this video and analyze it: ${request.youtube_url}`;
     }
 
     const contentParts: any[] = [];
