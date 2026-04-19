@@ -6,6 +6,88 @@ const FROM_EMAIL = process.env.EMAIL_FROM || 'MetaPunish <noreply@metapunish.com
 const APP_URL = process.env.APP_URL || 'https://metapunish.com';
 
 export class EmailService {
+    async sendAdminInviteEmail(to: string, inviterName: string, inviteUrl: string, promoCode?: string): Promise<void> {
+        if (!process.env.RESEND_API_KEY) {
+            console.warn('[EmailService] RESEND_API_KEY not set — skipping admin invite email');
+            return;
+        }
+        try {
+            await resend.emails.send({
+                from: FROM_EMAIL,
+                to,
+                subject: `${inviterName} invited you to MetaPunish as Admin`,
+                html: this.buildAdminInviteHtml(inviterName, inviteUrl, promoCode),
+            });
+        } catch (error) {
+            console.error('[EmailService] Failed to send admin invite email:', error);
+        }
+    }
+
+    async sendReferralInviteEmail(to: string, inviterName: string, inviteUrl: string): Promise<void> {
+        if (!process.env.RESEND_API_KEY) {
+            console.warn('[EmailService] RESEND_API_KEY not set — skipping referral invite email');
+            return;
+        }
+        try {
+            await resend.emails.send({
+                from: FROM_EMAIL,
+                to,
+                subject: `${inviterName} invited you to MetaPunish`,
+                html: this.buildReferralInviteHtml(inviterName, inviteUrl),
+            });
+        } catch (error) {
+            console.error('[EmailService] Failed to send referral invite email:', error);
+        }
+    }
+
+    private buildAdminInviteHtml(inviterName: string, inviteUrl: string, promoCode?: string): string {
+        return `
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="padding-bottom:32px;text-align:left;">
+          <span style="display:inline-block;background-color:#f43f5e;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">ADMIN ACCESS</span>
+        </td></tr>
+        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #f43f5e;padding:40px;">
+          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#f43f5e;">ADMIN INVITE</h1>
+          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">${inviterName} is granting you admin access</p>
+          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">You've been invited to join MetaPunish as an administrator. This gives you full access to Mission Control — user management, game registry, ingestion queue, and system stats.</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This invite expires in 48 hours.</p>
+          ${promoCode ? `<p style="margin:0 0 24px;padding:12px 16px;background:#111;border:1px solid rgba(244,63,94,0.3);font-size:13px;color:#ffffff;">Beta promo code: <strong style="color:#f43f5e;letter-spacing:0.1em;">${promoCode}</strong> — apply at checkout for your discount.</p>` : ''}
+          <a href="${inviteUrl}" style="display:inline-block;background-color:#f43f5e;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ACCEPT ADMIN INVITE →</a>
+        </td></tr>
+        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    }
+
+    private buildReferralInviteHtml(inviterName: string, inviteUrl: string): string {
+        return `
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="padding-bottom:32px;text-align:left;">
+          <span style="display:inline-block;background-color:#06b6d4;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#000000;">INVITED BY ${inviterName.toUpperCase()}</span>
+        </td></tr>
+        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #06b6d4;padding:40px;">
+          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#06b6d4;">JOIN THE ARENA</h1>
+          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">${inviterName} wants you on MetaPunish</p>
+          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">Get real-time meta intelligence, AI match analysis, and character theory for every major fighting game. ${inviterName} thinks you'd crush it here.</p>
+          <a href="${inviteUrl}" style="display:inline-block;background-color:#06b6d4;color:#000000;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ENTER THE META →</a>
+        </td></tr>
+        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    }
+
     async sendWelcomeEmail(to: string, name: string): Promise<void> {
         if (!process.env.RESEND_API_KEY) {
             console.warn('[EmailService] RESEND_API_KEY not set — skipping welcome email');

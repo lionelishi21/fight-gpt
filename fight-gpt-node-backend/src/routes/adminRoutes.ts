@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AdminController } from '../controllers/AdminController';
+import { inviteController } from '../controllers/InviteController';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 
 export class AdminRoutes {
@@ -38,6 +39,11 @@ export class AdminRoutes {
         // Manual Intervention
         this.router.post('/ingestion/trigger', this.adminController.triggerManualUrl);
         this.router.post('/ingestion/seed', this.adminController.seedUrls);
+
+        // Admin Invites
+        this.router.post('/invites', inviteController.createAdminInvite);
+        this.router.get('/invites', inviteController.listAdminInvites);
+        this.router.delete('/invites/:token', inviteController.revokeInvite);
     }
 
     public getRouter(): Router {

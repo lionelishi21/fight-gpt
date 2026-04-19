@@ -17,6 +17,8 @@ import { RivalRoutes } from './rivalRoutes';
 import { UserRoutes } from './userRoutes';
 import { AdminRoutes } from './adminRoutes';
 import { AdminController } from '../controllers/AdminController';
+import { inviteController } from '../controllers/InviteController';
+import { authMiddleware } from '../middleware/auth';
 import matchRouter from './matchRoutes';
 import analyticsRouter from './analyticsRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
@@ -174,6 +176,13 @@ export class Routes {
     if (this.adminRoutes) {
       this.router.use('/admin', this.adminRoutes.getRouter());
     }
+
+    // Public invite validation (used on signup page to pre-fill role/email)
+    this.router.get('/invites/validate/:token', inviteController.validateInvite);
+
+    // User referral routes (authenticated)
+    this.router.post('/users/referral/invite', authMiddleware, inviteController.sendReferralInvite);
+    this.router.get('/users/referral/stats', authMiddleware, inviteController.getReferralStats);
 
     // Match routes (team-based match analysis - Priority 7)
     this.router.use('/matches', matchRouter);

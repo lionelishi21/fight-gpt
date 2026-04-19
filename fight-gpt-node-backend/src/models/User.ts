@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface ISlot {
@@ -32,6 +32,10 @@ export interface IUser extends Document {
         mainCharacter?: string;
     };
     pushTokens: string[];
+    referralCode: string;
+    referredBy?: mongoose.Types.ObjectId;
+    referralCount: number;
+    referralCredits: number;
     gamification: {
         xp: number;
         level: number;
@@ -97,6 +101,10 @@ const UserSchema: Schema = new Schema(
             mainCharacter: { type: String },
         },
         pushTokens: [{ type: String }],
+        referralCode: { type: String, unique: true, sparse: true },
+        referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        referralCount: { type: Number, default: 0 },
+        referralCredits: { type: Number, default: 0 },
         gamification: {
             xp: { type: Number, default: 0 },
             level: { type: Number, default: 1 },
@@ -116,6 +124,15 @@ const UserSchema: Schema = new Schema(
     },
     { timestamps: true }
 );
+
+// Auto-generate referral code on first save
+UserSchema.pre<IUser>('save', async function (next) {
+    if (this.isNew && !this.referralCode) {
+        const { randomBytes } = await import('crypto');
+        this.referralCode = randomBytes(4).toString('hex').toUpperCase(); // e.g. "A3F9C2B1"
+    }
+    next();
+});
 
 // Hash password before saving
 UserSchema.pre<IUser>('save', async function (next) {

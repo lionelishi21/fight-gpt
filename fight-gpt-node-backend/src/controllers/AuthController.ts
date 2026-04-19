@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { BaseController } from './BaseController';
 import User, { IUser } from '../models/User';
 import UserGame from '../models/UserGame';
+import { Invite } from '../models/Invite';
 import { emailService } from '../services/EmailService';
 
 export class AuthController extends BaseController {
@@ -11,7 +12,7 @@ export class AuthController extends BaseController {
      */
     public register = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { name, email, password, location } = req.body;
+            const { name, email, password, location, inviteToken, referralCode } = req.body;
 
             // Check if user already exists
             const existingUser = await User.findOne({ email });
@@ -20,12 +21,32 @@ export class AuthController extends BaseController {
                 return;
             }
 
+            // Validate invite token if provided
+            let invite = null;
+            let grantAdminRole = false;
+            if (inviteToken) {
+                invite = await Invite.findOne({ token: inviteToken, status: 'pending' });
+                if (!invite || invite.expiresAt < new Date()) {
+                    this.sendError(res, 'Invalid or expired invite link', 400);
+                    return;
+                }
+                if (invite.type === 'admin_invite') grantAdminRole = true;
+            }
+
+            // Resolve referrer
+            let referrer = null;
+            if (referralCode && !inviteToken) {
+                referrer = await User.findOne({ referralCode });
+            }
+
             // Create new user
             const user = new User({
                 name,
                 email,
                 password,
                 location,
+                role: grantAdminRole ? 'admin' : 'user',
+                referredBy: referrer?._id,
                 onboardingCompleted: false,
                 preferences: {
                     favoriteGames: [],
@@ -34,6 +55,21 @@ export class AuthController extends BaseController {
             });
 
             await user.save();
+
+            // Mark invite as accepted
+            if (invite) {
+                invite.status = 'accepted';
+                invite.acceptedByUserId = user._id as any;
+                await invite.save();
+            }
+
+            // Credit referrer
+            if (referrer) {
+                referrer.referralCount = (referrer.referralCount || 0) + 1;
+                referrer.referralCredits = (referrer.referralCredits || 0) + 1;
+                referrer.gamification.xp = (referrer.gamification?.xp || 0) + 100;
+                await referrer.save();
+            }
 
             // Send welcome email (non-blocking)
             emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
