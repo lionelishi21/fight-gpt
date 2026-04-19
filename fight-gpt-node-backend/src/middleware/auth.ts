@@ -49,6 +49,8 @@ export const adminMiddleware = async (req: Request, res: Response, next: NextFun
             return;
         }
 
+        // Attach full user so controllers can access _id, name, etc.
+        (req as any).user = user;
         next();
     } catch (err) {
         res.status(500).json({ success: false, error: 'Server validation error' });
