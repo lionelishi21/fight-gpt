@@ -18,6 +18,15 @@ export class AdminRoutes {
         // Stats & Monitoring
         this.router.get('/stats', this.adminController.getSystemStats);
 
+        // User Management
+        this.router.get('/users', this.adminController.getUsers);
+
+        // Game Management
+        this.router.get('/games', this.adminController.getGames);
+        this.router.post('/games', this.adminController.createGame);
+        this.router.put('/games/:gameId', this.adminController.updateGame);
+        this.router.patch('/games/:gameId/status', this.adminController.setGameStatus);
+
         // Data Management
         this.router.get('/analyses', this.adminController.getRecentAnalyses);
         this.router.delete('/analyses/:id', this.adminController.deleteAnalysis);
