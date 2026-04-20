@@ -183,6 +183,9 @@ export class App {
    * Setup middleware
    */
   private setupMiddleware(): void {
+    // Trust nginx/load balancer proxy (fixes X-Forwarded-For rate limiter error)
+    this.app.set('trust proxy', 1);
+
     // Security middleware
     this.app.use(helmet());
 
