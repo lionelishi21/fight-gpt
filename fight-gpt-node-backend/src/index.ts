@@ -157,7 +157,7 @@ export class App {
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
     const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
-    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService) : null;
+    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined) : null;
 
     // Setup routes
     this.routes = new Routes(

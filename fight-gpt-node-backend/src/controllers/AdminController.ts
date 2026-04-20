@@ -1,11 +1,17 @@
 import { Request, Response } from 'express';
 import { BaseController } from './BaseController';
 import { IAdminService } from '../services/AdminService';
+import { IIngestionService } from '../services/IngestionService';
+import { IMetaService } from '../services/MetaService';
 import User from '../models/User';
 import { Game } from '../models/Game';
 
 export class AdminController extends BaseController {
-    constructor(private readonly adminService: IAdminService) {
+    constructor(
+        private readonly adminService: IAdminService,
+        private readonly ingestionService?: IIngestionService,
+        private readonly metaService?: IMetaService,
+    ) {
         super();
     }
 
@@ -245,6 +251,79 @@ export class AdminController extends BaseController {
             }
             const result = await this.adminService.seedUrls(gameId, youtubeUrls);
             this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * POST /api/admin/ingestion/seed-and-process
+     * One-shot: queue URLs (or scrape via yt-dlp if none given), process the queue,
+     * and optionally generate a meta report — all in a single call.
+     *
+     * Body: {
+     *   game_id: string,
+     *   youtube_urls?: string[],   // if omitted, scrapes YouTube instead
+     *   max_videos?: number,       // used when scraping (default 5)
+     *   batch_size?: number,       // videos to process this run (default 3)
+     *   generate_meta?: boolean,   // generate meta report after processing (default false)
+     * }
+     */
+    seedAndProcess = async (req: Request, res: Response): Promise<void> => {
+        if (!this.ingestionService) {
+            res.status(503).json({ success: false, error: 'Ingestion service unavailable' });
+            return;
+        }
+
+        try {
+            const {
+                game_id,
+                youtube_urls,
+                max_videos = 5,
+                batch_size = 3,
+                generate_meta = false,
+            } = req.body as {
+                game_id: string;
+                youtube_urls?: string[];
+                max_videos?: number;
+                batch_size?: number;
+                generate_meta?: boolean;
+            };
+
+            if (!game_id) {
+                res.status(400).json({ success: false, error: 'game_id is required' });
+                return;
+            }
+
+            // Step 1 — queue videos
+            let queueResult: { queued_count?: number; queued?: number; skipped_count?: number; skipped?: number };
+            if (Array.isArray(youtube_urls) && youtube_urls.length > 0) {
+                const r = await this.adminService.seedUrls(game_id, youtube_urls);
+                queueResult = { queued_count: r.data?.queued, skipped_count: r.data?.skipped };
+            } else {
+                const r = await this.ingestionService.triggerIngestion(game_id, max_videos);
+                queueResult = r.data ?? {};
+            }
+
+            // Step 2 — process the queue
+            const processResult = await this.ingestionService.processQueue(game_id, batch_size);
+
+            // Step 3 (optional) — generate meta report
+            let metaResult = null;
+            if (generate_meta && this.metaService) {
+                const mr = await this.metaService.generateMetaReport(game_id, 'weekly');
+                metaResult = mr.data;
+            }
+
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    queue: queueResult,
+                    process: processResult.data,
+                    meta: metaResult,
+                },
+                message: `Seed-and-process complete for ${game_id}`,
+            });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
         }

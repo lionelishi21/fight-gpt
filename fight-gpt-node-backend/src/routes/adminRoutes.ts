@@ -39,6 +39,7 @@ export class AdminRoutes {
         // Manual Intervention
         this.router.post('/ingestion/trigger', this.adminController.triggerManualUrl);
         this.router.post('/ingestion/seed', this.adminController.seedUrls);
+        this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
 
         // Admin Invites
         this.router.post('/invites', inviteController.createAdminInvite);
