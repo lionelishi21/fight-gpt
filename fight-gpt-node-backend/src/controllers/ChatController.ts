@@ -1,48 +1,82 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './BaseController';
-import { ChatService, ChatMessage } from '../services/ChatService';
+import { ChatService, ChatMessage, UserChatContext } from '../services/ChatService';
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
+import { IRivalRepository } from '../repositories/RivalRepository';
+import { IGameRepository } from '../repositories/GameRepository';
+import { IAnalysisRepository } from '../repositories/AnalysisRepository';
+import User from '../models/User';
 
-/**
- * Chat Controller
- * Handles chat-related HTTP requests
- * Follows Single Responsibility Principle - handles chat request/response
- */
 export class ChatController extends BaseController {
-  private chatService: ChatService;
-  private auditLogRepository: AuditLogRepository | null;
-
-  constructor(chatService: ChatService, auditLogRepository: AuditLogRepository | null) {
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly auditLogRepository: AuditLogRepository | null,
+    private readonly rivalRepository?: IRivalRepository,
+    private readonly gameRepository?: IGameRepository,
+    private readonly analysisRepository?: IAnalysisRepository,
+  ) {
     super();
-    this.chatService = chatService;
-    this.auditLogRepository = auditLogRepository;
   }
 
-  /**
-   * Send a chat message
-   * POST /api/chat
-   */
   sendMessage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { message, history } = req.body;
 
-      // Validate message
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
         this.sendResponse(res, { success: false, error: 'Message is required and must be a non-empty string' }, 400);
         return;
       }
-
-      // Validate history if provided
       if (history && !Array.isArray(history)) {
         this.sendResponse(res, { success: false, error: 'History must be an array' }, 400);
         return;
       }
 
-      // Process chat message
       const conversationHistory: ChatMessage[] = history || [];
-      const response = await this.chatService.sendMessage(message.trim(), conversationHistory);
+      const userId = (req as any).user?.id;
 
-      // Log the request (if audit log repository is available)
+      let response;
+
+      // If authenticated and repos available, use contextual chat
+      if (userId && this.rivalRepository && this.gameRepository) {
+        try {
+          const [user, rivals, games] = await Promise.all([
+            User.findById(userId).lean(),
+            this.rivalRepository.getRivalsByUserId(userId),
+            this.gameRepository.findActiveGames(),
+          ]);
+
+          // Fetch player analyses for tracked rivals (only for premium users)
+          let playerAnalyses: UserChatContext['playerAnalyses'] = [];
+          if ((user as any)?.planType === 'premium' && this.analysisRepository && rivals.length > 0) {
+            const recentAnalyses = await this.analysisRepository.getRecentAnalyses(50);
+            playerAnalyses = recentAnalyses
+              .filter((a: any) => a.analysis?.p1_name || a.analysis?.p2_name)
+              .flatMap((a: any) => {
+                const entries = [];
+                if (a.analysis?.p1_name) entries.push({ playerName: a.analysis.p1_name, gameId: a.game_id, analysisId: a.analysis_id, character: a.analysis.p1_character });
+                if (a.analysis?.p2_name) entries.push({ playerName: a.analysis.p2_name, gameId: a.game_id, analysisId: a.analysis_id, character: a.analysis.p2_character });
+                return entries;
+              })
+              .filter((e: any) => rivals.some(r => r.targetName.toLowerCase() === e.playerName?.toLowerCase()));
+          }
+
+          const ctx: UserChatContext = {
+            planType: (user as any)?.planType === 'premium' ? 'premium' : 'free',
+            slots: (user as any)?.slots || [],
+            rivals: rivals.map((r: any) => ({ name: r.targetName, gameId: r.gameId, characterId: r.characterId })),
+            games: (games as any[]).map((g: any) => ({ name: g.name, game_id: g.game_id, aliases: g.aliases || [] })),
+            playerAnalyses,
+          };
+
+          response = await this.chatService.sendContextualMessage(message.trim(), conversationHistory, ctx);
+        } catch (ctxErr) {
+          console.error('[ChatController] Context fetch failed, falling back:', ctxErr);
+          response = await this.chatService.sendMessage(message.trim(), conversationHistory);
+        }
+      } else {
+        response = await this.chatService.sendMessage(message.trim(), conversationHistory);
+      }
+
       if (this.auditLogRepository) {
         const requestId = this.getRequestId(req);
         await this.auditLogRepository.createAuditLog({
@@ -53,9 +87,7 @@ export class ChatController extends BaseController {
           user_agent: req.headers['user-agent'],
           request_body: { message: message.trim() },
           response_status: response.success ? 200 : 400,
-        }).catch((err) => {
-          console.error('[ChatController] Failed to create audit log:', err);
-        });
+        }).catch(() => {});
       }
 
       if (response.success) {
@@ -63,45 +95,30 @@ export class ChatController extends BaseController {
           success: true,
           data: {
             message: response.message,
-            content: response.message, // For compatibility
+            content: response.message,
+            detectedEntities: (response as any).detectedEntities,
+            requiresUpgrade: (response as any).requiresUpgrade,
+            requiresUrl: (response as any).requiresUrl,
           },
         }, 200);
       } else {
-        this.sendResponse(res, {
-          success: false,
-          error: response.error || 'Failed to get response',
-        }, 400);
+        this.sendResponse(res, { success: false, error: response.error || 'Failed to get response' }, 400);
       }
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Clear chat history (placeholder - could be used for session management)
-   * POST /api/chat/clear
-   */
   clearChat = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      // Log the request (if audit log repository is available)
       if (this.auditLogRepository) {
         const requestId = this.getRequestId(req);
         await this.auditLogRepository.createAuditLog({
-          request_id: requestId,
-          endpoint: '/api/chat/clear',
-          method: 'POST',
-          ip_address: req.ip,
-          user_agent: req.headers['user-agent'],
-          response_status: 200,
-        }).catch((err) => {
-          console.error('[ChatController] Failed to create audit log:', err);
-        });
+          request_id: requestId, endpoint: '/api/chat/clear', method: 'POST',
+          ip_address: req.ip, user_agent: req.headers['user-agent'], response_status: 200,
+        }).catch(() => {});
       }
-
-      this.sendResponse(res, {
-        success: true,
-        message: 'Chat cleared successfully',
-      }, 200);
+      this.sendResponse(res, { success: true, message: 'Chat cleared successfully' }, 200);
     } catch (error) {
       next(error);
     }

@@ -14,8 +14,10 @@ export class NotificationRoutes {
         // All notification routes require authentication
         this.router.use(authMiddleware);
 
-        this.router.get('/', this.notificationController.getMyNotifications);
-        this.router.patch('/:id/read', this.notificationController.markAsRead);
+        this.router.get('/',            this.notificationController.getMyNotifications);
+        this.router.get('/unread-count', this.notificationController.getUnreadCount);
+        this.router.patch('/read-all',   this.notificationController.markAllRead);
+        this.router.patch('/:id/read',   this.notificationController.markAsRead);
     }
 
     public getRouter(): Router {

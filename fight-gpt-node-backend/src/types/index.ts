@@ -66,9 +66,15 @@ export interface AnalysisResponse {
  */
 export interface TimelineEvent {
   timestamp: string;
-  event_type: 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss';
+  event_type: 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss' | 'neutral_win' | 'frame_trap' | 'whiff_punish' | 'okizeme' | 'corner_carry' | 'wake_up_option';
   description: string;
   coach_advice: string;
+  turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
+  neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
+  spacing?: 'close' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
+  frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
+  p1_state?: 'standing' | 'crouching' | 'jumping' | 'knockdown' | 'wakeup' | 'pressured' | 'attacking' | 'blocking';
+  p2_state?: 'standing' | 'crouching' | 'jumping' | 'knockdown' | 'wakeup' | 'pressured' | 'attacking' | 'blocking';
 }
 
 /**

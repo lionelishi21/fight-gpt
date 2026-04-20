@@ -34,6 +34,20 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
  * Middleware to check if user is an admin
  * Must be used AFTER authMiddleware
  */
+/**
+ * Optional auth middleware — sets req.user if valid token present, never blocks
+ */
+export const optionalAuthMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+    const token = req.header('x-auth-token');
+    if (!token) { next(); return; }
+    try {
+        const secret = process.env.JWT_SECRET || 'fight-gpt-secret-key-change-in-prod';
+        const decoded = jwt.verify(token, secret) as JwtPayload;
+        (req as any).user = decoded.user;
+    } catch { /* invalid token — just continue unauthenticated */ }
+    next();
+};
+
 export const adminMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         // @ts-ignore

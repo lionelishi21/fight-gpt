@@ -9,18 +9,22 @@ export class NotificationController extends BaseController {
 
     public getMyNotifications = async (req: Request, res: Response): Promise<void> => {
         try {
-            // @ts-ignore
-            const userId = req.user.id;
+            const userId = (req as any).user?.id || (req as any).user?._id;
             const limit = parseInt(req.query.limit as string) || 20;
-
             const notifications = await this.notificationRepository.getNotificationsByUserId(userId, limit);
-
-            this.sendResponse(res, {
-                success: true,
-                data: notifications,
-            });
+            this.sendResponse(res, { success: true, data: notifications });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch notifications', 500);
+        }
+    };
+
+    public getUnreadCount = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const userId = (req as any).user?.id || (req as any).user?._id;
+            const count = await this.notificationRepository.getUnreadCount(userId);
+            this.sendResponse(res, { success: true, data: { count } });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch unread count', 500);
         }
     };
 
@@ -28,18 +32,20 @@ export class NotificationController extends BaseController {
         try {
             const { id } = req.params;
             const notification = await this.notificationRepository.markAsRead(id);
-
-            if (!notification) {
-                this.sendError(res, 'Notification not found', 404);
-                return;
-            }
-
-            this.sendResponse(res, {
-                success: true,
-                data: notification,
-            });
+            if (!notification) { this.sendError(res, 'Notification not found', 404); return; }
+            this.sendResponse(res, { success: true, data: notification });
         } catch (error) {
-            this.sendError(res, error instanceof Error ? error.message : 'Failed to mark notification as read', 500);
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to mark as read', 500);
+        }
+    };
+
+    public markAllRead = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const userId = (req as any).user?.id || (req as any).user?._id;
+            await this.notificationRepository.markAllRead(userId);
+            this.sendResponse(res, { success: true, data: { message: 'All notifications marked as read' } });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to mark all as read', 500);
         }
     };
 }

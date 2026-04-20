@@ -26,6 +26,27 @@ export interface ChatResponse {
   error?: string;
 }
 
+export interface DetectedEntity {
+  text: string;
+  type: 'game' | 'character' | 'player';
+  color: string;
+  gameId?: string;
+}
+
+export interface UserChatContext {
+  planType: 'free' | 'premium';
+  slots: Array<{ gameId: string; characterId?: string }>;
+  rivals: Array<{ name: string; gameId: string; characterId?: string }>;
+  games: Array<{ name: string; game_id: string; aliases?: string[] }>;
+  playerAnalyses?: Array<{ playerName: string; gameId: string; analysisId: string; character: string }>;
+}
+
+export interface SmartChatResponse extends ChatResponse {
+  detectedEntities?: DetectedEntity[];
+  requiresUpgrade?: boolean;
+  requiresUrl?: { playerName: string; gameId?: string };
+}
+
 /**
  * Chat Service implementation with Gemini AI
  * Specialized for fighting games only
@@ -173,6 +194,87 @@ Help players improve their skills, understand game mechanics, learn characters, 
       console.error('[ChatService] Error sending message:', errorMessage);
       return { success: false, message: '', error: `Failed to get response: ${errorMessage}` };
     }
+  }
+
+  /**
+   * Context-aware message — resolves game/character/player entities before calling Gemini
+   */
+  async sendContextualMessage(
+    message: string,
+    history: ChatMessage[],
+    ctx: UserChatContext,
+  ): Promise<SmartChatResponse> {
+    const lowerMsg = message.toLowerCase();
+    const detectedEntities: DetectedEntity[] = [];
+
+    // Detect game names
+    for (const game of ctx.games) {
+      const names = [game.name, ...(game.aliases || [])];
+      for (const alias of names) {
+        if (alias && lowerMsg.includes(alias.toLowerCase())) {
+          detectedEntities.push({ text: alias, type: 'game', color: '#06b6d4', gameId: game.game_id });
+          break;
+        }
+      }
+    }
+
+    // Detect user's slot characters
+    for (const slot of ctx.slots) {
+      if (slot.characterId && lowerMsg.includes(slot.characterId.toLowerCase())) {
+        detectedEntities.push({ text: slot.characterId, type: 'character', color: '#fbbf24', gameId: slot.gameId });
+      }
+    }
+
+    // Detect rival/player names — check if any rival name appears in the message
+    const mentionedRival = ctx.rivals.find(r => lowerMsg.includes(r.name.toLowerCase()));
+    if (mentionedRival) {
+      detectedEntities.push({ text: mentionedRival.name, type: 'player', color: '#f43f5e', gameId: mentionedRival.gameId });
+
+      // Gate: player scouting is premium only
+      if (ctx.planType !== 'premium') {
+        return {
+          success: true,
+          message: `Player scouting is a **Pro feature**. To get AI analysis of ${mentionedRival.name}'s playstyle and matchup tips against them, upgrade to Pro.`,
+          detectedEntities,
+          requiresUpgrade: true,
+        };
+      }
+
+      // Premium: check if we have their footage analyzed
+      const analysis = ctx.playerAnalyses?.find(
+        a => a.playerName.toLowerCase() === mentionedRival.name.toLowerCase()
+      );
+      if (!analysis) {
+        return {
+          success: true,
+          message: `I found **${mentionedRival.name}** in your rivals list but I haven't analyzed their footage yet. Paste a YouTube URL of their gameplay and I'll analyze it to give you a full breakdown.`,
+          detectedEntities,
+          requiresUrl: { playerName: mentionedRival.name, gameId: mentionedRival.gameId },
+        };
+      }
+
+      // Have analysis — inject into context
+      const playerContext = `\n\n[PLAYER INTEL — ${mentionedRival.name}]\nCharacter: ${analysis.character}\nGame: ${analysis.gameId}\nAnalysis ID: ${analysis.analysisId}\nUse this data to answer questions about how to counter this player specifically.`;
+      return this.sendMessage(message + playerContext, history);
+    }
+
+    // No player — build a context prefix about what game/character to focus on
+    let contextPrefix = '';
+    const userGame = ctx.slots[0]?.gameId;
+    const userChar = ctx.slots[0]?.characterId;
+    if (userGame || userChar) {
+      contextPrefix = `[USER CONTEXT] The player mains ${userChar || 'unknown character'} in ${userGame || 'unknown game'}. Tailor advice to their character and game when relevant.\n\n`;
+    }
+
+    // Add game disambiguation instruction when game detected but potentially ambiguous SF versions
+    const sfDetected = detectedEntities.some(e => e.gameId?.includes('sf') || e.text.toLowerCase().includes('street fighter'));
+    if (sfDetected) {
+      contextPrefix += `[GAME NOTE] Street Fighter has multiple versions (SF6, SF5/SFV, SF3, SF2). If the version is unclear from context, ask the user to clarify which one they mean before answering.\n\n`;
+    }
+
+    const enrichedMessage = contextPrefix ? contextPrefix + message : message;
+    const response = await this.sendMessage(enrichedMessage, history);
+    return { ...response, detectedEntities };
   }
 
   /**

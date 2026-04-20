@@ -143,7 +143,13 @@ export class App {
       characterEncyclopediaService,
       auditLogRepository
     ) : null as any;
-    const chatController = new ChatController(chatService, auditLogRepository || null as any);
+    const chatController = new ChatController(
+      chatService,
+      auditLogRepository || null as any,
+      rivalRepository || undefined,
+      gameRepository || undefined,
+      analysisRepository || undefined,
+    );
     const metaController = AppConfig.MONGODB_URI ? new MetaController(metaService, this.ingestionService!) : null;
     const theoryController = AppConfig.MONGODB_URI ? new TheoryController(theoryService) : null;
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;

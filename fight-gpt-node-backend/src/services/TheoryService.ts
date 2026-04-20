@@ -5,6 +5,7 @@ import { IVectorRepository } from '../repositories/VectorRepository';
 import { ITheoryDocument } from '../models/TheoryDocument';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
+import { NotificationService } from './NotificationService';
 
 const CONFIDENCE_THRESHOLDS = { low: 5, medium: 20, high: 50 };
 
@@ -23,6 +24,7 @@ export class TheoryService extends BaseService implements ITheoryService {
         private readonly theoryRepository: ITheoryRepository,
         private readonly vectorRepository: IVectorRepository,
         private readonly geminiApiKey: string,
+        private readonly notificationService?: NotificationService,
     ) {
         super();
         this.genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -58,6 +60,14 @@ export class TheoryService extends BaseService implements ITheoryService {
                 generated_at: new Date(),
             });
 
+            // Fire notification to all users
+            this.notificationService?.characterTheory({
+                gameId,
+                characterName: characterId,
+                theoryId: (saved as any).theory_id ?? (saved as any)._id?.toString() ?? '',
+                headline: summary,
+            }).catch(() => {});
+
             return { success: true, data: saved as unknown as ITheoryDocument };
         } catch (error) {
             throw this.handleError(error, 'generateCharacterTheory');
@@ -92,6 +102,14 @@ export class TheoryService extends BaseService implements ITheoryService {
                 confidence,
                 generated_at: new Date(),
             });
+
+            this.notificationService?.matchupTheory({
+                gameId,
+                charA,
+                charB,
+                theoryId: (saved as any).theory_id ?? (saved as any)._id?.toString() ?? '',
+                headline: summary,
+            }).catch(() => {});
 
             return { success: true, data: saved as unknown as ITheoryDocument };
         } catch (error) {

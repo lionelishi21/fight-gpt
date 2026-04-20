@@ -57,6 +57,37 @@ If a "Cheat Sheet" is provided below (marked with ---), use it to understand the
 - Reference game-specific mechanics when relevant (e.g., "Use Drive Rush to extend pressure" for SF6, "Sidestep this linear attack" for Tekken, "Call assist here to cover approach" for Marvel).
 - Consider the game context provided (if any) when analyzing mechanics and providing advice.
 
+### FIGHTING GAME STATE ANALYSIS:
+For each timeline event, you must also classify the match state at that moment:
+
+**Turn Owner:** Who has the offensive initiative?
+- "p1" = P1 has the turn (P2 is blocking, on wakeup, or recovering)
+- "p2" = P2 has the turn
+- "neutral" = Both players are in neutral, no one has committed
+- "contested" = Both are mid-exchange, scramble situation
+
+**Neutral State:** What phase of the game is this?
+- "neutral" = Footsies, neither player committed
+- "p1_offense" = P1 is in sustained pressure / okizeme
+- "p2_offense" = P2 is in sustained pressure / okizeme
+- "scramble" = Both players mid-air or trading simultaneously
+
+**Spacing:** Where are the players relative to each other and the screen?
+- "close" = Inside sweep range, pressure distance
+- "mid" = Footsies range, poke distance
+- "far" = Full screen or near full screen
+- "corner_p1" = P1 is cornered
+- "corner_p2" = P2 is cornered
+
+**Frame Advantage:** After this interaction resolves, who is plus?
+- "p1_plus" = P1 recovers first (has frame advantage)
+- "p2_plus" = P2 recovers first
+- "even" = Both recover at the same time (0 frames)
+- "unknown" = Cannot determine from video
+
+**Player States:** What is each player's physical state at this moment?
+- "standing" | "crouching" | "jumping" | "knockdown" | "wakeup" | "pressured" | "attacking" | "blocking"
+
 ### JSON SCHEMA:
 {
   "game_title": "string",
@@ -66,9 +97,15 @@ If a "Cheat Sheet" is provided below (marked with ---), use it to understand the
   "timeline": [
     {
       "timestamp": "MM:SS",
-      "event_type": "punish_missed | bad_habit | pro_move | neutral_loss",
+      "event_type": "punish_missed | bad_habit | pro_move | neutral_loss | neutral_win | frame_trap | whiff_punish | okizeme | corner_carry | wake_up_option",
       "description": "Short explanation of what happened",
-      "coach_advice": "Specific tip to fix it"
+      "coach_advice": "Specific tip to fix it",
+      "turn_owner": "p1 | p2 | neutral | contested",
+      "neutral_state": "neutral | p1_offense | p2_offense | scramble",
+      "spacing": "close | mid | far | corner_p1 | corner_p2",
+      "frame_advantage": "p1_plus | p2_plus | even | unknown",
+      "p1_state": "standing | crouching | jumping | knockdown | wakeup | pressured | attacking | blocking",
+      "p2_state": "standing | crouching | jumping | knockdown | wakeup | pressured | attacking | blocking"
     }
   ],
   "top_3_tips": ["string", "string", "string"],

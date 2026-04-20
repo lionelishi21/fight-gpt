@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { validateRequest } from '../middleware/validationMiddleware';
 import { ChatController } from '../controllers/ChatController';
+import { optionalAuthMiddleware } from '../middleware/auth';
 
 /**
  * Chat Routes
@@ -22,9 +23,10 @@ export class ChatRoutes {
    * Setup routes
    */
   private setupRoutes(): void {
-    // POST /api/chat - Send a chat message
+    // POST /api/chat - Send a chat message (optional auth for user context)
     this.router.post(
       '/',
+      optionalAuthMiddleware,
       this.validateSendMessage(),
       validateRequest,
       (req, res, next) => this.controller.sendMessage(req, res, next)

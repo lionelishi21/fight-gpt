@@ -64,11 +64,20 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       if (this.vectorRepository && analysisResponse.timeline) {
         for (const event of analysisResponse.timeline) {
           try {
-            const contextText = `Game: ${request.game_id || 'Unknown'}. ` +
-              `Matchup: ${analysisResponse.p1_character || 'P1'} vs ${analysisResponse.p2_character || 'P2'}. ` +
-              `Situation: ${event.description}. ` +
-              `Advice: ${event.coach_advice}.`;
+            const contextParts = [
+              `Game: ${request.game_id || 'Unknown'}.`,
+              `Matchup: ${analysisResponse.p1_character || 'P1'} vs ${analysisResponse.p2_character || 'P2'}.`,
+              `Situation: ${event.description}.`,
+              `Advice: ${event.coach_advice}.`,
+            ];
+            if (event.neutral_state)   contextParts.push(`Phase: ${event.neutral_state}.`);
+            if (event.turn_owner)      contextParts.push(`Turn: ${event.turn_owner}.`);
+            if (event.spacing)         contextParts.push(`Spacing: ${event.spacing}.`);
+            if (event.frame_advantage) contextParts.push(`Frame advantage: ${event.frame_advantage}.`);
+            if (event.p1_state)        contextParts.push(`${analysisResponse.p1_character || 'P1'} state: ${event.p1_state}.`);
+            if (event.p2_state)        contextParts.push(`${analysisResponse.p2_character || 'P2'} state: ${event.p2_state}.`);
 
+            const contextText = contextParts.join(' ');
             const embedding = await this.aiService.generateEmbedding(contextText);
 
             // NOVELTY CHECK
@@ -84,7 +93,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               if (topScore > 0.15) isNovel = false;
             }
 
-            // Save scenario
+            // Save scenario with full match state context
             await this.vectorRepository.createScenario({
               scenario_id: UuidHelper.generate(),
               game_id: request.game_id || 'unknown',
@@ -93,7 +102,13 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               characters_involved: [analysisResponse.p1_character, analysisResponse.p2_character].filter(Boolean) as string[],
               embedding,
               match_references: [analysisId],
-              tags: [event.event_type]
+              tags: [event.event_type],
+              turn_owner: event.turn_owner,
+              neutral_state: event.neutral_state,
+              spacing: event.spacing,
+              frame_advantage: event.frame_advantage,
+              p1_state: event.p1_state,
+              p2_state: event.p2_state,
             });
 
             // TECH_DISCOVERY Alert

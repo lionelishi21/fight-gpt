@@ -6,9 +6,16 @@ export interface IScenario {
     description: string;
     context: string;
     characters_involved: string[];
-    embedding: number[]; // e.g. 768-dim from Gemini or 1536-dim from OpenAI
-    match_references: string[]; // Array of match_ids that demonstrate this scenario
+    embedding: number[];
+    match_references: string[];
     tags: string[];
+    // Match state context — populated by AI analysis
+    turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
+    neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
+    spacing?: 'close' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
+    frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
+    p1_state?: string;
+    p2_state?: string;
     created_at?: Date;
     updated_at?: Date;
 }
@@ -30,7 +37,13 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
         // configuring the 'embedding' field as a vector.
     },
     match_references: [{ type: String }],
-    tags: [{ type: String }]
+    tags: [{ type: String }],
+    turn_owner:      { type: String },
+    neutral_state:   { type: String },
+    spacing:         { type: String },
+    frame_advantage: { type: String },
+    p1_state:        { type: String },
+    p2_state:        { type: String },
 }, {
     timestamps: {
         createdAt: 'created_at',
