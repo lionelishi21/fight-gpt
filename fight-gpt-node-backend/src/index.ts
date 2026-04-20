@@ -48,6 +48,7 @@ import { ChatService } from './services/ChatService';
 import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
+import { NotificationService } from './services/NotificationService';
 import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
 import { AdminService } from './services/AdminService';
@@ -127,7 +128,8 @@ export class App {
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
     this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService) : null;
-    const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
+    const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository) : null as any;
+    const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
     const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
     const adminService = AppConfig.MONGODB_URI ? new AdminService() : null as any;
