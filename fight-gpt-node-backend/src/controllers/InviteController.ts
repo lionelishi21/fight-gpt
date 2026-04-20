@@ -122,11 +122,12 @@ export class InviteController extends BaseController {
             const { email } = req.body;
             if (!email) { res.status(400).json({ success: false, error: 'email is required' }); return; }
 
-            const senderUser = (req as any).user;
+            const userId = (req as any).user?.id;
+            const senderUser = await User.findById(userId).lean();
+            if (!senderUser) { res.status(404).json({ success: false, error: 'User not found' }); return; }
 
-            // Referral link just uses the user's referralCode — no invite record needed
-            const inviteUrl = `${APP_URL}/signup?ref=${senderUser.referralCode}`;
-            await emailService.sendReferralInviteEmail(email, senderUser.name, inviteUrl);
+            const inviteUrl = `${APP_URL}/signup?ref=${(senderUser as any).referralCode}`;
+            await emailService.sendReferralInviteEmail(email, (senderUser as any).name, inviteUrl);
 
             this.sendResponse(res, { success: true, data: { inviteUrl } });
         } catch (error) {
@@ -140,7 +141,10 @@ export class InviteController extends BaseController {
      */
     getReferralStats = async (req: Request, res: Response): Promise<void> => {
         try {
-            const user = (req as any).user;
+            const userId = (req as any).user?.id;
+            const user = await User.findById(userId).lean() as any;
+            if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
+
             const referees = await User.find({ referredBy: user._id })
                 .select('name email tier createdAt')
                 .sort({ createdAt: -1 })
@@ -151,9 +155,9 @@ export class InviteController extends BaseController {
                 data: {
                     referralCode: user.referralCode,
                     referralLink: `${APP_URL}/signup?ref=${user.referralCode}`,
-                    referralCount: user.referralCount,
-                    referralCredits: user.referralCredits,
-                    referees: referees.map(r => ({
+                    referralCount: user.referralCount ?? 0,
+                    referralCredits: user.referralCredits ?? 0,
+                    referees: referees.map((r: any) => ({
                         name: r.name,
                         email: r.email,
                         tier: r.tier,
