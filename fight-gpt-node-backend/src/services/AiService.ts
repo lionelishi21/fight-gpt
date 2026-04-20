@@ -237,8 +237,7 @@ export class AiService extends BaseService implements IAiService {
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      // Use the text-embedding-004 model
-      const model = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
       const result = await model.embedContent(text);
       return result.embedding.values;
     } catch (error) {
