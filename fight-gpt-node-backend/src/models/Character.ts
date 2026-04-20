@@ -4,7 +4,7 @@ import { CharacterStats, CharacterMove, ICharacter } from '../types/character';
 /**
  * Character document interface extending mongoose Document
  */
-export interface ICharacterDocument extends ICharacter, Document {
+export interface ICharacterDocument extends Omit<ICharacter, '_id'>, Document {
   _id: mongoose.Types.ObjectId;
 }
 

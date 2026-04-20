@@ -4,7 +4,7 @@ import { IGame } from '../types/game';
 /**
  * Game document interface extending mongoose Document
  */
-export interface IGameDocument extends IGame, Document {
+export interface IGameDocument extends Omit<IGame, '_id'>, Document {
   _id: mongoose.Types.ObjectId;
 }
 
@@ -100,7 +100,7 @@ GameSchema.index({ name: 'text', full_name: 'text', description: 'text' });
 // Ensure game_id is unique and lowercase
 GameSchema.pre('save', function (next) {
   if (this.isModified('game_id')) {
-    this.game_id = this.game_id.toLowerCase().trim();
+    this.game_id = (this.game_id as string).toLowerCase().trim();
   }
   next();
 });

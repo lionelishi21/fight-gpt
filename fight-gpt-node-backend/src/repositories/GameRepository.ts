@@ -8,6 +8,7 @@ import { CreateGameRequest, UpdateGameRequest, GameFilters } from '../types/game
  */
 export interface IGameRepository {
   findByGameId(gameId: string): Promise<IGameDocument | null>;
+  findById(id: string): Promise<IGameDocument | null>;
   findActiveGames(): Promise<IGameDocument[]>;
   findByName(name: string): Promise<IGameDocument[]>;
   findByPublisher(publisher: string): Promise<IGameDocument[]>;
@@ -18,6 +19,7 @@ export interface IGameRepository {
   updateGameByGameId(gameId: string, data: UpdateGameRequest): Promise<IGameDocument | null>;
   searchGames(query: string): Promise<IGameDocument[]>;
   findWithFilters(filters: GameFilters, limit?: number): Promise<IGameDocument[]>;
+  delete(id: string): Promise<boolean>;
   incrementCharacterCount(gameId: string): Promise<IGameDocument | null>;
   decrementCharacterCount(gameId: string): Promise<IGameDocument | null>;
   updateCharacterCount(gameId: string, count: number): Promise<IGameDocument | null>;
@@ -145,7 +147,7 @@ export class GameRepository
     try {
       // Try text search first
       const searchFilter: any = { $text: { $search: query } };
-      return this.findMany(searchFilter, { sort: { score: { $meta: 'textScore' } } });
+      return this.findMany(searchFilter, { sort: { score: { $meta: 'textScore' } } as any });
     } catch (error) {
       // Fallback to regex search if text index is not available
       const regexFilter: any = {

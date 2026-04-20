@@ -8,6 +8,7 @@ import { CreateCharacterRequest, UpdateCharacterRequest, CharacterFilters } from
  */
 export interface ICharacterRepository {
   findByGameId(gameId: string): Promise<ICharacterDocument[]>;
+  findById(id: string): Promise<ICharacterDocument | null>;
   findByGameIdAndName(gameId: string, name: string): Promise<ICharacterDocument[]>;
   findCurrentCharactersByGame(gameId: string): Promise<ICharacterDocument[]>;
   findByGameIdAndVersion(gameId: string, version: string): Promise<ICharacterDocument[]>;
@@ -16,6 +17,8 @@ export interface ICharacterRepository {
   updateCharacter(id: string, data: UpdateCharacterRequest): Promise<ICharacterDocument | null>;
   searchCharacters(query: string, gameId?: string): Promise<ICharacterDocument[]>;
   findWithFilters(filters: CharacterFilters, limit?: number): Promise<ICharacterDocument[]>;
+  exists(filter: object): Promise<boolean>;
+  delete(id: string): Promise<boolean>;
 }
 
 /**
@@ -95,7 +98,7 @@ export class CharacterRepository
         searchFilter.game_id = gameId;
       }
 
-      return this.findMany(searchFilter, { sort: { score: { $meta: 'textScore' } } });
+      return this.findMany(searchFilter, { sort: { score: { $meta: 'textScore' } } as any });
     } catch (error) {
       // Fallback to regex search if text index is not available
       const regexFilter: any = {
