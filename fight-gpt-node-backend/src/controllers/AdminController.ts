@@ -5,6 +5,8 @@ import { IIngestionService } from '../services/IngestionService';
 import { IMetaService } from '../services/MetaService';
 import User from '../models/User';
 import { Game } from '../models/Game';
+import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
+import { Character } from '../models/Character';
 
 export class AdminController extends BaseController {
     constructor(
@@ -234,6 +236,56 @@ export class AdminController extends BaseController {
             this.sendResponse(res, { success: true, data: game });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to update game');
+        }
+    };
+
+    /**
+     * POST /api/admin/games/:gameId/bump-patch
+     * Set a new current patch version for a game.
+     * Updates Game.latest_version and for each character:
+     *   - marks old encyclopedia docs as is_current_patch: false
+     *   - creates new encyclopedia doc for the new patch (carrying current moveset/rules/videos)
+     * Body: { patch_version: string }
+     */
+    bumpEncyclopediaPatch = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId } = req.params;
+            const { patch_version } = req.body;
+            if (!patch_version) {
+                res.status(400).json({ success: false, error: 'patch_version is required' });
+                return;
+            }
+
+            // Update the game's current patch label
+            const game = await Game.findOneAndUpdate(
+                { game_id: gameId },
+                { latest_version: patch_version },
+                { new: true }
+            );
+            if (!game) {
+                res.status(404).json({ success: false, error: 'Game not found' });
+                return;
+            }
+
+            // Bump encyclopedia for every character in this game
+            const encyclopediaRepo = new CharacterEncyclopediaRepository();
+            const characters = await Character.find({ game_id: gameId, is_current: true }).lean().exec();
+
+            const results = await Promise.allSettled(
+                characters.map((c: any) =>
+                    encyclopediaRepo.bumpPatchVersion(gameId, c.character_id || c._id.toString(), patch_version)
+                )
+            );
+
+            const bumped = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+
+            this.sendResponse(res, {
+                success: true,
+                data: { game_id: gameId, patch_version, bumped, failed },
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to bump patch version');
         }
     };
 

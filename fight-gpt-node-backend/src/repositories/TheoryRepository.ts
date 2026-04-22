@@ -16,30 +16,41 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
     }
 
     async upsertCharacterTheory(data: Partial<ITheoryDocumentDocument>): Promise<ITheoryDocumentDocument> {
-        return this.model.findOneAndUpdate(
+        // Mark previous theories for this character as not current
+        await this.model.updateMany(
             { game_id: data.game_id, character_id: data.character_id, type: 'character' },
-            { $set: data },
+            { $set: { is_current_patch: false } }
+        ).exec();
+        return this.model.findOneAndUpdate(
+            { game_id: data.game_id, character_id: data.character_id, type: 'character', patch_version: data.patch_version },
+            { $set: { ...data, is_current_patch: true } },
             { upsert: true, new: true }
         ).exec() as Promise<ITheoryDocumentDocument>;
     }
 
     async upsertMatchupTheory(data: Partial<ITheoryDocumentDocument>): Promise<ITheoryDocumentDocument> {
-        // Normalise order so A|B and B|A resolve to the same doc
         const [charA, charB] = [data.character_a!, data.character_b!].sort();
-        return this.model.findOneAndUpdate(
+        // Mark previous theories for this matchup as not current
+        await this.model.updateMany(
             { game_id: data.game_id, character_a: charA, character_b: charB, type: 'matchup' },
-            { $set: { ...data, character_a: charA, character_b: charB } },
+            { $set: { is_current_patch: false } }
+        ).exec();
+        return this.model.findOneAndUpdate(
+            { game_id: data.game_id, character_a: charA, character_b: charB, type: 'matchup', patch_version: data.patch_version },
+            { $set: { ...data, character_a: charA, character_b: charB, is_current_patch: true } },
             { upsert: true, new: true }
         ).exec() as Promise<ITheoryDocumentDocument>;
     }
 
     async getCharacterTheory(gameId: string, characterId: string): Promise<ITheoryDocumentDocument | null> {
-        return this.model.findOne({ game_id: gameId, character_id: characterId, type: 'character' }).exec();
+        return this.model.findOne({ game_id: gameId, character_id: characterId, type: 'character', is_current_patch: true }).exec()
+            ?? this.model.findOne({ game_id: gameId, character_id: characterId, type: 'character' }).sort({ generated_at: -1 }).exec();
     }
 
     async getMatchupTheory(gameId: string, charA: string, charB: string): Promise<ITheoryDocumentDocument | null> {
         const [a, b] = [charA, charB].sort();
-        return this.model.findOne({ game_id: gameId, character_a: a, character_b: b, type: 'matchup' }).exec();
+        return this.model.findOne({ game_id: gameId, character_a: a, character_b: b, type: 'matchup', is_current_patch: true }).exec()
+            ?? this.model.findOne({ game_id: gameId, character_a: a, character_b: b, type: 'matchup' }).sort({ generated_at: -1 }).exec();
     }
 
     async getAllCharacterTheories(gameId: string): Promise<ITheoryDocumentDocument[]> {

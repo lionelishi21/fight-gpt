@@ -1,5 +1,12 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://api.fightingames.online/api/characters\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Count: {len\\(d[\\\\\"data\\\\\"]\\)}'\\)\")",
+      "Bash(gh workflow *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(git push *)"
+    ],
     "additionalDirectories": [
       "/Users/Ish/software-development/fightgpt-mobile/app/(tabs)"
     ]

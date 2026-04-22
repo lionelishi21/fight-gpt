@@ -6,6 +6,7 @@ import { ITheoryDocument } from '../models/TheoryDocument';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { NotificationService } from './NotificationService';
+import { Game } from '../models/Game';
 
 const CONFIDENCE_THRESHOLDS = { low: 5, medium: 20, high: 50 };
 
@@ -35,8 +36,10 @@ export class TheoryService extends BaseService implements ITheoryService {
      */
     async generateCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>> {
         try {
-            // Pull all scenarios involving this character
-            const scenarios = await this.getScenariosForCharacter(gameId, characterId);
+            const [scenarios, patchVersion] = await Promise.all([
+                this.getScenariosForCharacter(gameId, characterId),
+                this.getCurrentPatchVersion(gameId),
+            ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
@@ -57,6 +60,8 @@ export class TheoryService extends BaseService implements ITheoryService {
                 counterplay,
                 source_scenario_count: scenarios.length,
                 confidence,
+                patch_version: patchVersion,
+                is_current_patch: true,
                 generated_at: new Date(),
             });
 
@@ -79,7 +84,10 @@ export class TheoryService extends BaseService implements ITheoryService {
      */
     async generateMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>> {
         try {
-            const scenarios = await this.getScenariosForMatchup(gameId, charA, charB);
+            const [scenarios, patchVersion] = await Promise.all([
+                this.getScenariosForMatchup(gameId, charA, charB),
+                this.getCurrentPatchVersion(gameId),
+            ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
@@ -100,6 +108,8 @@ export class TheoryService extends BaseService implements ITheoryService {
                 counterplay,
                 source_scenario_count: scenarios.length,
                 confidence,
+                patch_version: patchVersion,
+                is_current_patch: true,
                 generated_at: new Date(),
             });
 
@@ -148,6 +158,11 @@ export class TheoryService extends BaseService implements ITheoryService {
         } catch (error) {
             throw this.handleError(error, 'getAllCharacterTheories');
         }
+    }
+
+    private async getCurrentPatchVersion(gameId: string): Promise<string | undefined> {
+        const game = await Game.findOne({ game_id: gameId }).lean().exec();
+        return (game as any)?.latest_version ?? undefined;
     }
 
     // --- Private helpers ---

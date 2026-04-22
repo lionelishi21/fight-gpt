@@ -29,6 +29,10 @@ export interface ITheoryDocument {
     source_scenario_count: number;
     confidence: 'low' | 'medium' | 'high'; // based on scenario count
 
+    // Patch versioning
+    patch_version?: string;
+    is_current_patch: boolean;
+
     generated_at: Date;
     created_at?: Date;
     updated_at?: Date;
@@ -61,15 +65,17 @@ const TheoryDocumentSchema = new Schema<ITheoryDocumentDocument>({
     source_scenario_count: { type: Number, default: 0 },
     confidence: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
 
+    patch_version: { type: String, index: true },
+    is_current_patch: { type: Boolean, default: true, index: true },
+
     generated_at: { type: Date, required: true },
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
 
-// One theory doc per character per game (latest wins)
-TheoryDocumentSchema.index({ game_id: 1, character_id: 1 });
-// One matchup doc per pair per game
-TheoryDocumentSchema.index({ game_id: 1, character_a: 1, character_b: 1 });
+TheoryDocumentSchema.index({ game_id: 1, character_id: 1, is_current_patch: 1 });
+TheoryDocumentSchema.index({ game_id: 1, character_a: 1, character_b: 1, is_current_patch: 1 });
+TheoryDocumentSchema.index({ game_id: 1, type: 1, patch_version: 1 });
 TheoryDocumentSchema.index({ game_id: 1, type: 1, generated_at: -1 });
 
 export const TheoryDoc = mongoose.model<ITheoryDocumentDocument>('TheoryDocument', TheoryDocumentSchema);

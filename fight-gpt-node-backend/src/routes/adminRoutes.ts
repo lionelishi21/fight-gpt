@@ -27,6 +27,7 @@ export class AdminRoutes {
         this.router.post('/games', this.adminController.createGame);
         this.router.put('/games/:gameId', this.adminController.updateGame);
         this.router.patch('/games/:gameId/status', this.adminController.setGameStatus);
+        this.router.post('/games/:gameId/bump-patch', this.adminController.bumpEncyclopediaPatch);
 
         // Data Management
         this.router.get('/analyses', this.adminController.getRecentAnalyses);
