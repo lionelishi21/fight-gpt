@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { body, param, ValidationChain } from 'express-validator';
 import { AnalysisController } from '../controllers/AnalysisController';
 import { validateRequest } from '../middleware/validationMiddleware';
+import { optionalAuthMiddleware } from '../middleware/auth';
 
 /**
  * Analysis routes
@@ -21,17 +22,19 @@ export class AnalysisRoutes {
    * Setup routes
    */
   private setupRoutes(): void {
-    // POST /api/analyze - Analyze video
+    // POST /api/analyze - Analyze video (optionalAuth tags the analysis to the user)
     this.router.post(
       '/',
+      optionalAuthMiddleware,
       this.validateAnalyzeRequest(),
       validateRequest,
       (req: Request, res: Response, next: NextFunction) => this.controller.analyzeVideo(req, res, next)
     );
 
-    // GET /api/analysis/recent - Get recent analyses
+    // GET /api/analysis/recent - Get recent analyses for the signed-in user only
     this.router.get(
       '/recent',
+      optionalAuthMiddleware,
       validateRequest,
       (req: Request, res: Response, next: NextFunction) => this.controller.getRecentAnalyses(req, res, next)
     );

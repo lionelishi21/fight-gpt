@@ -41,8 +41,9 @@ export class AnalysisController extends BaseController implements IAnalysisContr
       // Log request
       console.log(`[AnalysisController] Analyze request: ${JSON.stringify(request)}`);
 
-      // Call service
-      const result = await this.analysisService.analyzeVideo(request);
+      // Call service — pass userId so the analysis is tagged to the requesting user
+      const userId = (req as any).user?.id;
+      const result = await this.analysisService.analyzeVideo(request, userId);
 
       // Calculate response time
       const responseTime = Date.now() - startTime;
@@ -152,9 +153,10 @@ export class AnalysisController extends BaseController implements IAnalysisContr
 
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const userId = (req as any).user?.id;
 
-      // Call service
-      const result = await this.analysisService.getRecentAnalyses(limit);
+      // Call service — filter by the signed-in user's ID
+      const result = await this.analysisService.getRecentAnalyses(limit, userId);
 
       // Calculate response time
       const responseTime = Date.now() - startTime;

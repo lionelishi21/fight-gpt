@@ -19,9 +19,9 @@ import { IRivalRepository } from '../repositories/RivalRepository';
  * Analysis Service interface
  */
 export interface IAnalysisService {
-  analyzeVideo(request: AnalysisRequest): Promise<ApiResponse<AnalysisResponse>>;
+  analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
-  getRecentAnalyses(limit: number): Promise<ApiResponse<AnalysisResponse[]>>;
+  getRecentAnalyses(limit: number, userId?: string): Promise<ApiResponse<AnalysisResponse[]>>;
 }
 
 /**
@@ -41,7 +41,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     super();
   }
 
-  async analyzeVideo(request: AnalysisRequest): Promise<ApiResponse<AnalysisResponse>> {
+  async analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
       this.validateAnalysisRequest(request);
 
@@ -58,7 +58,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       const analysisResponse = await this.aiService.analyzeVideo(enrichedRequest);
       const analysisId = UuidHelper.generate();
 
-      await this.analysisRepository.createAnalysis(request, analysisResponse, analysisId);
+      await this.analysisRepository.createAnalysis(request, analysisResponse, analysisId, userId);
 
       // --- VECTOR STORAGE & INTELLIGENCE LOOP ---
       if (this.vectorRepository && analysisResponse.timeline) {
@@ -225,9 +225,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async getRecentAnalyses(limit: number = 10): Promise<ApiResponse<any[]>> {
+  async getRecentAnalyses(limit: number = 10, userId?: string): Promise<ApiResponse<any[]>> {
     try {
-      const analyses = await this.analysisRepository.getRecentAnalyses(limit);
+      const analyses = await this.analysisRepository.getRecentAnalyses(limit, userId);
       return {
         success: true,
         data: analyses.map(a => ({

@@ -9,6 +9,7 @@ export interface IAnalysis extends Document {
   video_path?: string;
   video_source: 'youtube' | 'local_file';
   game_id?: string;
+  user_id?: string;
   analysis: AnalysisResponse;
   analysis_id: string;
   created_at: Date;
@@ -48,6 +49,11 @@ const AnalysisSchema: Schema = new Schema(
       required: true,
       unique: true,
       index: true,
+    },
+    user_id: {
+      type: String,
+      index: true,
+      sparse: true,
     },
   },
   {
