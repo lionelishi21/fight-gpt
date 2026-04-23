@@ -245,16 +245,27 @@ export class IngestionService extends BaseService implements IIngestionService {
      */
     private async searchYouTube(query: string, maxResults: number = 3): Promise<string[]> {
         try {
+            // Check yt-dlp is available
+            await execAsync('yt-dlp --version', { timeout: 5000 });
+        } catch {
+            Logger.error('[IngestionService] yt-dlp is not installed or not on PATH. Use the admin seed-urls endpoint to queue videos manually.');
+            return [];
+        }
+
+        try {
             const safeQuery = query.replace(/"/g, '\\"');
             const cmd = `yt-dlp --flat-playlist "ytsearch${maxResults}:${safeQuery}" --print webpage_url --no-warnings`;
-            const { stdout } = await execAsync(cmd, { timeout: 30000 });
+            const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
+            if (stderr) Logger.warn(`[IngestionService] yt-dlp stderr for "${query}": ${stderr.slice(0, 200)}`);
             const urls = stdout
                 .split('\n')
                 .map(line => line.trim())
                 .filter(line => line.startsWith('https://www.youtube.com/watch'));
+            Logger.info(`[IngestionService] yt-dlp found ${urls.length} URLs for: ${query}`);
             return urls;
         } catch (e) {
-            Logger.warn(`[IngestionService] yt-dlp search failed for: ${query}`, e);
+            const msg = e instanceof Error ? e.message : String(e);
+            Logger.error(`[IngestionService] yt-dlp search failed for: "${query}" — ${msg}`);
             return [];
         }
     }
