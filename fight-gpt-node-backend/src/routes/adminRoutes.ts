@@ -42,6 +42,9 @@ export class AdminRoutes {
         this.router.post('/ingestion/seed', this.adminController.seedUrls);
         this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
 
+        // Auto-Research
+        this.router.post('/research/trigger', this.adminController.triggerResearch);
+
         // Admin Invites
         this.router.post('/invites', inviteController.createAdminInvite);
         this.router.get('/invites', inviteController.listAdminInvites);

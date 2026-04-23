@@ -3,6 +3,7 @@ import { BaseController } from './BaseController';
 import { IAdminService } from '../services/AdminService';
 import { IIngestionService } from '../services/IngestionService';
 import { IMetaService } from '../services/MetaService';
+import { AutoResearchService } from '../services/AutoResearchService';
 import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
@@ -13,6 +14,7 @@ export class AdminController extends BaseController {
         private readonly adminService: IAdminService,
         private readonly ingestionService?: IIngestionService,
         private readonly metaService?: IMetaService,
+        private readonly autoResearchService?: AutoResearchService,
     ) {
         super();
     }
@@ -286,6 +288,23 @@ export class AdminController extends BaseController {
             });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to bump patch version');
+        }
+    };
+
+    /**
+     * POST /api/admin/research/trigger
+     * Manually run the Karpathy auto-research cycle without waiting for the 2am cron
+     */
+    triggerResearch = async (_req: Request, res: Response): Promise<void> => {
+        if (!this.autoResearchService) {
+            res.status(503).json({ success: false, error: 'Auto-research service unavailable' });
+            return;
+        }
+        try {
+            const result = await this.autoResearchService.runResearchCycle();
+            this.sendResponse(res, { success: true, data: result, message: 'Research cycle complete' });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Research cycle failed');
         }
     };
 
