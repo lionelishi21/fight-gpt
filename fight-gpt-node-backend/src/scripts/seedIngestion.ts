@@ -19,12 +19,35 @@ import { UuidHelper } from '../helpers/uuidHelper';
 // Format: { gameId, url, label }
 // Find good URLs from: CEOtaku, EVO, Combo Breaker, VSFighting, Capcom Cup channels
 const TOURNAMENT_URLS: { gameId: string; url: string; label: string }[] = [
-    // SF6 — replace/expand with real tournament VODs you want analyzed
-    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=REPLACE_ME_1', label: 'SF6 EVO 2024 Top 8' },
-    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=REPLACE_ME_2', label: 'SF6 Combo Breaker 2024 Grand Finals' },
-    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=REPLACE_ME_3', label: 'SF6 CEO 2024 Top 8' },
-    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=REPLACE_ME_4', label: 'SF6 Capcom Cup X Top 8' },
-    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=REPLACE_ME_5', label: 'SF6 VSFighting 2024 Grand Finals' },
+    // EVO 2024
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=X-C435HjNhg', label: 'SF6 EVO 2024 #1' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=ftboS91Az3A', label: 'SF6 EVO 2024 #2' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=JDNxkPJQxCE', label: 'SF6 EVO 2024 #3' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=-jSvU1x5uWI', label: 'SF6 EVO 2024 #4' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=idevgWCTI3U', label: 'SF6 EVO 2024 #5' },
+    // Combo Breaker 2024
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=qQYDz4Y8iq4', label: 'SF6 Combo Breaker 2024 #1' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=v8ubEiY1NW0', label: 'SF6 Combo Breaker 2024 #2' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=L46_1TRDdeQ', label: 'SF6 Combo Breaker 2024 #3' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=b06zAYuXLWE', label: 'SF6 Combo Breaker 2024 #4' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=ED_R1KWnjkA', label: 'SF6 Combo Breaker 2024 #5' },
+    // CEO 2024
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=9zbO5pOUK1I', label: 'SF6 CEO 2024 #1' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=RxNKuKHPY_k', label: 'SF6 CEO 2024 #2' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=iKWWOZddo8M', label: 'SF6 CEO 2024 #3' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=k6grIIhkHq0', label: 'SF6 CEO 2024 #4' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=3umOo8mfrm8', label: 'SF6 CEO 2024 #5' },
+    // Capcom Cup 2024
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=2Ys4eR5OgTw', label: 'SF6 Capcom Cup 2024 #1' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=v4psG1qeLx8', label: 'SF6 Capcom Cup 2024 #2' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=CFWSn39RQys', label: 'SF6 Capcom Cup 2024 #3' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=qKOXFbh4Nw8', label: 'SF6 Capcom Cup 2024 #4' },
+    // Pro Player High Level
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=tzBJ1tZWDE0', label: 'SF6 Pro Player High Level #1' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=ZA52DT7ozyQ', label: 'SF6 Pro Player High Level #2' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=iP8s7Sgq2f8', label: 'SF6 Pro Player High Level #3' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=yXGJVmdgMUs', label: 'SF6 Pro Player High Level #4' },
+    { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=S3vleFRSocs', label: 'SF6 Pro Player High Level #5' },
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -57,7 +80,7 @@ async function main() {
 
     for (const { gameId, url, label } of realUrls) {
         try {
-            await IngestionJob.create({
+            const doc = new IngestionJob({
                 job_id: UuidHelper.generate(),
                 game_id: gameId,
                 youtube_url: url,
@@ -66,6 +89,7 @@ async function main() {
                 status: 'pending',
                 retry_count: 0,
             });
+            await doc.save();
             queued++;
             Logger.info(`  ✓ Queued [${gameId}] ${label}`);
         } catch (e: any) {
