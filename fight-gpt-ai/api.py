@@ -197,7 +197,7 @@ def download_video(youtube_url: str, output_path: str = 'videos') -> str:
     
     raise Exception(f"All download strategies failed. Last error: {last_error}")
 
-def upload_video_to_gemini(video_path: str, timeout: int = 300) -> genai.File:
+def upload_video_to_gemini(video_path: str, timeout: int = 300) -> Any:
     """
     Upload video file to Gemini File API and wait for ACTIVE state.
     Returns the file object when ready.
@@ -230,7 +230,7 @@ def upload_video_to_gemini(video_path: str, timeout: int = 300) -> genai.File:
     print(f"✅ File is ACTIVE and ready: {uploaded_file.name}")
     return uploaded_file
 
-def analyze_video_with_gemini(video_file: genai.File, game_context_text: Optional[str] = None) -> Dict[str, Any]:
+def analyze_video_with_gemini(video_file: Any, game_context_text: Optional[str] = None) -> Dict[str, Any]:
     """
     Analyze video using Gemini's native video understanding with Pro Coach prompt.
     Optionally includes game context for better analysis.
