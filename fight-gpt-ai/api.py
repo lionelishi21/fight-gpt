@@ -2,6 +2,8 @@ import os
 import json
 import time
 from typing import Optional, Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- FastAPI Imports ---
 from fastapi import FastAPI, HTTPException
@@ -271,7 +273,7 @@ def analyze_video_with_gemini(video_file: Any, game_context_text: Optional[str] 
         print(f"   Response text: {response.text[:500]}")
         raise Exception(f"Invalid JSON response from Gemini: {e}")
 
-def cleanup_gemini_file(file: genai.File) -> None:
+def cleanup_gemini_file(file: Any) -> None:
     """Delete uploaded file from Gemini File API."""
     try:
         genai.delete_file(file.name)
