@@ -40,7 +40,7 @@ export class AiService extends BaseService implements IAiService {
 
   constructor(
     apiKey: string,
-    modelName: string = 'gemini-1.5-flash',
+    modelName: string = 'gemini-2.5-flash',
     gameMetadataService: IGameMetadataService,
     characterEncyclopediaService: ICharacterEncyclopediaService
   ) {
@@ -132,7 +132,7 @@ export class AiService extends BaseService implements IAiService {
     contentParts.push({ text: fullPrompt });
 
     // Try primary model, fall back on 503/overload
-    const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
     const modelsToTry = [this.modelName, ...FALLBACK_MODELS.filter(m => m !== this.modelName)];
     let lastError: Error | null = null;
 
