@@ -13,6 +13,16 @@ export interface IMetaService {
     queryMetaInsight(gameId: string, query: string): Promise<ApiResponse<{ answer: string; scenarios: unknown[] }>>;
 }
 
+/**
+ * Character name values that are NOT real character names.
+ * These appear in seed data or AI output as placeholders meaning
+ * "this scenario applies to all characters" — they must be excluded
+ * from tier list / matchup calculations.
+ */
+const INVALID_CHARACTER_NAMES = new Set([
+    'all', 'unknown', 'n/a', 'none', 'any', 'tbd', '?', '',
+]);
+
 export class MetaService extends BaseService implements IMetaService {
     private genAI: GoogleGenerativeAI;
 
@@ -236,6 +246,10 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
             // Count character usage
             for (const char of chars) {
                 if (!char) continue;
+                // Skip placeholder/garbage values that are not real character names
+                const normalized = char.trim().toLowerCase();
+                if (INVALID_CHARACTER_NAMES.has(normalized)) continue;
+
                 if (!characterMap.has(char)) {
                     characterMap.set(char, { usage: 0, wins: 0, strategies: [] });
                 }

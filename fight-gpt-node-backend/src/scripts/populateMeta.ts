@@ -153,7 +153,7 @@ async function seedProactiveMeta() {
                 game_id: 'sf6',
                 description: 'How to punish Drive Impact effectively',
                 context: 'Opponent uses Drive Impact predictably or in the corner.',
-                characters_involved: ['all'],
+                characters_involved: [], // applies to all — intentionally empty, not a specific character
                 embedding: dummyEmbedding,
                 match_references: [],
                 tags: ['punish', 'drive-impact', 'defense']
