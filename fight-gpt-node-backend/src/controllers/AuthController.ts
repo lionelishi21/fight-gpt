@@ -5,6 +5,8 @@ import User, { IUser } from '../models/User';
 import UserGame from '../models/UserGame';
 import { Invite } from '../models/Invite';
 import { emailService } from '../services/EmailService';
+import { NotificationRepository } from '../repositories/NotificationRepository';
+import { NotificationService } from '../services/NotificationService';
 
 export class AuthController extends BaseController {
     /**
@@ -73,6 +75,15 @@ export class AuthController extends BaseController {
 
             // Send welcome email (non-blocking)
             emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
+
+            // Send onboarding notification to Discovery Feed
+            const notificationService = new NotificationService(new NotificationRepository());
+            notificationService.notify(user._id, 'META_SHIFT', {
+                gameId: 'sf6',
+                title: 'Meta Intelligence Active',
+                description: 'We have processed recent SF6 tournaments. Check the Discovery Feed for the latest scenarios.',
+                link: '/dashboard/meta'
+            }, 'high').catch(() => {});
 
             // Generate JWT
             const token = this.generateToken(user);

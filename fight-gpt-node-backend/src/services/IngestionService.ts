@@ -79,7 +79,7 @@ export class IngestionService extends BaseService implements IIngestionService {
      */
     async triggerIngestion(
         gameId: string,
-        maxVideos: number = 5
+        maxVideos: number = 15
     ): Promise<ApiResponse<IngestionTriggerResult>> {
         const queries = GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
         const result: IngestionTriggerResult = {
@@ -138,7 +138,7 @@ export class IngestionService extends BaseService implements IIngestionService {
      */
     async processQueue(
         gameId?: string,
-        batchSize: number = 3
+        batchSize: number = 10
     ): Promise<ApiResponse<{ processed: number; failed: number }>> {
         if (this.isProcessing) {
             return { success: false, error: 'Queue processor already running' };
@@ -152,7 +152,7 @@ export class IngestionService extends BaseService implements IIngestionService {
             const jobs = await this.ingestionRepository.getPendingJobs(gameId, batchSize);
             Logger.info(`[IngestionService] Processing ${jobs.length} pending jobs`);
 
-            for (const job of jobs) {
+            const processingPromises = jobs.map(async (job) => {
                 try {
                     // Mark as processing
                     await this.ingestionRepository.updateJobStatus(job.job_id, 'processing');
@@ -190,7 +190,9 @@ export class IngestionService extends BaseService implements IIngestionService {
                     failed++;
                     Logger.warn(`[IngestionService] Job ${job.job_id} failed (retry ${job.retry_count + 1}): ${msg}`);
                 }
-            }
+            });
+
+            await Promise.allSettled(processingPromises);
 
             return {
                 success: true,
@@ -204,9 +206,9 @@ export class IngestionService extends BaseService implements IIngestionService {
 
     /**
      * Start background scheduler that triggers ingestion + processing on an interval
-     * Default: every 6 hours
+     * Default: every 1 hour
      */
-    startScheduler(intervalMs: number = 6 * 60 * 60 * 1000): void {
+    startScheduler(intervalMs: number = 1 * 60 * 60 * 1000): void {
         if (this.schedulerTimer) {
             Logger.warn('[IngestionService] Scheduler already running');
             return;
@@ -218,16 +220,22 @@ export class IngestionService extends BaseService implements IIngestionService {
             Logger.info('[IngestionService] Scheduler tick — triggering ingestion for all games');
             const gameIds = Object.keys(GAME_SEARCH_QUERIES);
 
+            // Prioritize SF6 by sorting it to the front
+            gameIds.sort((a, b) => (a === 'sf6' ? -1 : b === 'sf6' ? 1 : 0));
+
             for (const gameId of gameIds) {
                 try {
-                    await this.triggerIngestion(gameId, 5);
+                    // Grab more videos for SF6
+                    const maxVideosToFetch = gameId === 'sf6' ? 20 : 10;
+                    await this.triggerIngestion(gameId, maxVideosToFetch);
                 } catch (e) {
                     Logger.error(`[IngestionService] Scheduler failed for ${gameId}`, e);
                 }
             }
 
-            // Process the queue after seeding new jobs
-            await this.processQueue(undefined, 5);
+            // Process the queue after seeding new jobs. Grab more for SF6.
+            await this.processQueue('sf6', 15);
+            await this.processQueue(undefined, 10);
         }, intervalMs);
     }
 
