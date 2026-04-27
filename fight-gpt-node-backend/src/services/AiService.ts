@@ -64,16 +64,14 @@ export class AiService extends BaseService implements IAiService {
         throw new Error('Video path or YouTube URL is required for analysis');
       }
 
-      const videoFilePath = request.video_path ?? (
-        request.youtube_url ? await this.downloadYouTubeVideo(request.youtube_url) : null
-      );
-
-      if (videoFilePath) {
-        if (request.youtube_url) localVideoPath = videoFilePath;
-        uploadResponse = await this.uploadToGemini(videoFilePath);
+      // If a local file is provided, we must upload it using GoogleAIFileManager
+      if (request.video_path) {
+        localVideoPath = request.video_path;
+        uploadResponse = await this.uploadToGemini(localVideoPath);
         await this.waitForProcessing(uploadResponse.file.name);
       }
 
+      // Pass the uploaded file OR the direct YouTube URL to generateAnalysis
       const result = await this.generateAnalysis(uploadResponse, request);
 
       if (uploadResponse) {
@@ -92,44 +90,6 @@ export class AiService extends BaseService implements IAiService {
         try { fs.unlinkSync(localVideoPath); } catch {}
       }
     }
-  }
-
-  private async downloadYouTubeVideo(url: string): Promise<string> {
-    const tmpDir = os.tmpdir();
-    const outTemplate = path.join(tmpDir, 'fgpt_%(id)s.%(ext)s');
-
-    const strategies = [
-      `yt-dlp -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/worst[ext=mp4]/best" --no-playlist -o "${outTemplate}" "${url}"`,
-      `yt-dlp -f "worst[ext=mp4]/worst" --no-playlist --extractor-args "youtube:player_client=android" -o "${outTemplate}" "${url}"`,
-      `yt-dlp -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/worst[ext=mp4]/best" --no-playlist --extractor-args "youtube:player_client=ios,web" -o "${outTemplate}" "${url}"`,
-    ];
-
-    let lastError: Error | null = null;
-    for (const cmd of strategies) {
-      try {
-        const { stdout } = await execAsync(cmd, { timeout: 120_000 });
-        // yt-dlp prints the final path — parse it
-        const match = stdout.match(/\[download\] Destination: (.+)|Merging formats into "(.+)"/);
-        if (match) {
-          const p = (match[1] || match[2]).trim();
-          if (fs.existsSync(p)) return p;
-        }
-        // Fallback: search tmpdir for recent fgpt_ file
-        const files = fs.readdirSync(tmpDir)
-          .filter(f => f.startsWith('fgpt_'))
-          .map(f => ({ name: f, mtime: fs.statSync(path.join(tmpDir, f)).mtimeMs }))
-          .sort((a, b) => b.mtime - a.mtime);
-        if (files.length > 0) return path.join(tmpDir, files[0].name);
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error(String(e));
-      }
-    }
-
-    throw new Error(
-      lastError?.message?.includes('available') || lastError?.message?.includes('removed')
-        ? 'This video is unavailable or has been removed from YouTube.'
-        : `Failed to download video: ${lastError?.message}`
-    );
   }
 
   private async uploadToGemini(filePath: string) {
@@ -162,6 +122,11 @@ export class AiService extends BaseService implements IAiService {
     if (fileResponse) {
       contentParts.push({
         fileData: { mimeType: fileResponse.mimeType, fileUri: fileResponse.uri },
+      });
+    } else if (request.youtube_url) {
+      // Direct YouTube URL pass as supported by newer Gemini API
+      contentParts.push({
+        fileData: { mimeType: 'video/mp4', fileUri: request.youtube_url }
       });
     }
     contentParts.push({ text: fullPrompt });

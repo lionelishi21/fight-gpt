@@ -156,6 +156,13 @@ const CharacterSchema: Schema = new Schema(
     patch_notes_summary: {
       type: String,
     },
+    status: {
+      type: String,
+      enum: ['released', 'coming_soon'],
+      default: 'released',
+      required: true,
+      index: true,
+    },
   },
   {
     timestamps: {

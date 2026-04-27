@@ -18,6 +18,71 @@ export class ScraperService {
         }
     }
 
+    async scrapeRoster(gameId: string): Promise<{ name: string; status: 'released' | 'coming_soon' }[]> {
+        if (gameId !== 'sf6') {
+            console.log(`Scraping roster for ${gameId} is not supported yet.`);
+            return [];
+        }
+
+        if (!this.browser) await this.initialize();
+        const context = await this.browser!.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+        });
+        const page = await context.newPage();
+
+        try {
+            console.log(`Scraping roster for ${gameId} at ${this.baseUrl}`);
+            await page.goto(this.baseUrl, { waitUntil: 'networkidle', timeout: 60000 });
+
+            // Wait for characters table or section
+            await page.waitForTimeout(5000);
+
+            const roster = await page.evaluate(() => {
+                const characters: { name: string; status: 'released' | 'coming_soon' }[] = [];
+                // Look for character links in the roster section
+                // SuperCombo SF6 main page usually has character portraits linked
+                // We'll target the main character gallery or tables
+                
+                const charLinks = document.querySelectorAll('.character-portrait a, .gallerybox a, table.wikitable a, .sf6-roster a, a.mw-redirect');
+                
+                charLinks.forEach(link => {
+                    const name = link.textContent?.trim() || link.getAttribute('title')?.trim();
+                    if (!name || name.length < 2 || name.toLowerCase().includes('edit') || name.toLowerCase().includes('file:')) return;
+
+                    // Exclude general wiki links
+                    const ignoreList = ['Street Fighter 6', 'System Mechanics', 'Controls', 'Frame Data', 'Strategy'];
+                    if (ignoreList.includes(name)) return;
+
+                    // Check if it's explicitly marked as upcoming (in an "Upcoming" section or text)
+                    let status: 'released' | 'coming_soon' = 'released';
+                    const parentElement = link.closest('.upcoming, .unreleased, div[id*="Upcoming"], h2:has(span[id*="Upcoming"]) ~ div');
+                    
+                    // Or if there's a "Coming Soon" or "DLC" text near it without frame data
+                    if (parentElement || link.parentElement?.textContent?.toLowerCase().includes('upcoming') || link.parentElement?.textContent?.toLowerCase().includes('coming soon')) {
+                        status = 'coming_soon';
+                    }
+
+                    // Add unique characters only
+                    if (!characters.some(c => c.name === name)) {
+                        characters.push({ name, status });
+                    }
+                });
+
+                return characters;
+            });
+
+            console.log(`Found ${roster.length} characters on roster page`);
+            return roster;
+
+        } catch (error: any) {
+            console.error(`Error scraping roster for ${gameId}:`, error.message, error.stack);
+            throw error;
+        } finally {
+            await page.close();
+            await context.close();
+        }
+    }
+
     async scrapeCharacter(characterName: string): Promise<any> {
         if (!this.browser) await this.initialize();
         const context = await this.browser!.newContext({

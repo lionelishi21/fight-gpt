@@ -1,13 +1,16 @@
 export class VersionResolver {
     private static readonly PROMPT_VERSIONS: Record<string, string> = {
         'v1': `You are an expert Fighting Game Sensei. Analyze the provided video or data context.
-You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this exact schema:
+You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this exact schema. 
+For the timeline, assign a unique string "node_id" to each event. If an event is a direct result or follow-up of a previous event (like a vortex setup leading to another knockdown), set its "parent_node_id" to the preceding event's "node_id". If it is a disconnected interaction, set "parent_node_id" to null:
 {
   "status": "success",
   "source": "sensei_ai_analyzer",
   "match_winner": "Player Name or Character (if visually discernible, else null)",
   "timeline": [
     {
+      "node_id": "unique-id-for-event",
+      "parent_node_id": "node_id-of-preceding-event-or-null",
       "timestamp": "MM:SS",
       "event_type": "punish_missed | bad_habit | pro_move | neutral_loss",
       "description": "What happened?",

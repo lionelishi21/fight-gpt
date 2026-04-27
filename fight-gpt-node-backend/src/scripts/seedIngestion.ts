@@ -63,7 +63,7 @@ const ingestionJobSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now },
 });
 
-const IngestionJob = mongoose.models.IngestionJob || mongoose.model('IngestionJob', ingestionJobSchema, 'ingestionJobs');
+const IngestionJob = mongoose.models.IngestionJob || mongoose.model('IngestionJob', ingestionJobSchema);
 
 async function main() {
     const realUrls = TOURNAMENT_URLS.filter(u => !u.url.includes('REPLACE_ME'));

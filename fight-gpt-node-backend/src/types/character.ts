@@ -50,6 +50,7 @@ export interface ICharacter {
   stats: CharacterStats;
   moves: CharacterMove[];
   patch_notes_summary?: string;
+  status?: 'released' | 'coming_soon';
   created_at?: Date;
   updated_at?: Date;
 }
@@ -68,6 +69,7 @@ export interface CreateCharacterRequest {
   stats: CharacterStats;
   moves: CharacterMove[];
   patch_notes_summary?: string;
+  status?: 'released' | 'coming_soon';
 }
 
 /**
@@ -84,6 +86,7 @@ export interface UpdateCharacterRequest {
   stats?: CharacterStats;
   moves?: CharacterMove[];
   patch_notes_summary?: string;
+  status?: 'released' | 'coming_soon';
 }
 
 /**

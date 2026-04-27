@@ -65,6 +65,8 @@ export interface AnalysisResponse {
  * Timeline event in analysis
  */
 export interface TimelineEvent {
+  node_id?: string;
+  parent_node_id?: string | null;
   timestamp: string;
   event_type: 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss' | 'neutral_win' | 'frame_trap' | 'whiff_punish' | 'okizeme' | 'corner_carry' | 'wake_up_option';
   description: string;
