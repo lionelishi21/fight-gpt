@@ -50,6 +50,13 @@ const GameSchema: Schema = new Schema(
       default: 'Fighting',
       trim: true,
     },
+    match_format: {
+      type: String,
+      enum: ['1v1', 'team_3v3', 'team_2v2', 'team_tag'],
+      default: '1v1',
+      required: true,
+      index: true,
+    },
     platform: {
       type: [String],
       default: [],

@@ -9,6 +9,14 @@ export interface ISlot {
     proficiencyLevel?: 'newbie' | 'intermediate' | 'pro';
 }
 
+export interface ITeamMain {
+    game_id:   string;
+    point:     string;
+    assist1:   string;
+    assist2:   string;
+    is_active: boolean;
+}
+
 export interface IUser extends Document {
     name: string;
     email: string;
@@ -26,6 +34,7 @@ export interface IUser extends Document {
     role: 'user' | 'admin';
     activeSlotIndex: number;
     slots: ISlot[];
+    team_mains: ITeamMain[];
     preferences: {
         favoriteGames: string[];
         skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'pro';
@@ -101,6 +110,15 @@ const UserSchema: Schema = new Schema(
             mainCharacter: { type: String },
         },
         pushTokens: [{ type: String }],
+        team_mains: [
+            {
+                game_id:   { type: String, required: true },
+                point:     { type: String, required: true },
+                assist1:   { type: String, required: true },
+                assist2:   { type: String, required: true },
+                is_active: { type: Boolean, default: true },
+            }
+        ],
         referralCode: { type: String, unique: true, sparse: true },
         referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
         referralCount: { type: Number, default: 0 },

@@ -19,16 +19,29 @@ export interface HealthResponse {
 }
 
 /**
+ * Team composition for 3v3 and tag team games (e.g. DBFZ)
+ */
+export interface TeamComposition {
+  point:   string; // point/anchor character name
+  assist1: string; // second character name
+  assist2: string; // third character name
+}
+
+/**
  * Analysis request payload
  */
 export interface AnalysisRequest {
   youtube_url?: string;
   video_path?: string;
   game_id?: string;
+  match_format?: '1v1' | 'team_3v3' | 'team_2v2' | 'team_tag';
   p1_character_id?: string;
   p2_character_id?: string;
   p1_name?: string;
   p2_name?: string;
+  // Team-game fields (used when match_format is team_*)
+  p1_team?: TeamComposition;
+  p2_team?: TeamComposition;
   game_metadata?: {
     global_mechanics?: unknown[];
     constants?: Record<string, unknown>;
@@ -49,14 +62,24 @@ export interface AnalysisResponse {
   source: string;
   video_source?: string;
   game_title?: string;
+  match_format?: '1v1' | 'team_3v3' | 'team_2v2' | 'team_tag';
   p1_character?: string;
   p2_character?: string;
   p1_name?: string;
   p2_name?: string;
+  p1_team?: TeamComposition;
+  p2_team?: TeamComposition;
   match_winner?: string;
   timeline?: TimelineEvent[];
   top_3_tips?: string[];
   daily_mission?: DailyMission;
+  // Team-specific analysis block (populated when match_format is team_*)
+  team_analysis?: {
+    assist_synergies:        string[];
+    point_character_report:  string;
+    extension_routes:        string[];
+    team_vortex:             TimelineEvent[];
+  };
   cached?: boolean;
   analysis_id?: string;
 }
