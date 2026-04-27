@@ -99,9 +99,9 @@ export class AiService extends BaseService implements IAiService {
     const outTemplate = path.join(tmpDir, 'fgpt_%(id)s.%(ext)s');
 
     const strategies = [
-      `yt-dlp -f "best[ext=mp4]/best" --no-playlist -o "${outTemplate}" "${url}"`,
-      `yt-dlp -f "worst[ext=mp4]/best" --no-playlist --extractor-args "youtube:player_client=android" -o "${outTemplate}" "${url}"`,
-      `yt-dlp -f "best" --no-playlist --extractor-args "youtube:player_client=ios,web" -o "${outTemplate}" "${url}"`,
+      `yt-dlp -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/worst[ext=mp4]/best" --no-playlist -o "${outTemplate}" "${url}"`,
+      `yt-dlp -f "worst[ext=mp4]/worst" --no-playlist --extractor-args "youtube:player_client=android" -o "${outTemplate}" "${url}"`,
+      `yt-dlp -f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/worst[ext=mp4]/best" --no-playlist --extractor-args "youtube:player_client=ios,web" -o "${outTemplate}" "${url}"`,
     ];
 
     let lastError: Error | null = null;
