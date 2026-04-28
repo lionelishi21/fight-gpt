@@ -21,6 +21,7 @@ import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
 import matchRouter from './matchRoutes';
 import analyticsRouter from './analyticsRoutes';
+import scenarioRouter from './scenarioRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
 import { HealthController } from '../controllers/HealthController';
 import { CharacterController } from '../controllers/CharacterController';
@@ -186,6 +187,9 @@ export class Routes {
 
     // Match routes (team-based match analysis - Priority 7)
     this.router.use('/matches', matchRouter);
+
+    // Scenario explorer routes (authenticated)
+    this.router.use('/scenarios', scenarioRouter);
 
     // Analytics routes (Priority 7.3)
     this.router.use('/analytics', analyticsRouter);

@@ -34,6 +34,33 @@ export class NotificationService {
 
     // ─── Typed helpers ───────────────────────────────────────────────────────
 
+    async techDiscovery(opts: {
+        gameId: string;
+        scenarioId: string;
+        eventType: string;
+        description: string;
+        context: string;
+        characters: string[];
+        youtubeUrl?: string;
+    }) {
+        const chars = opts.characters.length > 0
+            ? opts.characters.map(c => c.toUpperCase()).join(' & ')
+            : opts.gameId.toUpperCase();
+        const shortDesc = opts.context?.length > 120
+            ? opts.context.slice(0, 117) + '…'
+            : (opts.context || opts.description);
+
+        await this.broadcast('TECH_DISCOVERY', {
+            gameId: opts.gameId,
+            title: `[${chars}] New tech — ${opts.eventType.replace(/_/g, ' ')}`,
+            description: shortDesc,
+            characterId: opts.characters[0] || undefined,
+            // Internal detail page — NOT raw YouTube
+            link: `/dashboard/tech/${opts.scenarioId}`,
+            data: { scenarioId: opts.scenarioId, youtubeUrl: opts.youtubeUrl },
+        }, 'high');
+    }
+
     async newCombo(opts: { gameId: string; characterName: string; combo: string; damage: number; link?: string }) {
         await this.broadcast('NEW_COMBO', {
             gameId: opts.gameId,

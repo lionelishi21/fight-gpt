@@ -93,9 +93,10 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               if (topScore > 0.15) isNovel = false;
             }
 
-            // Save scenario with full match state context
+            // Save scenario — capture scenario_id for the notification link
+            const scenarioId = UuidHelper.generate();
             await this.vectorRepository.createScenario({
-              scenario_id: UuidHelper.generate(),
+              scenario_id: scenarioId,
               game_id: request.game_id || 'unknown',
               description: event.description,
               context: contextText,
@@ -111,28 +112,41 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               p2_state: event.p2_state,
             });
 
-            // TECH_DISCOVERY Alert
+            // TECH_DISCOVERY Alert — only for genuinely novel scenarios
             if (isNovel && this.notificationRepository) {
+              const chars = [analysisResponse.p1_character, analysisResponse.p2_character]
+                .filter(Boolean) as string[];
+              const charLabel = chars.length > 0
+                ? chars.map(c => c.toUpperCase()).join(' & ')
+                : (request.game_id || 'UNKNOWN').toUpperCase();
+              const shortCtx = contextText.length > 120
+                ? contextText.slice(0, 117) + '…'
+                : contextText;
+
               const usersToNotify = await User.find({
                 'slots.gameId': request.game_id,
                 'slots.notificationsEnabled': true
               }).limit(100);
 
               for (const user of usersToNotify) {
-                  await this.notificationRepository.createNotification({
-                      userId: (user as any)._id,
-                      type: 'TECH_DISCOVERY',
-                      severity: 'high',
-                      payload: {
-                          gameId: request.game_id || 'unknown',
-                          characterId: analysisResponse.p1_character || undefined,
-                          title: 'NEW TECH DISCOVERED',
-                          description: `A unique interaction was spotted for ${analysisResponse.p1_character || 'your character'}.`,
-                          link: request.youtube_url ? `${request.youtube_url}&t=${event.timestamp}` : undefined,
-                          timestamp: event.timestamp,
-                          data: { novelty_score: 1 - ((similarScenarios[0] as any)?.score || 0) }
-                      }
-                  });
+                await this.notificationRepository.createNotification({
+                  userId: (user as any)._id,
+                  type: 'TECH_DISCOVERY',
+                  severity: 'high',
+                  payload: {
+                    gameId: request.game_id || 'unknown',
+                    characterId: analysisResponse.p1_character || undefined,
+                    title: `[${charLabel}] New tech — ${event.event_type.replace(/_/g, ' ')}`,
+                    description: shortCtx,
+                    // Internal route — NOT the YouTube URL
+                    link: `/dashboard/tech/${scenarioId}`,
+                    data: {
+                      scenarioId,
+                      youtubeUrl: request.youtube_url,
+                      novelty_score: 1 - ((similarScenarios[0] as any)?.score || 0),
+                    },
+                  },
+                });
               }
             }
           } catch (e) {
