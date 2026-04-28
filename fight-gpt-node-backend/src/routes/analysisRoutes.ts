@@ -38,6 +38,13 @@ export class AnalysisRoutes {
       validateRequest,
       (req: Request, res: Response, next: NextFunction) => this.controller.getRecentAnalyses(req, res, next)
     );
+    
+    // GET /api/analysis/discovery - Get all recent analyses (public discovery)
+    this.router.get(
+      '/discovery',
+      validateRequest,
+      (req: Request, res: Response, next: NextFunction) => this.controller.getDiscoveryAnalyses(req, res, next)
+    );
 
     // GET /api/analysis/:id - Get analysis by ID
     this.router.get(

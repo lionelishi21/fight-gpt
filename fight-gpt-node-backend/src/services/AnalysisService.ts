@@ -21,7 +21,8 @@ import { IRivalRepository } from '../repositories/RivalRepository';
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
-  getRecentAnalyses(limit: number, userId?: string): Promise<ApiResponse<AnalysisResponse[]>>;
+  getRecentAnalyses(limit: number, userId?: string): Promise<ApiResponse<any[]>>;
+  getDiscoveryAnalyses(limit?: number): Promise<ApiResponse<any[]>>;
 }
 
 /**
@@ -252,6 +253,26 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       return {
         success: true,
         data: analyses.map(a => ({
+          _id: a._id,
+          analysis_id: a.analysis_id,
+          youtube_url: a.youtube_url,
+          game_id: a.game_id,
+          created_at: a.created_at,
+          ...(a.analysis as object),
+        })),
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async getDiscoveryAnalyses(limit: number = 20): Promise<ApiResponse<any[]>> {
+    try {
+      const analyses = await this.analysisRepository.getRecentAnalyses(limit);
+      return {
+        success: true,
+        data: analyses.map(a => ({
+          _id: a._id,
           analysis_id: a.analysis_id,
           youtube_url: a.youtube_url,
           game_id: a.game_id,

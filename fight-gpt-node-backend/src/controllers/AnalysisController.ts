@@ -195,5 +195,34 @@ export class AnalysisController extends BaseController implements IAnalysisContr
       this.handleError(error, req, res, next);
     }
   }
+
+  /**
+   * Get discovery analyses endpoint handler
+   * GET /api/analysis/discovery
+   */
+  async getDiscoveryAnalyses(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const requestId = this.getRequestId(req);
+    const startTime = Date.now();
+
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      const result = await this.analysisService.getDiscoveryAnalyses(limit);
+
+      const responseTime = Date.now() - startTime;
+      await this.auditLogRepository.createAuditLog({
+        request_id: requestId,
+        endpoint: '/api/analysis/discovery',
+        method: 'GET',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'],
+        response_status: result.success ? 200 : 500,
+        response_time_ms: responseTime,
+      });
+
+      this.sendResponse(res, result, result.success ? 200 : 500);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
+  }
 }
 
