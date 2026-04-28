@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IScenario {
     scenario_id: string;
     game_id: string;
+    pro_player_id?: string; // Link to the ProPlayer who performed this scenario
     description: string;
     context: string;
     characters_involved: string[];
@@ -28,14 +29,13 @@ export interface IScenarioDocument extends IScenario, Document {
 const ScenarioSchema = new Schema<IScenarioDocument>({
     scenario_id: { type: String, required: true, unique: true, index: true },
     game_id: { type: String, required: true, index: true },
+    pro_player_id: { type: String, index: true },
     description: { type: String, required: true },
     context: { type: String, required: true },
     characters_involved: [{ type: String }],
     embedding: {
         type: [Number],
         required: true,
-        // Note: To use Atlas Vector Search, an Atlas Search index must be created via the UI or Atlas API
-        // configuring the 'embedding' field as a vector.
     },
     match_references: [{ type: String }],
     tags: [{ type: String }],
@@ -54,5 +54,6 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
 });
 
 ScenarioSchema.index({ game_id: 1, tags: 1 });
+ScenarioSchema.index({ pro_player_id: 1 });
 
 export const Scenario = mongoose.model<IScenarioDocument>('Scenario', ScenarioSchema);

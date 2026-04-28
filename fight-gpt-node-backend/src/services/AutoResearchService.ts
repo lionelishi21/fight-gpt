@@ -62,43 +62,42 @@ export class AutoResearchService {
                 for (const char of characters) {
                     const charId = char.name.toLowerCase().replace(/\s+/g, '_');
 
-                    try {
-                        const scenarioCount = await Scenario.countDocuments({
-                            game_id: gameId,
-                            characters_involved: charId,
-                        });
+                    for (const level of ['Rookie', 'Intermediate', 'Pro'] as const) {
+                        try {
+                            const scenarioCount = await Scenario.countDocuments({
+                                game_id: gameId,
+                                characters_involved: charId,
+                            });
 
-                        if (scenarioCount < 3) { skipped++; continue; } // Not enough data
+                            if (scenarioCount < 3) continue;
 
-                        const existing = await TheoryDoc.findOne({
-                            game_id: gameId,
-                            character_id: charId,
-                            type: 'character',
-                            is_current_patch: true,
-                        }).lean().exec();
+                            const existing = await TheoryDoc.findOne({
+                                game_id: gameId,
+                                character_id: charId,
+                                target_skill_level: level,
+                                type: 'character',
+                                is_current_patch: true,
+                            }).lean().exec();
 
-                        // Regenerate if: no theory, or theory is older than 7 days, or
-                        // new scenarios have arrived since last generation
-                        const needsUpdate = !existing
-                            || this.isStale(existing.generated_at, 7)
-                            || await this.hasNewScenarios(gameId, charId, existing.generated_at);
+                            const needsUpdate = !existing
+                                || this.isStale(existing.generated_at, 7)
+                                || await this.hasNewScenarios(gameId, charId, existing.generated_at);
 
-                        if (!needsUpdate) { skipped++; continue; }
+                            if (!needsUpdate) continue;
 
-                        console.log(`[AutoResearch] Generating character theory: ${gameId}/${charId}`);
-                        const result = await this.theoryService.generateCharacterTheory(gameId, charId);
+                            console.log(`[AutoResearch] Generating ${level} character theory: ${gameId}/${charId}`);
+                            const result = await this.theoryService.generateCharacterTheory(gameId, charId, level);
 
-                        if (result.success && result.data) {
-                            characterGenerated++;
-                            // Notification already fired inside TheoryService — no duplicate needed
+                            if (result.success && result.data) {
+                                characterGenerated++;
+                            }
+                        } catch (err) {
+                            console.error(`[AutoResearch] Failed ${level} character theory ${charId}:`, err);
                         }
-                    } catch (err) {
-                        console.error(`[AutoResearch] Failed character theory ${charId}:`, err);
                     }
                 }
 
                 // ── 2. High-priority matchup gaps ─────────────────────────
-                // Generate matchups for the top 5 characters by scenario count
                 const topChars = await this.getTopCharactersByScenarioCount(gameId, 5);
 
                 for (let i = 0; i < topChars.length; i++) {
@@ -106,37 +105,40 @@ export class AutoResearchService {
                         const charA = topChars[i];
                         const charB = topChars[j];
 
-                        try {
-                            const scenarioCount = await Scenario.countDocuments({
-                                game_id: gameId,
-                                characters_involved: { $all: [charA, charB] },
-                            });
+                        for (const level of ['Rookie', 'Intermediate', 'Pro'] as const) {
+                            try {
+                                const scenarioCount = await Scenario.countDocuments({
+                                    game_id: gameId,
+                                    characters_involved: { $all: [charA, charB] },
+                                });
 
-                            if (scenarioCount < 3) { skipped++; continue; }
+                                if (scenarioCount < 3) continue;
 
-                            const [a, b] = [charA, charB].sort();
-                            const existing = await TheoryDoc.findOne({
-                                game_id: gameId,
-                                character_a: a,
-                                character_b: b,
-                                type: 'matchup',
-                                is_current_patch: true,
-                            }).lean().exec();
+                                const [a, b] = [charA, charB].sort();
+                                const existing = await TheoryDoc.findOne({
+                                    game_id: gameId,
+                                    character_a: a,
+                                    character_b: b,
+                                    target_skill_level: level,
+                                    type: 'matchup',
+                                    is_current_patch: true,
+                                }).lean().exec();
 
-                            const needsUpdate = !existing
-                                || this.isStale(existing.generated_at, 14)
-                                || await this.hasNewMatchupScenarios(gameId, charA, charB, existing.generated_at);
+                                const needsUpdate = !existing
+                                    || this.isStale(existing.generated_at, 14)
+                                    || await this.hasNewMatchupScenarios(gameId, charA, charB, existing.generated_at);
 
-                            if (!needsUpdate) { skipped++; continue; }
+                                if (!needsUpdate) continue;
 
-                            console.log(`[AutoResearch] Generating matchup theory: ${charA} vs ${charB}`);
-                            const result = await this.theoryService.generateMatchupTheory(gameId, charA, charB);
+                                console.log(`[AutoResearch] Generating ${level} matchup theory: ${charA} vs ${charB}`);
+                                const result = await this.theoryService.generateMatchupTheory(gameId, charA, charB, level);
 
-                            if (result.success && result.data) {
-                                matchupGenerated++;
+                                if (result.success && result.data) {
+                                    matchupGenerated++;
+                                }
+                            } catch (err) {
+                                console.error(`[AutoResearch] Failed ${level} matchup ${charA} vs ${charB}:`, err);
                             }
-                        } catch (err) {
-                            console.error(`[AutoResearch] Failed matchup ${charA} vs ${charB}:`, err);
                         }
                     }
                 }

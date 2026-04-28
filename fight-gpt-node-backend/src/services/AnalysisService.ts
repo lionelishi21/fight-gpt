@@ -100,6 +100,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               await this.vectorRepository.createScenario({
                 scenario_id: scenarioId,
                 game_id: request.game_id || 'unknown',
+                pro_player_id: (request as any).pro_player_id,
                 description: event.description,
                 context: contextText,
                 characters_involved: [analysisResponse.p1_character, analysisResponse.p2_character].filter(Boolean) as string[],

@@ -158,9 +158,11 @@ export class IngestionService extends BaseService implements IIngestionService {
                     await this.ingestionRepository.updateJobStatus(job.job_id, 'processing');
 
                     // Run the analysis pipeline
+                    const proPlayerId = (job as any).metadata?.pro_player_id;
                     const analysisResult = await this.analysisService.analyzeVideo({
                         youtube_url: job.youtube_url,
                         game_id: job.game_id,
+                        pro_player_id: proPlayerId,
                     });
 
                     if (analysisResult.success && analysisResult.data) {
@@ -217,15 +219,12 @@ export class IngestionService extends BaseService implements IIngestionService {
         Logger.info(`[IngestionService] Starting ingestion scheduler (every ${intervalMs / 3600000}h)`);
 
         this.schedulerTimer = setInterval(async () => {
-            Logger.info('[IngestionService] Scheduler tick — triggering ingestion for all games');
+            // 1. Regular search-based ingestion
             const gameIds = Object.keys(GAME_SEARCH_QUERIES);
-
-            // Prioritize SF6 by sorting it to the front
             gameIds.sort((a, b) => (a === 'sf6' ? -1 : b === 'sf6' ? 1 : 0));
 
             for (const gameId of gameIds) {
                 try {
-                    // Grab more videos for SF6
                     const maxVideosToFetch = gameId === 'sf6' ? 20 : 10;
                     await this.triggerIngestion(gameId, maxVideosToFetch);
                 } catch (e) {
@@ -233,10 +232,51 @@ export class IngestionService extends BaseService implements IIngestionService {
                 }
             }
 
-            // Process the queue after seeding new jobs. Grab more for SF6.
+            // 2. Pro Player prioritized ingestion (including Japan)
+            await this.ingestProPlayers();
+
+            // 3. Process the queue
             await this.processQueue('sf6', 15);
             await this.processQueue(undefined, 10);
         }, intervalMs);
+    }
+
+    /**
+     * Specialized ingestion for top-tier players
+     */
+    async ingestProPlayers(): Promise<void> {
+        try {
+            const { ProPlayer } = await import('../models/ProPlayer');
+            const pros = await ProPlayer.find({ isVerified: true }).lean().exec();
+            
+            for (const pro of pros) {
+                for (const channel of pro.channels) {
+                    // Search for recent matches by this specific pro
+                    const query = `${pro.name} ${pro.gameId} high level ranked match pro player`;
+                    const urls = await this.searchYouTube(query, 3);
+                    
+                    for (const url of urls) {
+                        const existing = await this.ingestionRepository.findByUrl(url);
+                        if (existing) continue;
+
+                        await this.ingestionRepository.createJob({
+                            job_id: UuidHelper.generate(),
+                            game_id: pro.gameId,
+                            youtube_url: url,
+                            search_query: `PRO_SCOUT: ${pro.name} (${pro.region})`,
+                            source: 'pro_scout',
+                            status: 'pending',
+                            retry_count: 0,
+                            metadata: { pro_player_id: (pro as any)._id.toString() }
+                        });
+                    }
+                }
+                // Mark pro as recently updated
+                await ProPlayer.updateOne({ _id: (pro as any)._id }, { lastIngestJobAt: new Date() });
+            }
+        } catch (e) {
+            Logger.error('[IngestionService] Pro player ingestion failed', e);
+        }
     }
 
     stopScheduler(): void {

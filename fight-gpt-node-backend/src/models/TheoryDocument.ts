@@ -1,11 +1,13 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export type TheoryType = 'character' | 'matchup' | 'meta';
+export type SkillLevel = 'Rookie' | 'Intermediate' | 'Pro';
 
 export interface ITheoryDocument {
     theory_id: string;
     game_id: string;
     type: TheoryType;
+    target_skill_level: SkillLevel;
 
     // For character theory
     character_id?: string;
@@ -46,6 +48,7 @@ const TheoryDocumentSchema = new Schema<ITheoryDocumentDocument>({
     theory_id: { type: String, required: true, unique: true, index: true },
     game_id: { type: String, required: true, index: true },
     type: { type: String, enum: ['character', 'matchup', 'meta'], required: true },
+    target_skill_level: { type: String, enum: ['Rookie', 'Intermediate', 'Pro'], default: 'Intermediate', index: true },
 
     character_id: { type: String, index: true },
     character_name: { type: String },
@@ -73,9 +76,9 @@ const TheoryDocumentSchema = new Schema<ITheoryDocumentDocument>({
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
 
-TheoryDocumentSchema.index({ game_id: 1, character_id: 1, is_current_patch: 1 });
-TheoryDocumentSchema.index({ game_id: 1, character_a: 1, character_b: 1, is_current_patch: 1 });
-TheoryDocumentSchema.index({ game_id: 1, type: 1, patch_version: 1 });
-TheoryDocumentSchema.index({ game_id: 1, type: 1, generated_at: -1 });
+// Update indexes to include skill level
+TheoryDocumentSchema.index({ game_id: 1, character_id: 1, target_skill_level: 1, is_current_patch: 1 });
+TheoryDocumentSchema.index({ game_id: 1, character_a: 1, character_b: 1, target_skill_level: 1, is_current_patch: 1 });
+TheoryDocumentSchema.index({ game_id: 1, type: 1, target_skill_level: 1, patch_version: 1 });
 
 export const TheoryDoc = mongoose.model<ITheoryDocumentDocument>('TheoryDocument', TheoryDocumentSchema);

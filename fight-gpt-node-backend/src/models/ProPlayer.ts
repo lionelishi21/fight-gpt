@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IProPlayer {
     name: string; // The Pro's name (e.g., "Punk", "Tokido")
     gameId: string;
+    region: 'Global' | 'Japan' | 'USA' | 'Europe' | 'Other';
     description?: string;
     channels: string[]; // YouTube channel IDs or URLs to monitor
     isVerified: boolean; // System-vetted pro
@@ -16,6 +17,7 @@ export interface IProPlayerDocument extends IProPlayer, Document {}
 const ProPlayerSchema = new Schema<IProPlayerDocument>({
     name: { type: String, required: true, index: true },
     gameId: { type: String, required: true, index: true },
+    region: { type: String, enum: ['Global', 'Japan', 'USA', 'Europe', 'Other'], default: 'Global' },
     description: { type: String },
     channels: [{ type: String }],
     isVerified: { type: Boolean, default: false },
