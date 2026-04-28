@@ -250,6 +250,58 @@ export class AuthController extends BaseController {
     };
 
     /**
+     * Update user profile (name, etc)
+     */
+    public updateProfile = async (req: Request, res: Response): Promise<void> => {
+        try {
+            // @ts-ignore
+            const userId = req.user.id;
+            const { name } = req.body;
+
+            const user = await User.findById(userId);
+            if (!user) {
+                this.sendError(res, 'User not found', 404);
+                return;
+            }
+
+            if (name) user.name = name;
+            await user.save();
+
+            this.sendResponse(res, { success: true, data: user });
+        } catch (error) {
+            this.sendError(res, 'Failed to update profile', 500);
+        }
+    };
+
+    /**
+     * Update user preferences (skill level, region, etc)
+     */
+    public updatePreferences = async (req: Request, res: Response): Promise<void> => {
+        try {
+            // @ts-ignore
+            const userId = req.user.id;
+            const { preferences } = req.body;
+
+            const user = await User.findById(userId);
+            if (!user) {
+                this.sendError(res, 'User not found', 404);
+                return;
+            }
+
+            user.preferences = {
+                ...(user.preferences || {}),
+                ...preferences
+            };
+
+            await user.save();
+
+            this.sendResponse(res, { success: true, data: user });
+        } catch (error) {
+            this.sendError(res, 'Failed to update preferences', 500);
+        }
+    };
+
+    /**
      * Generate JWT Token
      */
     private generateToken(user: IUser): string {
