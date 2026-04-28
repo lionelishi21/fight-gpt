@@ -15,13 +15,10 @@ import { IVectorRepository } from '../repositories/VectorRepository';
 import { INotificationRepository } from '../repositories/NotificationRepository';
 import { IRivalRepository } from '../repositories/RivalRepository';
 
-/**
- * Analysis Service interface
- */
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
-  getRecentAnalyses(limit: number, userId?: string): Promise<ApiResponse<any[]>>;
+  getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
   getDiscoveryAnalyses(limit?: number): Promise<ApiResponse<any[]>>;
 }
 
@@ -113,7 +110,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                 frame_advantage: event.frame_advantage,
                 p1_state: event.p1_state,
                 p2_state: event.p2_state,
-                timestamp: event.timestamp,
+                timestamp: event.timestamp ? Number(event.timestamp) : undefined,
               });
             } else if (similarScenarios && similarScenarios.length > 0) {
               // If not novel, link this match to the existing scenario instead of creating a duplicate
@@ -238,6 +235,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
+
   async getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
       const analysis = await this.analysisRepository.findByAnalysisId(analysisId);
@@ -248,9 +246,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async getRecentAnalyses(limit: number = 10, userId?: string): Promise<ApiResponse<any[]>> {
+  async getRecentAnalyses(limit: number = 10, userId?: string, gameId?: string): Promise<ApiResponse<any[]>> {
     try {
-      const analyses = await this.analysisRepository.getRecentAnalyses(limit, userId);
+      const analyses = await this.analysisRepository.getRecentAnalyses(limit, userId, gameId);
       return {
         success: true,
         data: analyses.map(a => ({

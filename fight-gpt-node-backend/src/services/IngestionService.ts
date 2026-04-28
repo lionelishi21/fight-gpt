@@ -267,7 +267,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             source: 'pro_scout',
                             status: 'pending',
                             retry_count: 0,
-                            metadata: { pro_player_id: (pro as any)._id.toString() }
+                            pro_player_id: (pro as any)._id.toString()
                         });
                     }
                 }

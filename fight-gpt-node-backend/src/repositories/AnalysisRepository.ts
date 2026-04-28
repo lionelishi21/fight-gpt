@@ -10,7 +10,7 @@ export interface IAnalysisRepository {
   findByYouTubeUrl(youtubeUrl: string): Promise<IAnalysis | null>;
   findByVideoPath(videoPath: string): Promise<IAnalysis | null>;
   findByAnalysisId(analysisId: string): Promise<IAnalysis | null>;
-  getRecentAnalyses(limit: number, userId?: string): Promise<IAnalysis[]>;
+  getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<IAnalysis[]>;
   createAnalysis(request: AnalysisRequest, response: AnalysisResponse, analysisId: string, userId?: string): Promise<IAnalysis>;
 }
 
@@ -48,9 +48,12 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
   /**
    * Get recent analyses
    */
-  async getRecentAnalyses(limit: number, userId?: string): Promise<IAnalysis[]> {
-    const filter = userId ? { user_id: userId } : {};
-    return this.findMany(filter, { sort: { createdAt: -1 }, limit });
+  async getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<IAnalysis[]> {
+    const filter: any = {};
+    if (userId) filter.user_id = userId;
+    if (gameId) filter.game_id = gameId;
+    
+    return this.findMany(filter, { sort: { created_at: -1 }, limit });
   }
 
   /**

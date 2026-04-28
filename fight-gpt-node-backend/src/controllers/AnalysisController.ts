@@ -153,10 +153,11 @@ export class AnalysisController extends BaseController implements IAnalysisContr
 
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const gameId = req.query.gameId as string;
       const userId = (req as any).user?.id;
 
-      // Call service — filter by the signed-in user's ID
-      const result = await this.analysisService.getRecentAnalyses(limit, userId);
+      // Call service — filter by the signed-in user's ID and optionally gameId
+      const result = await this.analysisService.getRecentAnalyses(limit, userId, gameId);
 
       // Calculate response time
       const responseTime = Date.now() - startTime;

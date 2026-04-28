@@ -8,11 +8,13 @@ import { UuidHelper } from '../helpers/uuidHelper';
 import { NotificationService } from './NotificationService';
 import { Game } from '../models/Game';
 
+export type SkillLevel = 'Rookie' | 'Intermediate' | 'Pro';
+
 const CONFIDENCE_THRESHOLDS = { low: 5, medium: 20, high: 50 };
 
 export interface ITheoryService {
-    generateCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>>;
-    generateMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>>;
+    generateCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
+    generateMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>>;
     getMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;

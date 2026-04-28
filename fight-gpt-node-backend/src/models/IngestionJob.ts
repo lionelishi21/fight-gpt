@@ -9,13 +9,14 @@ export interface IIngestionJob {
     video_title?: string;
     channel_name?: string;
     search_query: string;         // The query that surfaced this video
-    source: 'scheduled' | 'manual' | 'tournament';
+    source: 'scheduled' | 'manual' | 'tournament' | 'pro_scout';
     status: IngestionJobStatus;
     error_message?: string;
     analysis_id?: string;         // Linked analysis result once processed
     scenario_count?: number;      // Number of scenarios extracted
     retry_count: number;
     processed_at?: Date;
+    pro_player_id?: string; // Link to pro player if this is a scout job
     created_at?: Date;
     updated_at?: Date;
 }
@@ -31,7 +32,7 @@ const IngestionJobSchema = new Schema<IIngestionJobDocument>({
     video_title: { type: String },
     channel_name: { type: String },
     search_query: { type: String, required: true },
-    source: { type: String, enum: ['scheduled', 'manual', 'tournament'], default: 'scheduled' },
+    source: { type: String, enum: ['scheduled', 'manual', 'tournament', 'pro_scout'], default: 'scheduled' },
     status: {
         type: String,
         enum: ['pending', 'processing', 'completed', 'failed', 'skipped'],
@@ -43,6 +44,7 @@ const IngestionJobSchema = new Schema<IIngestionJobDocument>({
     scenario_count: { type: Number },
     retry_count: { type: Number, default: 0 },
     processed_at: { type: Date },
+    pro_player_id: { type: String, index: true },
 }, {
     timestamps: {
         createdAt: 'created_at',
