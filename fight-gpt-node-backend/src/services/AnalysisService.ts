@@ -93,24 +93,31 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               if (topScore > 0.15) isNovel = false;
             }
 
-            // Save scenario — capture scenario_id for the notification link
+            // Save scenario ONLY IF NOVEL to avoid duplicates
             const scenarioId = UuidHelper.generate();
-            await this.vectorRepository.createScenario({
-              scenario_id: scenarioId,
-              game_id: request.game_id || 'unknown',
-              description: event.description,
-              context: contextText,
-              characters_involved: [analysisResponse.p1_character, analysisResponse.p2_character].filter(Boolean) as string[],
-              embedding,
-              match_references: [analysisId],
-              tags: [event.event_type],
-              turn_owner: event.turn_owner,
-              neutral_state: event.neutral_state,
-              spacing: event.spacing,
-              frame_advantage: event.frame_advantage,
-              p1_state: event.p1_state,
-              p2_state: event.p2_state,
-            });
+            if (isNovel) {
+              await this.vectorRepository.createScenario({
+                scenario_id: scenarioId,
+                game_id: request.game_id || 'unknown',
+                description: event.description,
+                context: contextText,
+                characters_involved: [analysisResponse.p1_character, analysisResponse.p2_character].filter(Boolean) as string[],
+                embedding,
+                match_references: [analysisId],
+                tags: [event.event_type],
+                turn_owner: event.turn_owner,
+                neutral_state: event.neutral_state,
+                spacing: event.spacing,
+                frame_advantage: event.frame_advantage,
+                p1_state: event.p1_state,
+                p2_state: event.p2_state,
+                timestamp: event.timestamp,
+              });
+            } else if (similarScenarios && similarScenarios.length > 0) {
+              // If not novel, link this match to the existing scenario instead of creating a duplicate
+              const existingScenario = similarScenarios[0] as any;
+              await (this.vectorRepository as any).addMatchReference(existingScenario.scenario_id, analysisId);
+            }
 
             // TECH_DISCOVERY Alert — only for genuinely novel scenarios
             if (isNovel && this.notificationRepository) {

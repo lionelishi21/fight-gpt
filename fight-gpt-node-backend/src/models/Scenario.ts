@@ -16,6 +16,7 @@ export interface IScenario {
     frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
     p1_state?: string;
     p2_state?: string;
+    timestamp?: number;
     created_at?: Date;
     updated_at?: Date;
 }
@@ -44,6 +45,7 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
     frame_advantage: { type: String },
     p1_state:        { type: String },
     p2_state:        { type: String },
+    timestamp:       { type: Number },
 }, {
     timestamps: {
         createdAt: 'created_at',

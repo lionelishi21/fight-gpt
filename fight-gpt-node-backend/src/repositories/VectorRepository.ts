@@ -4,6 +4,7 @@ import { IScenarioDocument, Scenario } from '../models/Scenario';
 export interface IVectorRepository {
     createScenario(data: Partial<IScenarioDocument>): Promise<IScenarioDocument>;
     findSimilarScenarios(vector: number[], gameId: string, limit?: number): Promise<IScenarioDocument[]>;
+    addMatchReference(scenarioId: string, analysisId: string): Promise<void>;
 }
 
 export class VectorRepository extends BaseRepository<IScenarioDocument> implements IVectorRepository {
@@ -44,6 +45,13 @@ export class VectorRepository extends BaseRepository<IScenarioDocument> implemen
                 }
             }
         ]).exec() as unknown as Promise<IScenarioDocument[]>;
+    }
+
+    public async addMatchReference(scenarioId: string, analysisId: string): Promise<void> {
+        await this.model.updateOne(
+            { scenario_id: scenarioId },
+            { $addToSet: { match_references: analysisId } }
+        );
     }
 }
 
