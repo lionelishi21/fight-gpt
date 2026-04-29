@@ -41,6 +41,9 @@ export class TheoryService extends BaseService implements ITheoryService {
         characterId: string,
         targetSkillLevel: SkillLevel = 'Intermediate'
     ): Promise<ApiResponse<ITheoryDocument>> {
+        if (!characterId || characterId === 'undefined') {
+            return { success: false, error: 'Valid character ID required for theory generation.' };
+        }
         try {
             const [scenarios, patchVersion] = await Promise.all([
                 this.getScenariosForCharacter(gameId, characterId),

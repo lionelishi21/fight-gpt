@@ -97,7 +97,7 @@ export class NotificationService {
     }
 
     async characterTheory(opts: { gameId: string; characterName: string; theoryId: string; headline: string }) {
-        const char = opts.characterName || 'Unknown Operator';
+        const char = !opts.characterName || opts.characterName === 'undefined' ? 'Unknown Operator' : opts.characterName;
         await this.broadcast('CHARACTER_THEORY', {
             gameId: opts.gameId,
             title: `New AI theory — ${char.toUpperCase()}`,
