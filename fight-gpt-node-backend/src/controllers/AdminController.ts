@@ -399,4 +399,59 @@ export class AdminController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
         }
     };
+
+    /**
+     * GET /api/admin/characters
+     * List characters (optionally filtered by gameId)
+     */
+    getCharacters = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const gameId = req.query.gameId as string;
+            const result = await this.adminService.getCharacters(gameId);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * POST /api/admin/characters
+     * Create a new character
+     */
+    createCharacter = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const result = await this.adminService.createCharacter(req.body);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * PATCH /api/admin/characters/:id
+     * Update character metadata
+     */
+    updateCharacter = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            const result = await this.adminService.updateCharacter(id, req.body);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * DELETE /api/admin/characters/:id
+     * Delete a character
+     */
+    deleteCharacter = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            const result = await this.adminService.deleteCharacter(id);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
 }

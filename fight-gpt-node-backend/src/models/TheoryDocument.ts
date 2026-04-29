@@ -34,6 +34,10 @@ export interface ITheoryDocument {
     // Patch versioning
     patch_version?: string;
     is_current_patch: boolean;
+    vortex_graph?: {
+        nodes: Array<{ id: string; label: string; description: string; type: 'neutral' | 'pressure' | 'finisher' | 'reset' }>;
+        edges: Array<{ source: string; target: string; label?: string }>;
+    };
 
     generated_at: Date;
     created_at?: Date;
@@ -70,6 +74,19 @@ const TheoryDocumentSchema = new Schema<ITheoryDocumentDocument>({
 
     patch_version: { type: String, index: true },
     is_current_patch: { type: Boolean, default: true, index: true },
+    vortex_graph: {
+        nodes: [{
+            id: String,
+            label: String,
+            description: String,
+            type: { type: String, enum: ['neutral', 'pressure', 'finisher', 'reset'] }
+        }],
+        edges: [{
+            source: String,
+            target: String,
+            label: String
+        }]
+    },
 
     generated_at: { type: Date, required: true },
 }, {

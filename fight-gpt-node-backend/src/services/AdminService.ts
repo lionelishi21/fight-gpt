@@ -2,6 +2,9 @@ import { IngestionJob } from '../models/IngestionJob';
 import { Analysis } from '../models/Analysis';
 import User from '../models/User';
 import { Scenario } from '../models/Scenario';
+import { Character } from '../models/Character';
+import { Game } from '../models/Game';
+import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 
@@ -13,6 +16,10 @@ export interface IAdminService {
     retryJob(jobId: string): Promise<ApiResponse<boolean>>;
     triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
     seedUrls(gameId: string, youtubeUrls: string[]): Promise<ApiResponse<{ queued: number; skipped: number }>>;
+    getCharacters(gameId?: string): Promise<ApiResponse<any[]>>;
+    createCharacter(data: any): Promise<ApiResponse<any>>;
+    updateCharacter(id: string, data: any): Promise<ApiResponse<any>>;
+    deleteCharacter(id: string): Promise<ApiResponse<boolean>>;
 }
 
 export class AdminService extends BaseService implements IAdminService {
@@ -147,5 +154,60 @@ export class AdminService extends BaseService implements IAdminService {
             }
         }
         return { success: true, data: { queued, skipped }, message: `Seeded ${queued} URLs for ${gameId}` };
+    }
+
+    async getCharacters(gameId?: string): Promise<ApiResponse<any[]>> {
+        try {
+            const query = gameId ? { game_id: gameId } : {};
+            const characters = await Character.find(query).sort({ game_id: 1, name: 1 }).lean().exec();
+            return { success: true, data: characters };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch characters' };
+        }
+    }
+
+    async createCharacter(data: any): Promise<ApiResponse<any>> {
+        try {
+            const character = await Character.create(data);
+            
+            // Automatically initialize encyclopedia for the current patch if game exists
+            const game = await Game.findOne({ game_id: data.game_id });
+            if (game && game.latest_version) {
+                const encyclopediaRepo = new CharacterEncyclopediaRepository();
+                await encyclopediaRepo.createEncyclopedia({
+                    game_id: data.game_id,
+                    character_id: character.id || character._id.toString(),
+                    patch_version: game.latest_version,
+                    is_current_patch: true,
+                    moveset: { normals: [], specials: [], ex_moves: [], supers: [] },
+                    game_rules: [],
+                    videos: [],
+                    version: '1.0'
+                });
+            }
+
+            return { success: true, data: character };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to create character' };
+        }
+    }
+
+    async updateCharacter(id: string, data: any): Promise<ApiResponse<any>> {
+        try {
+            const character = await Character.findByIdAndUpdate(id, data, { new: true });
+            if (!character) return { success: false, error: 'Character not found' };
+            return { success: true, data: character };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to update character' };
+        }
+    }
+
+    async deleteCharacter(id: string): Promise<ApiResponse<boolean>> {
+        try {
+            const result = await Character.deleteOne({ _id: id });
+            return { success: true, data: result.deletedCount > 0 };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to delete character' };
+        }
     }
 }

@@ -1,6 +1,8 @@
 import { INotificationRepository } from '../repositories/NotificationRepository';
 import { NotificationType } from '../models/Notification';
 import mongoose from 'mongoose';
+import { emailService } from './EmailService';
+import User from '../models/User';
 
 export class NotificationService {
     constructor(private readonly repo: INotificationRepository) {}
@@ -155,5 +157,27 @@ export class NotificationService {
             link: '/dashboard',
             data: opts,
         }, 'high');
+    }
+
+    async rivalWatch(userId: string, opts: { gameId: string; gameName: string; rivalName: string; analysisId: string; youtubeUrl?: string }) {
+        // 1. Create in-app notification
+        await this.notify(userId, 'RIVAL_WATCH', {
+            gameId: opts.gameId,
+            title: `RIVAL SPOTTED: ${opts.rivalName}`,
+            description: `Your tracked rival ${opts.rivalName} was found in a new match.`,
+            link: opts.youtubeUrl,
+            data: { rivalName: opts.rivalName, analysisId: opts.analysisId }
+        }, 'high');
+
+        // 2. Send email alert
+        try {
+            const user = await User.findById(userId).select('email name').lean().exec();
+            if (user && user.email) {
+                const analysisUrl = `https://metapunish.com/dashboard/matches?id=${opts.analysisId}`;
+                await emailService.sendRivalWatchAlert(user.email, user.name, opts.rivalName, opts.gameName, analysisUrl);
+            }
+        } catch (err) {
+            console.error('[NotificationService] Failed to send rival watch email:', err);
+        }
     }
 }

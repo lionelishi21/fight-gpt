@@ -48,6 +48,12 @@ const TOURNAMENT_URLS: { gameId: string; url: string; label: string }[] = [
     { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=iP8s7Sgq2f8', label: 'SF6 Pro Player High Level #3' },
     { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=yXGJVmdgMUs', label: 'SF6 Pro Player High Level #4' },
     { gameId: 'sf6', url: 'https://www.youtube.com/watch?v=S3vleFRSocs', label: 'SF6 Pro Player High Level #5' },
+    // Tekken 8 Major Tournaments 2024
+    { gameId: 'tekken8', url: 'https://www.youtube.com/watch?v=Ea5pGcudoXA', label: 'T8 EVO 2024 Grand Finals' },
+    { gameId: 'tekken8', url: 'https://www.youtube.com/watch?v=w9qJs-u-0Pc', label: 'T8 Combo Breaker 2024 Top 8' },
+    { gameId: 'tekken8', url: 'https://www.youtube.com/watch?v=VWT6tX0fkRM', label: 'T8 CEO 2024 Top 8' },
+    { gameId: 'tekken8', url: 'https://www.youtube.com/watch?v=NjD691hIecE', label: 'T8 Emirates Showdown 2024 Top 8' },
+    { gameId: 'tekken8', url: 'https://www.youtube.com/watch?v=MRSrHOZYzv8', label: 'T8 Thaiger Uppercut 2024 Run' },
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 

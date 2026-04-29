@@ -132,7 +132,7 @@ export class AiService extends BaseService implements IAiService {
     contentParts.push({ text: fullPrompt });
 
     // Try primary model, fall back on 503/overload
-    const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const FALLBACK_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
     const modelsToTry = [this.modelName, ...FALLBACK_MODELS.filter(m => m !== this.modelName)];
     let lastError: Error | null = null;
 

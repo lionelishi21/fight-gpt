@@ -48,7 +48,7 @@ export class TheoryService extends BaseService implements ITheoryService {
             ]);
             const confidence = this.calcConfidence(scenarios.length);
 
-            const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
+            const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay, vortexGraph } =
                 await this.synthesiseCharacterTheory(gameId, characterId, scenarios, targetSkillLevel);
 
             const saved = await this.theoryRepository.upsertCharacterTheory({
@@ -65,6 +65,7 @@ export class TheoryService extends BaseService implements ITheoryService {
                 key_weaknesses: weaknesses,
                 win_conditions: winConditions,
                 counterplay,
+                vortex_graph: vortexGraph,
                 source_scenario_count: scenarios.length,
                 confidence,
                 patch_version: patchVersion,
@@ -237,7 +238,15 @@ Return ONLY valid JSON in this exact format:
   "key_strengths": ["strength1", "strength2", "strength3"],
   "key_weaknesses": ["weakness1", "weakness2"],
   "win_conditions": ["win_condition1", "win_condition2", "win_condition3"],
-  "counterplay": ["counterplay_tip1", "counterplay_tip2", "counterplay_tip3"]
+  "counterplay": ["counterplay_tip1", "counterplay_tip2", "counterplay_tip3"],
+  "vortex_graph": {
+    "nodes": [
+      { "id": "n1", "label": "Situation Name", "description": "Short strategic tip", "type": "neutral|pressure|finisher|reset" }
+    ],
+    "edges": [
+      { "source": "n1", "target": "n2", "label": "action/condition" }
+    ]
+  }
 }`;
 
         try {
@@ -252,6 +261,7 @@ Return ONLY valid JSON in this exact format:
                 weaknesses: parsed.key_weaknesses || ['Linear pressure'],
                 winConditions: parsed.win_conditions || ['Control the corner', 'Land a heavy punish'],
                 counterplay: parsed.counterplay || ['Respect their wake-up options'],
+                vortexGraph: parsed.vortex_graph || { nodes: [], edges: [] }
             };
         } catch {
             return {

@@ -107,6 +107,24 @@ export class EmailService {
         }
     }
 
+    async sendRivalWatchAlert(to: string, userName: string, rivalName: string, gameName: string, analysisUrl: string): Promise<void> {
+        if (!process.env.RESEND_API_KEY) {
+            console.warn('[EmailService] RESEND_API_KEY not set — skipping rival watch alert');
+            return;
+        }
+
+        try {
+            await resend.emails.send({
+                from: FROM_EMAIL,
+                to,
+                subject: `RIVAL SPOTTED: ${rivalName} is back in the arena`,
+                html: this.buildRivalWatchHtml(userName, rivalName, gameName, analysisUrl),
+            });
+        } catch (error) {
+            console.error('[EmailService] Failed to send rival watch alert:', error);
+        }
+    }
+
     private buildWelcomeHtml(name: string): string {
         return `
 <!DOCTYPE html>
@@ -202,6 +220,29 @@ export class EmailService {
   </table>
 </body>
 </html>`;
+    }
+
+    private buildRivalWatchHtml(userName: string, rivalName: string, gameName: string, analysisUrl: string): string {
+        return `
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="padding-bottom:32px;text-align:left;">
+          <span style="display:inline-block;background-color:#f43f5e;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">RIVAL WATCH ALERT</span>
+        </td></tr>
+        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #f43f5e;padding:40px;">
+          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#f43f5e;">TARGET IDENTIFIED</h1>
+          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">New Match Intel for ${rivalName}</p>
+          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">Attention ${userName}. Our sensors just detected a new match involving your tracked rival <strong>${rivalName}</strong> in <strong>${gameName}</strong>. The AI has already analyzed the footage for weaknesses.</p>
+          <a href="${analysisUrl}" style="display:inline-block;background-color:#f43f5e;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ANALYZE RIVAL DATA →</a>
+        </td></tr>
+        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
     }
 }
 

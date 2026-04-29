@@ -152,7 +152,8 @@ export class IngestionService extends BaseService implements IIngestionService {
             const jobs = await this.ingestionRepository.getPendingJobs(gameId, batchSize);
             Logger.info(`[IngestionService] Processing ${jobs.length} pending jobs`);
 
-            const processingPromises = jobs.map(async (job) => {
+            // Process jobs sequentially to respect rate limits (e.g. Gemini 5 RPM)
+            for (const job of jobs) {
                 try {
                     // Mark as processing
                     await this.ingestionRepository.updateJobStatus(job.job_id, 'processing');
@@ -192,9 +193,12 @@ export class IngestionService extends BaseService implements IIngestionService {
                     failed++;
                     Logger.warn(`[IngestionService] Job ${job.job_id} failed (retry ${job.retry_count + 1}): ${msg}`);
                 }
-            });
-
-            await Promise.allSettled(processingPromises);
+                
+                // Rate limit buffer (e.g. 60s between analysis requests to stay under token limits)
+                if (jobs.indexOf(job) < jobs.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 60000));
+                }
+            }
 
             return {
                 success: true,
@@ -288,33 +292,56 @@ export class IngestionService extends BaseService implements IIngestionService {
     }
 
     /**
-     * Use yt-dlp to search YouTube and return video URLs
-     * yt-dlp --flat-playlist "ytsearch5:query" --print webpage_url
+     * Use YouTube Data API v3 to search for videos.
+     * This is the primary and only search method (yt-dlp is deprecated).
      */
     private async searchYouTube(query: string, maxResults: number = 3): Promise<string[]> {
-        try {
-            // Check yt-dlp is available
-            await execAsync('yt-dlp --version', { timeout: 5000 });
-        } catch {
-            Logger.error('[IngestionService] yt-dlp is not installed or not on PATH. Use the admin seed-urls endpoint to queue videos manually.');
-            return [];
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        if (apiKey) {
+            return this.searchViaYouTubeApi(query, maxResults, apiKey);
         }
 
+        Logger.error('[IngestionService] YOUTUBE_API_KEY is missing. YouTube search is disabled.');
+        return [];
+    }
+
+    /**
+     * YouTube Data API v3 search — reliable, requires YOUTUBE_API_KEY env var
+     * Free tier: 10,000 units/day (search costs 100 units each = ~100 searches/day)
+     */
+    private async searchViaYouTubeApi(query: string, maxResults: number, apiKey: string): Promise<string[]> {
         try {
-            const safeQuery = query.replace(/"/g, '\\"');
-            const cmd = `yt-dlp --flat-playlist "ytsearch${maxResults}:${safeQuery}" --print webpage_url --no-warnings`;
-            const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
-            if (stderr) Logger.warn(`[IngestionService] yt-dlp stderr for "${query}": ${stderr.slice(0, 200)}`);
-            const urls = stdout
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.startsWith('https://www.youtube.com/watch'));
-            Logger.info(`[IngestionService] yt-dlp found ${urls.length} URLs for: ${query}`);
+            const params = new URLSearchParams({
+                part: 'id',
+                q: query,
+                type: 'video',
+                maxResults: String(maxResults),
+                videoDuration: 'medium', // 4-20 min — typical match length
+                relevanceLanguage: 'en',
+                key: apiKey,
+            });
+
+            const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                Logger.error(`[IngestionService] YouTube API error (${response.status}): ${errorText.slice(0, 300)}`);
+                return [];
+            }
+
+            const data = await response.json();
+            const urls = (data.items || [])
+                .filter((item: any) => item.id?.videoId)
+                .map((item: any) => `https://www.youtube.com/watch?v=${item.id.videoId}`);
+
+            Logger.info(`[IngestionService] YouTube API found ${urls.length} URLs for: ${query}`);
             return urls;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            Logger.error(`[IngestionService] yt-dlp search failed for: "${query}" — ${msg}`);
+            Logger.error(`[IngestionService] YouTube API search failed: ${msg}`);
             return [];
         }
     }
 }
+
+

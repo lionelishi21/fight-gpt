@@ -29,6 +29,12 @@ export class AdminRoutes {
         this.router.patch('/games/:gameId/status', this.adminController.setGameStatus);
         this.router.post('/games/:gameId/bump-patch', this.adminController.bumpEncyclopediaPatch);
 
+        // Character Management
+        this.router.get('/characters', this.adminController.getCharacters);
+        this.router.post('/characters', this.adminController.createCharacter);
+        this.router.patch('/characters/:id', this.adminController.updateCharacter);
+        this.router.delete('/characters/:id', this.adminController.deleteCharacter);
+
         // Data Management
         this.router.get('/analyses', this.adminController.getRecentAnalyses);
         this.router.delete('/analyses/:id', this.adminController.deleteAnalysis);

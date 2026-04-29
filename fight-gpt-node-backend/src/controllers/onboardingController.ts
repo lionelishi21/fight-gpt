@@ -13,14 +13,12 @@ export class OnboardingController extends BaseController {
         try {
             // @ts-ignore - user is attached by middleware
             const userId = req.user.id;
-            const { gameId, characterId, skillLevel, country, city } = req.body;
+            const { gameId, characterId, skillLevel, goal, country, city } = req.body;
 
             // 1. Validate Game
-            // Try finding by game_id string first (e.g. 'sf6')
             let game = await Game.findOne({ game_id: gameId });
             if (!game) {
-                // Fallback to _id if provided
-                if (gameId.match(/^[0-9a-fA-F]{24}$/)) {
+                if (gameId?.match(/^[0-9a-fA-F]{24}$/)) {
                     game = await Game.findById(gameId);
                 }
             }
@@ -38,15 +36,9 @@ export class OnboardingController extends BaseController {
                     this.sendError(res, 'Character not found', 404);
                     return;
                 }
-                // Ensure character belongs to game
-                if (character.game_id.toString() !== game.game_id && character.game_id.toString() !== game._id.toString()) {
-                    this.sendError(res, 'Character does not belong to the selected game', 400);
-                    return;
-                }
             }
 
             // 3. Enforce Free Tier Logic (1 Character per Game)
-            // Check for existing active UserGame entries for this game
             const existingEntry = await UserGame.findOne({
                 user: userId,
                 game: game._id,
@@ -54,12 +46,9 @@ export class OnboardingController extends BaseController {
             });
 
             if (existingEntry) {
-                // If they already have a character for this game, we update it
-                // In a strict "1 character per game" model, this effectively replaces the choice
                 existingEntry.character = character ? character._id : undefined;
                 await existingEntry.save();
             } else {
-                // Create new entry
                 const userGame = new UserGame({
                     user: userId,
                     game: game._id,
@@ -70,7 +59,7 @@ export class OnboardingController extends BaseController {
                 await userGame.save();
             }
 
-            // 4. Update User Profile with V2 Slot Architecture
+            // 4. Update User Profile
             const proficiencyMap: Record<string, 'newbie' | 'intermediate' | 'pro'> = {
                 'beginner': 'newbie',
                 'intermediate': 'intermediate',
@@ -78,9 +67,18 @@ export class OnboardingController extends BaseController {
                 'pro': 'pro'
             };
 
+            const user = await User.findById(userId);
+            if (!user) {
+                this.sendError(res, 'User not found', 404);
+                return;
+            }
+
+            // Preservation logic: only set FREE if tier is default
+            const newTier = user.tier === 'FREE' ? 'FREE' : user.tier;
+
             await User.findByIdAndUpdate(userId, {
                 onboardingCompleted: true,
-                tier: 'FREE',
+                tier: newTier,
                 activeSlotIndex: 0,
                 slots: [{
                     gameId: gameId,
@@ -90,7 +88,8 @@ export class OnboardingController extends BaseController {
                     proficiencyLevel: proficiencyMap[skillLevel] || 'newbie'
                 }],
                 $set: {
-                    'preferences.skillLevel': skillLevel || 'beginner', // Backward compat
+                    'preferences.skillLevel': skillLevel || 'beginner',
+                    'preferences.goal': goal || 'rank_up',
                     'location.country': country,
                     'location.city': city
                 },

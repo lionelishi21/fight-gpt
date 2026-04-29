@@ -14,6 +14,8 @@ import { IGameMetadata, GameRule as CharacterGameRule } from '../types/gameMetad
 import { IVectorRepository } from '../repositories/VectorRepository';
 import { INotificationRepository } from '../repositories/NotificationRepository';
 import { IRivalRepository } from '../repositories/RivalRepository';
+import { NotificationService } from './NotificationService';
+import { Game } from '../models/Game';
 
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
@@ -33,7 +35,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     private readonly characterEncyclopediaService: ICharacterEncyclopediaService,
     private readonly characterService?: ICharacterService,
     private readonly vectorRepository?: IVectorRepository,
-    private readonly notificationRepository?: INotificationRepository,
+    private readonly notificationService?: NotificationService,
     private readonly rivalRepository?: IRivalRepository
   ) {
     super();
@@ -162,29 +164,27 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       }
 
       // RIVAL_WATCH Alert
-      if (this.notificationRepository && this.rivalRepository) {
+      if (this.notificationService && this.rivalRepository) {
           const names = [analysisResponse.p1_name, analysisResponse.p2_name].filter(Boolean) as string[];
+          const game = await Game.findOne({ game_id: request.game_id }).select('name').lean().exec();
+          const gameName = (game as any)?.name || request.game_id || 'Unknown Game';
+
           for (const name of names) {
               const rivals = await this.rivalRepository.findByTargetName(name, request.game_id || 'unknown');
               for (const rival of rivals) {
-                  await this.notificationRepository.createNotification({
-                      userId: rival.userId as any,
-                      type: 'RIVAL_WATCH',
-                      severity: 'high',
-                      payload: {
-                          gameId: request.game_id || 'unknown',
-                          title: `RIVAL SPOTTED: ${name}`,
-                          description: `Your tracked rival ${name} was found in a new match.`,
-                          link: request.youtube_url || undefined,
-                          data: { rivalName: name, analysisId }
-                      }
+                  await this.notificationService.rivalWatch(rival.userId.toString(), {
+                      gameId: request.game_id || 'unknown',
+                      gameName,
+                      rivalName: name,
+                      analysisId,
+                      youtubeUrl: request.youtube_url
                   });
               }
           }
       }
 
       // PRO_SCOUT Alert
-      if (this.notificationRepository) {
+      if (this.notificationService) {
           const names = [analysisResponse.p1_name, analysisResponse.p2_name].filter(Boolean) as string[];
           for (const name of names) {
               const pro = await ProPlayer.findOne({ 
@@ -204,21 +204,16 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                   }).limit(100);
 
                   for (const user of usersToNotify) {
-                      await this.notificationRepository.createNotification({
-                          userId: (user as any)._id,
-                          type: 'PRO_SCOUT',
-                          severity: 'medium',
-                          payload: {
-                              gameId: request.game_id || 'unknown',
-                              characterId: (analysisResponse.p1_name?.toLowerCase() === name.toLowerCase()) 
-                                  ? analysisResponse.p1_character 
-                                  : analysisResponse.p2_character,
-                              title: `PRO SCOUT: ${name}`,
-                              description: `New high-level footage analyzed for ${name}.`,
-                              link: request.youtube_url || undefined,
-                              data: { proName: name, analysisId }
-                          }
-                      });
+                      await this.notificationService.notify((user as any)._id, 'PRO_SCOUT', {
+                          gameId: request.game_id || 'unknown',
+                          characterId: (analysisResponse.p1_name?.toLowerCase() === name.toLowerCase()) 
+                              ? analysisResponse.p1_character 
+                              : analysisResponse.p2_character,
+                          title: `PRO SCOUT: ${name}`,
+                          description: `New high-level footage analyzed for ${name}.`,
+                          link: request.youtube_url || undefined,
+                          data: { proName: name, analysisId }
+                      }, 'medium');
                   }
               }
           }

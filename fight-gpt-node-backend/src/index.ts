@@ -36,6 +36,7 @@ import { NotificationController } from './controllers/NotificationController';
 import { RivalController } from './controllers/RivalController';
 import { UserController } from './controllers/UserController';
 import { AdminController } from './controllers/AdminController';
+import { PaymentController } from './controllers/PaymentController';
 
 // Import services
 import { AnalysisService } from './services/AnalysisService';
@@ -53,6 +54,7 @@ import { AutoResearchService } from './services/AutoResearchService';
 import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
 import { AdminService } from './services/AdminService';
+import { PaymentService } from './services/PaymentService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -109,6 +111,7 @@ export class App {
     // Only initialize services that need MongoDB if MongoDB is available
     const gameMetadataService = AppConfig.MONGODB_URI ? new GameMetadataService(gameMetadataRepository) : null as any;
     const characterEncyclopediaService = AppConfig.MONGODB_URI ? new CharacterEncyclopediaService(characterEncyclopediaRepository) : null as any;
+    const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository) : null as any;
     const aiService = AppConfig.MONGODB_URI ? new AiService(
       AppConfig.GEMINI_API_KEY,
       AppConfig.GEMINI_MODEL,
@@ -123,13 +126,12 @@ export class App {
       characterEncyclopediaService,
       characterService, // Pass characterService for character name lookup
       vectorRepository,
-      notificationRepository,
+      notificationService,
       rivalRepository
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
     this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService) : null;
-    const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository) : null as any;
     const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
     const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
@@ -163,6 +165,8 @@ export class App {
     const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
     const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined) : null;
+    const paymentService = new PaymentService();
+    const paymentController = new PaymentController(paymentService);
 
     // Setup routes
     this.routes = new Routes(
@@ -178,7 +182,8 @@ export class App {
       notificationController,
       rivalController,
       userController,
-      adminController
+      adminController,
+      paymentController
     );
     this.setupRoutes();
 
@@ -208,8 +213,22 @@ export class App {
     this.app.use(compression());
 
     // Body parsing middleware
-    this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
+    // Note: We capture the raw body for Stripe webhook verification
+    this.app.use(express.json({
+      verify: (req: any, _res, buf) => {
+        if (req.originalUrl.startsWith('/api/payments/webhook')) {
+          req.rawBody = buf;
+        }
+      }
+    }));
+    this.app.use(express.urlencoded({ 
+      extended: true,
+      verify: (req: any, _res, buf) => {
+        if (req.originalUrl.startsWith('/api/payments/webhook')) {
+          req.rawBody = buf;
+        }
+      }
+    }));
 
     // Logging middleware
     if (AppConfig.isDevelopment()) {

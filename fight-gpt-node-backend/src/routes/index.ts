@@ -16,6 +16,7 @@ import { NotificationRoutes } from './notificationRoutes';
 import { RivalRoutes } from './rivalRoutes';
 import { UserRoutes } from './userRoutes';
 import { AdminRoutes } from './adminRoutes';
+import { PaymentRoutes } from './paymentRoutes';
 import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
@@ -34,6 +35,7 @@ import { TheoryController } from '../controllers/TheoryController';
 import { NotificationController } from '../controllers/NotificationController';
 import { RivalController } from '../controllers/RivalController';
 import { UserController } from '../controllers/UserController';
+import { PaymentController } from '../controllers/PaymentController';
 
 /**
  * Routes configuration
@@ -59,6 +61,7 @@ export class Routes {
   private rivalRoutes: RivalRoutes | null;
   private userRoutes: UserRoutes | null;
   private adminRoutes: AdminRoutes | null;
+  private paymentRoutes: PaymentRoutes;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -74,6 +77,7 @@ export class Routes {
     rivalController?: RivalController | null,
     userController?: UserController | null,
     adminController?: AdminController | null,
+    paymentController?: PaymentController | null,
   ) {
     this.router = Router();
     this.analysisRoutes = analysisController ? new AnalysisRoutes(analysisController) : null as any;
@@ -94,6 +98,7 @@ export class Routes {
     this.rivalRoutes = rivalController ? new RivalRoutes(rivalController) : null;
     this.userRoutes = userController ? new UserRoutes(userController) : null;
     this.adminRoutes = adminController ? new AdminRoutes(adminController) : null;
+    this.paymentRoutes = new PaymentRoutes(paymentController!);
     this.setupRoutes();
   }
 
@@ -177,6 +182,9 @@ export class Routes {
     if (this.adminRoutes) {
       this.router.use('/admin', this.adminRoutes.getRouter());
     }
+
+    // Payment routes
+    this.router.use('/payments', this.paymentRoutes.getRouter());
 
     // Public invite validation (used on signup page to pre-fill role/email)
     this.router.get('/invites/validate/:token', inviteController.validateInvite);
