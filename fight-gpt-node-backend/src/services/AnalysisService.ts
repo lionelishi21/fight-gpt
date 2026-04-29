@@ -295,24 +295,38 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     const enrichedRequest: AnalysisRequest = { ...request };
     try {
       const gameMetadataResult = await this.gameMetadataService.getCurrentGameMetadataByGameId(request.game_id);
-      if (gameMetadataResult.success && gameMetadataResult.data) {
-        enrichedRequest.game_metadata = {
-          global_mechanics: gameMetadataResult.data.global_mechanics || [],
-          constants: gameMetadataResult.data.constants || {},
-        };
+      const gameMetadata = gameMetadataResult.success ? gameMetadataResult.data : null;
+
+      let p1Rules = null;
+      let p2Rules = null;
+      let p1Enc = null;
+      let p2Enc = null;
+
+      if (request.p1_character_id) {
+        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p1_character_id);
+        if (rulesRes.success) p1Rules = rulesRes.data;
+        
+        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, request.p1_character_id);
+        if (encRes.success) p1Enc = encRes.data;
       }
 
-      if (request.p1_character_id || request.p2_character_id) {
-        enrichedRequest.character_game_rules = {};
-        if (request.p1_character_id) {
-          const res = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p1_character_id);
-          if (res.success) enrichedRequest.character_game_rules.p1 = res.data;
-        }
-        if (request.p2_character_id) {
-          const res = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p2_character_id);
-          if (res.success) enrichedRequest.character_game_rules.p2 = res.data;
-        }
+      if (request.p2_character_id) {
+        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p2_character_id);
+        if (rulesRes.success) p2Rules = rulesRes.data;
+
+        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, request.p2_character_id);
+        if (encRes.success) p2Enc = encRes.data;
       }
+
+      // Generate the unified "Sensei Context"
+      enrichedRequest.ai_context = formatFullGameContextForAI(
+        gameMetadata || null,
+        p1Rules,
+        p2Rules,
+        p1Enc,
+        p2Enc
+      );
+
     } catch (e) {
       console.error(`[AnalysisService] Enrichment failed:`, e);
     }

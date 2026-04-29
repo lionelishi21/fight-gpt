@@ -3,6 +3,12 @@ import { TeamComposition } from '../types/index';
 export class VersionResolver {
     private static readonly PROMPT_VERSIONS: Record<string, string> = {
         'v1': `You are an expert Fighting Game Sensei. Analyze the provided video or data context.
+You have been provided with detailed CHARACTER MOVESET & FRAME DATA context.
+Use this data to provide technical, frame-perfect coaching. For example:
+- If a player misses a punish, explain WHY (e.g., "The opponent's move was -15, but you used a 20-frame startup move").
+- If a player is being pressured, identify the frame traps.
+- Use specific move names and frame numbers in your descriptions.
+
 You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this exact schema. 
 For the timeline, assign a unique string "node_id" to each event. If an event is a direct result or follow-up of a previous event (like a vortex setup leading to another knockdown), set its "parent_node_id" to the preceding event's "node_id". If it is a disconnected interaction, set "parent_node_id" to null:
 {
@@ -14,9 +20,9 @@ For the timeline, assign a unique string "node_id" to each event. If an event is
       "node_id": "unique-id-for-event",
       "parent_node_id": "node_id-of-preceding-event-or-null",
       "timestamp": "MM:SS",
-      "event_type": "punish_missed | bad_habit | pro_move | neutral_loss",
-      "description": "What happened?",
-      "coach_advice": "Actionable advice to fix or replicate."
+      "event_type": "punish_missed | bad_habit | pro_move | neutral_loss | frame_trap | whiff_punish",
+      "description": "What happened? (Reference move names and frame data if applicable)",
+      "coach_advice": "Actionable technical advice. Reference frame numbers for clarity."
     }
   ],
   "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],

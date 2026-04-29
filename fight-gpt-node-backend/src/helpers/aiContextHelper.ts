@@ -1,8 +1,9 @@
 import { IGameMetadata, GameRule as CharacterGameRule } from '../types/gameMetadata';
+import { ICharacterEncyclopedia } from '../types/characterEncyclopedia';
 
 /**
  * AI Context Helper
- * Formats game metadata and character rules for AI prompts
+ * Formats game metadata, character rules, and movesets for AI prompts
  */
 
 /**
@@ -148,13 +149,46 @@ export function formatCharacterGameRulesForAI(
 }
 
 /**
+ * Format character moveset for AI prompts
+ */
+export function formatCharacterMovesetForAI(
+  encyclopedia: ICharacterEncyclopedia | null | undefined,
+  characterLabel: string = 'Character'
+): string {
+  if (!encyclopedia || !encyclopedia.moveset) return '';
+
+  const parts: string[] = [`${characterLabel.toUpperCase()} MOVESET & FRAME DATA:`];
+  const { normals, specials, ex_moves, supers } = encyclopedia.moveset;
+
+  const formatMove = (m: any) => 
+    `- ${m.name} (${m.command}): Startup:${m.startup || '?'}f | Active:${m.active || '?'}f | Recovery:${m.recovery || '?'}f | Block:${m.on_block > 0 ? '+' : ''}${m.on_block || '0'} | Hit:${m.on_hit > 0 ? '+' : ''}${m.on_hit || '0'}`;
+
+  if (normals?.length) {
+    parts.push('NORMALS:');
+    normals.slice(0, 15).forEach(m => parts.push(formatMove(m)));
+  }
+  if (specials?.length) {
+    parts.push('SPECIALS:');
+    specials.slice(0, 10).forEach(m => parts.push(formatMove(m)));
+  }
+  if (supers?.length) {
+    parts.push('SUPERS:');
+    supers.forEach(m => parts.push(formatMove(m)));
+  }
+
+  return parts.join('\n');
+}
+
+/**
  * Format full game context for AI prompt
  * Combines game metadata and character rules into a single formatted string
  */
 export function formatFullGameContextForAI(
   gameMetadata: IGameMetadata | null,
   p1Rules: CharacterGameRule[] | null | undefined,
-  p2Rules: CharacterGameRule[] | null | undefined
+  p2Rules: CharacterGameRule[] | null | undefined,
+  p1Encyclopedia?: ICharacterEncyclopedia | null,
+  p2Encyclopedia?: ICharacterEncyclopedia | null
 ): string {
   const parts: string[] = [];
 
@@ -166,20 +200,28 @@ export function formatFullGameContextForAI(
     }
   }
 
-  // Add P1 character rules
+  // Add P1 character rules & moveset
   if (p1Rules && p1Rules.length > 0) {
     const p1Formatted = formatCharacterGameRulesForAI(p1Rules, 'Player 1');
     if (p1Formatted.hasRules) {
       parts.push(p1Formatted.rulesText);
     }
   }
+  if (p1Encyclopedia) {
+    const p1Moveset = formatCharacterMovesetForAI(p1Encyclopedia, 'Player 1');
+    if (p1Moveset) parts.push(p1Moveset);
+  }
 
-  // Add P2 character rules
+  // Add P2 character rules & moveset
   if (p2Rules && p2Rules.length > 0) {
     const p2Formatted = formatCharacterGameRulesForAI(p2Rules, 'Player 2');
     if (p2Formatted.hasRules) {
       parts.push(p2Formatted.rulesText);
     }
+  }
+  if (p2Encyclopedia) {
+    const p2Moveset = formatCharacterMovesetForAI(p2Encyclopedia, 'Player 2');
+    if (p2Moveset) parts.push(p2Moveset);
   }
 
   // If no context available, return empty string
