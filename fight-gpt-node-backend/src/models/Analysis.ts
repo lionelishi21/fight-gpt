@@ -12,6 +12,8 @@ export interface IAnalysis extends Document {
   user_id?: string;
   analysis: AnalysisResponse;
   analysis_id: string;
+  p1_name?: string;
+  p2_name?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -54,6 +56,14 @@ const AnalysisSchema: Schema = new Schema(
       type: String,
       index: true,
       sparse: true,
+    },
+    p1_name: {
+      type: String,
+      index: true,
+    },
+    p2_name: {
+      type: String,
+      index: true,
     },
   },
   {

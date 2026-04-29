@@ -12,33 +12,25 @@ const execAsync = promisify(exec);
 // Search queries per game — these surface tournament sets, pro player footage, high-level ranked
 const GAME_SEARCH_QUERIES: Record<string, string[]> = {
     sf6: [
-        'Street Fighter 6 tournament 2024 top 8',
-        'SF6 EVO 2024 grand finals',
-        'Street Fighter 6 pro player ranked match',
-        'SF6 high level gameplay 2024',
-        'Street Fighter 6 combo guide punish',
+        'SF6 tournament 2024 top 8 official',
+        'Street Fighter 6 pro player tournament grand finals',
+        'SF6 Capcom Cup match high level',
     ],
     tekken8: [
-        'Tekken 8 tournament 2024',
-        'Tekken 8 EVO 2024 top 8',
-        'Tekken 8 pro player ranked high level',
-        'Tekken 8 frame data punish guide',
+        'Tekken 8 TWT 2024 top 8 tournament',
+        'Tekken 8 pro player ranked match high level',
+        'Tekken 8 EVO grand finals',
     ],
     ggst: [
-        'Guilty Gear Strive tournament 2024',
-        'GGST EVO 2024 grand finals',
-        'Guilty Gear Strive high level ranked',
-        'Strive combo guide optimal punish',
+        'Guilty Gear Strive tournament 2024 top 8',
+        'GGST pro player ranked high level match',
     ],
     mk1: [
-        'Mortal Kombat 1 tournament 2024',
-        'MK1 EVO 2024 top 8',
-        'Mortal Kombat 1 high level gameplay',
+        'Mortal Kombat 1 Final Kombat 2024 top 8',
+        'MK1 pro player tournament match',
     ],
     dbfz: [
-        'Dragon Ball FighterZ tournament 2024',
-        'DBFZ EVO 2024 high level',
-        'Dragon Ball FighterZ combo guide',
+        'DBFZ World Tour 2024 top 8 tournament',
     ],
 };
 
@@ -129,7 +121,7 @@ export class IngestionService extends BaseService implements IIngestionService {
         return {
             success: true,
             data: result,
-            message: `Queued ${result.queued_count} new videos for ${gameId}`,
+            message: `Elite ingestion triggered for ${gameId}: ${result.queued_count} queued, ${result.skipped_count} skipped`,
         };
     }
 
