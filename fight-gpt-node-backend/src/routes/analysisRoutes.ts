@@ -53,6 +53,14 @@ export class AnalysisRoutes {
       validateRequest,
       (req: Request, res: Response, next: NextFunction) => this.controller.getAnalysis(req, res, next)
     );
+
+    // POST /api/analysis/:id/verify - Verify mission success
+    this.router.post(
+      '/:id/verify',
+      optionalAuthMiddleware,
+      validateRequest,
+      (req: Request, res: Response, next: NextFunction) => this.controller.verifyMission(req, res, next)
+    );
   }
 
   /**

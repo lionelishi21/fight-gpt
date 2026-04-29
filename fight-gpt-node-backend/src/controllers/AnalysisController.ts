@@ -12,6 +12,7 @@ export interface IAnalysisController {
   analyzeVideo(req: Request, res: Response, next: NextFunction): Promise<void>;
   getAnalysis(req: Request, res: Response, next: NextFunction): Promise<void>;
   getRecentAnalyses(req: Request, res: Response, next: NextFunction): Promise<void>;
+  verifyMission(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 /**
@@ -221,6 +222,49 @@ export class AnalysisController extends BaseController implements IAnalysisContr
       });
 
       this.sendResponse(res, result, result.success ? 200 : 500);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
+  /**
+   * Verify mission success for an analysis
+   * POST /api/analysis/:id/verify
+   */
+  async verifyMission(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const requestId = this.getRequestId(req);
+    const startTime = Date.now();
+
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.id;
+
+      if (!id || !userId) {
+        this.sendResponse(res, { success: false, error: 'Analysis ID and User Auth required' }, 400);
+        return;
+      }
+
+      // 1. Get the analysis
+      const result = await this.analysisService.getAnalysis(id);
+      if (!result.success || !result.data) {
+        this.sendResponse(res, { success: false, error: 'Analysis not found' }, 404);
+        return;
+      }
+
+      // 2. Run mission verification
+      const { MissionService } = require('../services/MissionService');
+      const verifyResult = await MissionService.verifyMissionSuccess(result.data, userId);
+
+      const responseTime = Date.now() - startTime;
+      await this.auditLogRepository.createAuditLog({
+        request_id: requestId,
+        endpoint: `/api/analysis/${id}/verify`,
+        method: 'POST',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'],
+        response_status: 200,
+        response_time_ms: responseTime,
+      });
+
+      this.sendResponse(res, { success: true, data: verifyResult }, 200);
     } catch (error) {
       this.handleError(error, req, res, next);
     }

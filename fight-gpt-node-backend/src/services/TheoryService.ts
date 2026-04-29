@@ -57,18 +57,18 @@ export class TheoryService extends BaseService implements ITheoryService {
                 type: 'character',
                 target_skill_level: targetSkillLevel,
                 character_id: characterId,
-                character_name: characterId.toUpperCase(),
+                character_name: characterId ? characterId.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : 'Unknown character',
                 title: title || `${characterId.toUpperCase()} Meta Analysis`,
-                summary,
-                full_theory: fullTheory,
-                key_strengths: strengths,
-                key_weaknesses: weaknesses,
-                win_conditions: winConditions,
-                counterplay,
-                vortex_graph: vortexGraph,
+                summary: summary || 'No summary available.',
+                full_theory: fullTheory || 'Theory synthesis yielded no long-form intelligence.',
+                key_strengths: strengths || [],
+                key_weaknesses: weaknesses || [],
+                win_conditions: winConditions || [],
+                counterplay: counterplay || [],
+                vortex_graph: vortexGraph || { nodes: [], edges: [] },
                 source_scenario_count: scenarios.length,
-                confidence,
-                patch_version: patchVersion,
+                confidence: confidence || 'low',
+                patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
             });
@@ -113,16 +113,16 @@ export class TheoryService extends BaseService implements ITheoryService {
                 target_skill_level: targetSkillLevel,
                 character_a: charA,
                 character_b: charB,
-                title,
-                summary,
-                full_theory: fullTheory,
-                key_strengths: strengths,
-                key_weaknesses: weaknesses,
-                win_conditions: winConditions,
-                counterplay,
+                title: title || `${charA.toUpperCase()} vs ${charB.toUpperCase()} Analysis`,
+                summary: summary || 'No summary available.',
+                full_theory: fullTheory || 'Matchup synthesis yielded no intelligence.',
+                key_strengths: strengths || [],
+                key_weaknesses: weaknesses || [],
+                win_conditions: winConditions || [],
+                counterplay: counterplay || [],
                 source_scenario_count: scenarios.length,
-                confidence,
-                patch_version: patchVersion,
+                confidence: confidence || 'low',
+                patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
             });
@@ -174,9 +174,9 @@ export class TheoryService extends BaseService implements ITheoryService {
         }
     }
 
-    private async getCurrentPatchVersion(gameId: string): Promise<string | undefined> {
+    private async getCurrentPatchVersion(gameId: string): Promise<string> {
         const game = await Game.findOne({ game_id: gameId }).lean().exec();
-        return (game as any)?.latest_version ?? undefined;
+        return (game as any)?.latest_version || 'LIVE';
     }
 
     // --- Private helpers ---
