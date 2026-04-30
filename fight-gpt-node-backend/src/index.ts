@@ -302,6 +302,12 @@ export class App {
         this.ingestionService.startScheduler();
       }
 
+      // Start meta synthesis scheduler (every 24 hours)
+      const metaService = (this.routes as any).metaController?.metaService;
+      if (metaService) {
+        metaService.startScheduler();
+      }
+
       // Start server
       this.app.listen(AppConfig.PORT, () => {
         Logger.info(`Server running on port ${AppConfig.PORT} in ${AppConfig.NODE_ENV} mode`);

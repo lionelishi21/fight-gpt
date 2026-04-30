@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import cron from 'node-cron';
 import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
@@ -11,6 +12,7 @@ export interface IMetaService {
     getLatestMetaReport(gameId: string, period?: string): Promise<ApiResponse<IMetaReport>>;
     getMetaReportHistory(gameId: string, limit?: number): Promise<ApiResponse<IMetaReport[]>>;
     queryMetaInsight(gameId: string, query: string): Promise<ApiResponse<{ answer: string; scenarios: unknown[] }>>;
+    startScheduler(): void;
 }
 
 /**
@@ -213,6 +215,32 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         } catch (error) {
             throw this.handleError(error, 'queryMetaInsight');
         }
+    }
+
+    /**
+     * Start the automated meta synthesis scheduler.
+     * Runs at 4am daily — after Karpathy auto-research (2am).
+     */
+    startScheduler(): void {
+        // Daily at 04:00
+        cron.schedule('0 4 * * *', async () => {
+            console.log('[MetaService] Starting automated daily meta synthesis...');
+            try {
+                // Find all active games
+                const Game = (this.metaRepository as any).model.db.model('Game');
+                const games = await Game.find({ is_active: true }).lean().exec();
+
+                for (const game of games) {
+                    console.log(`[MetaService] Synthesising meta for ${game.game_id}...`);
+                    await this.generateMetaReport(game.game_id, 'weekly');
+                }
+                console.log('[MetaService] Daily meta synthesis complete.');
+            } catch (err) {
+                console.error('[MetaService] Automated meta synthesis failed:', err);
+            }
+        }, { timezone: 'UTC' });
+        
+        console.log('[MetaService] Scheduled — runs daily at 04:00 UTC');
     }
 
     // --- Private helpers ---

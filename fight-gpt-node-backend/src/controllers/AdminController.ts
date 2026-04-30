@@ -301,10 +301,17 @@ export class AdminController extends BaseController {
             return;
         }
         try {
-            const result = await this.autoResearchService.runResearchCycle();
-            this.sendResponse(res, { success: true, data: result, message: 'Research cycle complete' });
+            // Run in background to avoid HTTP timeout
+            this.autoResearchService.runResearchCycle().catch(err => {
+                console.error('[AdminController] Background research cycle failed:', err);
+            });
+            
+            this.sendResponse(res, { 
+                success: true, 
+                message: 'Research cycle triggered in background. Check logs or wait for push notifications for results.' 
+            });
         } catch (error) {
-            this.sendError(res, error instanceof Error ? error.message : 'Research cycle failed');
+            this.sendError(res, error instanceof Error ? error.message : 'Research cycle trigger failed');
         }
     };
 
