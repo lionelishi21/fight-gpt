@@ -16,6 +16,9 @@ import rateLimit from 'express-rate-limit';
 // Import configuration
 import { AppConfig } from './config/app';
 import { Database } from './config/database';
+import { EngagementService } from './services/EngagementService';
+import { EngagementController } from './controllers/EngagementController';
+import { EngagementRoutes } from './routes/engagementRoutes';
 import { Logger } from './helpers/logger';
 import { SystemInitializer } from './helpers/SystemInitializer';
 
@@ -169,6 +172,10 @@ export class App {
     const paymentController = new PaymentController(paymentService);
 
     // Setup routes
+    const engagementService = new EngagementService(theoryService);
+    const engagementController = new EngagementController(engagementService);
+    const engagementRoutes = new EngagementRoutes(engagementController);
+
     this.routes = new Routes(
       analysisController,
       healthController,
@@ -183,7 +190,8 @@ export class App {
       rivalController,
       userController,
       adminController,
-      paymentController
+      paymentController,
+      engagementController
     );
     this.setupRoutes();
 

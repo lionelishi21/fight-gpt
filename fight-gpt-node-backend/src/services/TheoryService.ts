@@ -13,8 +13,8 @@ export type SkillLevel = 'Rookie' | 'Intermediate' | 'Pro';
 const CONFIDENCE_THRESHOLDS = { low: 5, medium: 20, high: 50 };
 
 export interface ITheoryService {
-    generateCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
-    generateMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
+    generateCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel, correctionFeedback?: string): Promise<ApiResponse<ITheoryDocument>>;
+    generateMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel, correctionFeedback?: string): Promise<ApiResponse<ITheoryDocument>>;
     getCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>>;
     getMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;
@@ -39,7 +39,8 @@ export class TheoryService extends BaseService implements ITheoryService {
     async generateCharacterTheory(
         gameId: string,
         characterId: string,
-        targetSkillLevel: SkillLevel = 'Intermediate'
+        targetSkillLevel: SkillLevel = 'Intermediate',
+        correctionFeedback?: string
     ): Promise<ApiResponse<ITheoryDocument>> {
         if (!characterId || characterId === 'undefined') {
             return { success: false, error: 'Valid character ID required for theory generation.' };
@@ -52,7 +53,7 @@ export class TheoryService extends BaseService implements ITheoryService {
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay, vortexGraph } =
-                await this.synthesiseCharacterTheory(gameId, characterId, scenarios, targetSkillLevel);
+                await this.synthesiseCharacterTheory(gameId, characterId, scenarios, targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertCharacterTheory({
                 theory_id: UuidHelper.generate(),
@@ -97,7 +98,8 @@ export class TheoryService extends BaseService implements ITheoryService {
         gameId: string,
         charA: string,
         charB: string,
-        targetSkillLevel: SkillLevel = 'Intermediate'
+        targetSkillLevel: SkillLevel = 'Intermediate',
+        correctionFeedback?: string
     ): Promise<ApiResponse<ITheoryDocument>> {
         try {
             const [scenarios, patchVersion] = await Promise.all([
@@ -107,7 +109,7 @@ export class TheoryService extends BaseService implements ITheoryService {
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
-                await this.synthesiseMatchupTheory(gameId, charA, charB, scenarios, targetSkillLevel);
+                await this.synthesiseMatchupTheory(gameId, charA, charB, scenarios, targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertMatchupTheory({
                 theory_id: UuidHelper.generate(),
@@ -211,7 +213,8 @@ export class TheoryService extends BaseService implements ITheoryService {
         gameId: string,
         characterId: string,
         scenarios: any[],
-        skillLevel: string = 'Intermediate'
+        skillLevel: string = 'Intermediate',
+        correctionFeedback?: string
     ) {
         const scenarioText = scenarios.length > 0
             ? scenarios.slice(0, 30).map((s, i) =>
@@ -232,6 +235,9 @@ export class TheoryService extends BaseService implements ITheoryService {
 
 Scenarios:
 ${scenarioText}
+
+${correctionFeedback ? `CRITICAL COMMUNITY FEEDBACK (PLEASE CORRECT):
+${correctionFeedback}` : ''}
 
 Return ONLY valid JSON in this exact format:
 {
@@ -284,7 +290,8 @@ Return ONLY valid JSON in this exact format:
         charA: string,
         charB: string,
         scenarios: any[],
-        skillLevel: string = 'Intermediate'
+        skillLevel: string = 'Intermediate',
+        correctionFeedback?: string
     ) {
         const scenarioText = scenarios.length > 0
             ? scenarios.slice(0, 30).map((s, i) =>
@@ -305,6 +312,9 @@ Return ONLY valid JSON in this exact format:
 
 Scenarios:
 ${scenarioText}
+
+${correctionFeedback ? `CRITICAL COMMUNITY FEEDBACK (PLEASE CORRECT):
+${correctionFeedback}` : ''}
 
 Return ONLY valid JSON:
 {
