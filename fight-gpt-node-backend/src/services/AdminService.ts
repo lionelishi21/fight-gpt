@@ -25,18 +25,25 @@ export interface IAdminService {
 export class AdminService extends BaseService implements IAdminService {
     async getSystemStats(): Promise<ApiResponse<any>> {
         try {
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+
             const [
                 totalUsers,
                 totalAnalyses,
                 totalScenarios,
                 pendingJobs,
-                failedJobs
+                failedJobs,
+                dailyAnalyses,
+                dailyScenarios
             ] = await Promise.all([
                 User.countDocuments(),
                 Analysis.countDocuments(),
                 Scenario.countDocuments(),
                 IngestionJob.countDocuments({ status: 'pending' }),
-                IngestionJob.countDocuments({ status: 'failed' })
+                IngestionJob.countDocuments({ status: 'failed' }),
+                Analysis.countDocuments({ created_at: { $gte: startOfToday } }),
+                Scenario.countDocuments({ created_at: { $gte: startOfToday } })
             ]);
 
             return {
@@ -48,6 +55,10 @@ export class AdminService extends BaseService implements IAdminService {
                     queue: {
                         pending: pendingJobs,
                         failed: failedJobs
+                    },
+                    daily: {
+                        analyses: dailyAnalyses,
+                        scenarios: dailyScenarios
                     }
                 }
             };
