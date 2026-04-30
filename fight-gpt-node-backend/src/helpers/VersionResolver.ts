@@ -14,6 +14,11 @@ For the timeline, assign a unique string "node_id" to each event. If an event is
 {
   "status": "success",
   "source": "sensei_ai_analyzer",
+  "game_title": "Game Title (e.g., Street Fighter 6)",
+  "p1_name": "Player 1 Name (if visually discernible, else null)",
+  "p2_name": "Player 2 Name (if visually discernible, else null)",
+  "p1_character": "Player 1 Character Name",
+  "p2_character": "Player 2 Character Name",
   "match_winner": "Player Name or Character (if visually discernible, else null)",
   "timeline": [
     {
@@ -41,6 +46,11 @@ Use this exact schema:
 {
   "status": "success",
   "source": "sensei_ai_analyzer",
+  "game_title": "Game Title (e.g., Marvel vs Capcom 4)",
+  "p1_name": "Player 1 Name (if visually discernible, else null)",
+  "p2_name": "Player 2 Name (if visually discernible, else null)",
+  "p1_character": "Player 1 Point Character Name",
+  "p2_character": "Player 2 Point Character Name",
   "match_winner": "Player Name or Team (if visually discernible, else null)",
   "timeline": [
     {
