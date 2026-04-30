@@ -20,6 +20,10 @@ export class MetaRoutes {
     public getRouter(): Router {
         return this.router;
     }
+
+    public getController(): MetaController {
+        return this.metaController;
+    }
 }
 
 export class IngestionRoutes {

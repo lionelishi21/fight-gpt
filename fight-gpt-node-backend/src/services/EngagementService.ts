@@ -126,15 +126,16 @@ export class EngagementService extends BaseService {
                     await this.theoryService.generateCharacterTheory(
                         theory.game_id, 
                         theory.character_id!, 
-                        theory.target_skill_level as any
-                        // TODO: Add correctionFeedback param to TheoryService
+                        theory.target_skill_level as any,
+                        feedbackContext
                     );
                 } else if (theory.type === 'matchup') {
                     await this.theoryService.generateMatchupTheory(
                         theory.game_id,
                         theory.character_a!,
                         theory.character_b!,
-                        theory.target_skill_level as any
+                        theory.target_skill_level as any,
+                        feedbackContext
                     );
                 }
             }

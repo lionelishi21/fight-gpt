@@ -41,6 +41,13 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     super();
   }
 
+  private sanitizeAiString(val: any): string | null {
+    if (!val || typeof val !== 'string') return null;
+    const low = val.toLowerCase().trim();
+    if (low === 'undefined' || low === 'null' || low === 'unknown' || low === 'p1' || low === 'p2') return null;
+    return low.replace(/\s+/g, '_');
+  }
+
   async analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
       this.validateAnalysisRequest(request);
@@ -64,9 +71,11 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       if (this.vectorRepository && analysisResponse.timeline) {
         for (const event of analysisResponse.timeline) {
           try {
+            const p1 = this.sanitizeAiString(analysisResponse.p1_character) || 'P1';
+            const p2 = this.sanitizeAiString(analysisResponse.p2_character) || 'P2';
             const contextParts = [
               `Game: ${request.game_id || 'Unknown'}.`,
-              `Matchup: ${analysisResponse.p1_character || 'P1'} vs ${analysisResponse.p2_character || 'P2'}.`,
+              `Matchup: ${p1} vs ${p2}.`,
               `Situation: ${event.description}.`,
               `Advice: ${event.coach_advice}.`,
             ];
@@ -102,7 +111,10 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                 pro_player_id: (request as any).pro_player_id,
                 description: event.description,
                 context: contextText,
-                characters_involved: [analysisResponse.p1_character, analysisResponse.p2_character].filter(Boolean) as string[],
+                characters_involved: [
+                  this.sanitizeAiString(analysisResponse.p1_character),
+                  this.sanitizeAiString(analysisResponse.p2_character)
+                ].filter(Boolean) as string[],
                 embedding,
                 match_references: [analysisId],
                 tags: [event.event_type],
@@ -122,8 +134,10 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
             // TECH_DISCOVERY Alert — only for genuinely novel scenarios
             if (isNovel && this.notificationRepository) {
-              const chars = [analysisResponse.p1_character, analysisResponse.p2_character]
-                .filter(Boolean) as string[];
+              const chars = [
+                this.sanitizeAiString(analysisResponse.p1_character),
+                this.sanitizeAiString(analysisResponse.p2_character)
+              ].filter(Boolean) as string[];
               const charLabel = chars.length > 0
                 ? chars.map(c => c.toUpperCase()).join(' & ')
                 : (request.game_id || 'UNKNOWN').toUpperCase();
@@ -143,8 +157,8 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                   severity: 'high',
                   payload: {
                     gameId: request.game_id || 'unknown',
-                    characterId: analysisResponse.p1_character || undefined,
-                    title: `[${charLabel}] New tech — ${event.event_type.replace(/_/g, ' ')}`,
+                    characterId: this.sanitizeAiString(analysisResponse.p1_character) || undefined,
+                    title: `[${charLabel}] New tech — ${(event.event_type || 'Discovery').replace(/_/g, ' ')}`,
                     description: shortCtx,
                     // Internal route — NOT the YouTube URL
                     link: `/dashboard/tech/${scenarioId}`,

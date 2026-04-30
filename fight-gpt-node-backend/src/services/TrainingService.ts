@@ -39,6 +39,7 @@ export class TrainingService {
                 difficulty: mission.difficulty,
                 reward: `${mission.reward.xp} XP`, // Formatting for UI
                 rewardValue: mission.reward.xp,
+                targetLink: mission.targetLink,
                 status: userEntry ? userEntry.status : 'AVAILABLE', // AVAILABLE means not started/tracked yet
                 completed: userEntry?.status === 'COMPLETED',
             };

@@ -311,9 +311,12 @@ export class App {
       }
 
       // Start meta synthesis scheduler (every 24 hours)
-      const metaService = (this.routes as any).metaController?.metaService;
-      if (metaService) {
-        metaService.startScheduler();
+      const metaRoutes = this.routes.getMetaRoutes();
+      if (metaRoutes) {
+        const metaService = metaRoutes.getController().getMetaService();
+        if (metaService) {
+          metaService.startScheduler();
+        }
       }
 
       // Start server

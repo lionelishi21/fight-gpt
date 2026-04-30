@@ -10,8 +10,8 @@ import { BaseService } from './BaseService';
 
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
-    getIngestionJobs(limit: number, status?: string): Promise<ApiResponse<any[]>>;
-    getAnalyses(limit: number, offset: number): Promise<ApiResponse<any[]>>;
+    getIngestionJobs(limit: number, status?: string, gameId?: string): Promise<ApiResponse<any[]>>;
+    getAnalyses(limit: number, offset: number, gameId?: string, search?: string): Promise<ApiResponse<any[]>>;
     deleteAnalysis(analysisId: string): Promise<ApiResponse<boolean>>;
     retryJob(jobId: string): Promise<ApiResponse<boolean>>;
     triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
@@ -35,7 +35,8 @@ export class AdminService extends BaseService implements IAdminService {
                 pendingJobs,
                 failedJobs,
                 dailyAnalyses,
-                dailyScenarios
+                dailyScenarios,
+                latestAnalysesToday
             ] = await Promise.all([
                 User.countDocuments(),
                 Analysis.countDocuments(),
@@ -43,7 +44,12 @@ export class AdminService extends BaseService implements IAdminService {
                 IngestionJob.countDocuments({ status: 'pending' }),
                 IngestionJob.countDocuments({ status: 'failed' }),
                 Analysis.countDocuments({ created_at: { $gte: startOfToday } }),
-                Scenario.countDocuments({ created_at: { $gte: startOfToday } })
+                Scenario.countDocuments({ created_at: { $gte: startOfToday } }),
+                Analysis.find({ created_at: { $gte: startOfToday } })
+                    .sort({ created_at: -1 })
+                    .limit(10)
+                    .select('analysis_id game_id youtube_url created_at')
+                    .lean()
             ]);
 
             return {
@@ -58,7 +64,8 @@ export class AdminService extends BaseService implements IAdminService {
                     },
                     daily: {
                         analyses: dailyAnalyses,
-                        scenarios: dailyScenarios
+                        scenarios: dailyScenarios,
+                        latest: latestAnalysesToday
                     }
                 }
             };
@@ -67,9 +74,12 @@ export class AdminService extends BaseService implements IAdminService {
         }
     }
 
-    async getIngestionJobs(limit: number = 20, status?: string): Promise<ApiResponse<any[]>> {
+    async getIngestionJobs(limit: number = 20, status?: string, gameId?: string): Promise<ApiResponse<any[]>> {
         try {
-            const query = status ? { status } : {};
+            const query: any = {};
+            if (status) query.status = status;
+            if (gameId) query.game_id = gameId;
+
             const jobs = await IngestionJob.find(query)
                 .sort({ created_at: -1 })
                 .limit(limit)
@@ -81,9 +91,19 @@ export class AdminService extends BaseService implements IAdminService {
         }
     }
 
-    async getAnalyses(limit: number = 20, offset: number = 0): Promise<ApiResponse<any[]>> {
+    async getAnalyses(limit: number = 20, offset: number = 0, gameId?: string, search?: string): Promise<ApiResponse<any[]>> {
         try {
-            const analyses = await Analysis.find()
+            const query: any = {};
+            if (gameId) query.game_id = gameId;
+            if (search) {
+                query.$or = [
+                    { analysis_id: { $regex: search, $options: 'i' } },
+                    { game_id: { $regex: search, $options: 'i' } },
+                    { youtube_url: { $regex: search, $options: 'i' } }
+                ];
+            }
+
+            const analyses = await Analysis.find(query)
                 .sort({ created_at: -1 })
                 .skip(offset)
                 .limit(limit)

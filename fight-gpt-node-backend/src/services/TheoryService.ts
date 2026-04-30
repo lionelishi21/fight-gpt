@@ -15,8 +15,8 @@ const CONFIDENCE_THRESHOLDS = { low: 5, medium: 20, high: 50 };
 export interface ITheoryService {
     generateCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel, correctionFeedback?: string): Promise<ApiResponse<ITheoryDocument>>;
     generateMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel, correctionFeedback?: string): Promise<ApiResponse<ITheoryDocument>>;
-    getCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>>;
-    getMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>>;
+    getCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
+    getMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;
 }
 
@@ -42,27 +42,28 @@ export class TheoryService extends BaseService implements ITheoryService {
         targetSkillLevel: SkillLevel = 'Intermediate',
         correctionFeedback?: string
     ): Promise<ApiResponse<ITheoryDocument>> {
-        if (!characterId || characterId === 'undefined') {
+        const charId = characterId ? characterId.toLowerCase().trim().replace(/\s+/g, '_') : '';
+        if (!charId || charId === 'undefined') {
             return { success: false, error: 'Valid character ID required for theory generation.' };
         }
         try {
             const [scenarios, patchVersion] = await Promise.all([
-                this.getScenariosForCharacter(gameId, characterId),
+                this.getScenariosForCharacter(gameId, charId),
                 this.getCurrentPatchVersion(gameId),
             ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay, vortexGraph } =
-                await this.synthesiseCharacterTheory(gameId, characterId, scenarios, targetSkillLevel, correctionFeedback);
+                await this.synthesiseCharacterTheory(gameId, charId, scenarios, targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertCharacterTheory({
                 theory_id: UuidHelper.generate(),
                 game_id: gameId,
                 type: 'character',
                 target_skill_level: targetSkillLevel,
-                character_id: characterId,
-                character_name: characterId ? characterId.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : 'Unknown character',
-                title: title || `${characterId.toUpperCase()} Meta Analysis`,
+                character_id: charId,
+                character_name: charId ? charId.split('_').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : 'Unknown character',
+                title: title || `${charId.toUpperCase()} Meta Analysis`,
                 summary: summary || 'No summary available.',
                 full_theory: fullTheory || 'Theory synthesis yielded no long-form intelligence.',
                 key_strengths: strengths || [],
@@ -80,7 +81,7 @@ export class TheoryService extends BaseService implements ITheoryService {
             // Fire notification to all users who might care
             this.notificationService?.characterTheory({
                 gameId,
-                characterName: characterId,
+                characterName: charId,
                 theoryId: (saved as any).theory_id ?? (saved as any)._id?.toString() ?? '',
                 headline: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => {});
@@ -101,24 +102,26 @@ export class TheoryService extends BaseService implements ITheoryService {
         targetSkillLevel: SkillLevel = 'Intermediate',
         correctionFeedback?: string
     ): Promise<ApiResponse<ITheoryDocument>> {
+        const a = charA.toLowerCase().trim().replace(/\s+/g, '_');
+        const b = charB.toLowerCase().trim().replace(/\s+/g, '_');
         try {
             const [scenarios, patchVersion] = await Promise.all([
-                this.getScenariosForMatchup(gameId, charA, charB),
+                this.getScenariosForMatchup(gameId, a, b),
                 this.getCurrentPatchVersion(gameId),
             ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
-                await this.synthesiseMatchupTheory(gameId, charA, charB, scenarios, targetSkillLevel, correctionFeedback);
+                await this.synthesiseMatchupTheory(gameId, a, b, scenarios, targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertMatchupTheory({
                 theory_id: UuidHelper.generate(),
                 game_id: gameId,
                 type: 'matchup',
                 target_skill_level: targetSkillLevel,
-                character_a: charA,
-                character_b: charB,
-                title: title || `${charA.toUpperCase()} vs ${charB.toUpperCase()} Analysis`,
+                character_a: a,
+                character_b: b,
+                title: title || `${a.toUpperCase()} vs ${b.toUpperCase()} Analysis`,
                 summary: summary || 'No summary available.',
                 full_theory: fullTheory || 'Matchup synthesis yielded no intelligence.',
                 key_strengths: strengths || [],
@@ -134,8 +137,8 @@ export class TheoryService extends BaseService implements ITheoryService {
 
             this.notificationService?.matchupTheory({
                 gameId,
-                charA,
-                charB,
+                charA: a,
+                charB: b,
                 theoryId: (saved as any).theory_id ?? (saved as any)._id?.toString() ?? '',
                 headline: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => {});
@@ -146,11 +149,12 @@ export class TheoryService extends BaseService implements ITheoryService {
         }
     }
 
-    async getCharacterTheory(gameId: string, characterId: string): Promise<ApiResponse<ITheoryDocument>> {
+    async getCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>> {
+        const charId = characterId.toLowerCase().trim().replace(/\s+/g, '_');
         try {
-            const theory = await this.theoryRepository.getCharacterTheory(gameId, characterId);
+            const theory = await this.theoryRepository.getCharacterTheory(gameId, charId, targetSkillLevel);
             if (!theory) {
-                return { success: false, error: `No theory found for ${characterId}. Trigger generation first.` };
+                return { success: false, error: `No theory found for ${charId}${targetSkillLevel ? ` at ${targetSkillLevel} level` : ''}. Trigger generation first.` };
             }
             return { success: true, data: theory as unknown as ITheoryDocument };
         } catch (error) {
@@ -158,11 +162,13 @@ export class TheoryService extends BaseService implements ITheoryService {
         }
     }
 
-    async getMatchupTheory(gameId: string, charA: string, charB: string): Promise<ApiResponse<ITheoryDocument>> {
+    async getMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>> {
+        const a = charA.toLowerCase().trim().replace(/\s+/g, '_');
+        const b = charB.toLowerCase().trim().replace(/\s+/g, '_');
         try {
-            const theory = await this.theoryRepository.getMatchupTheory(gameId, charA, charB);
+            const theory = await this.theoryRepository.getMatchupTheory(gameId, a, b, targetSkillLevel);
             if (!theory) {
-                return { success: false, error: `No matchup theory for ${charA} vs ${charB}. Trigger generation first.` };
+                return { success: false, error: `No matchup theory for ${a} vs ${b}${targetSkillLevel ? ` at ${targetSkillLevel} level` : ''}. Trigger generation first.` };
             }
             return { success: true, data: theory as unknown as ITheoryDocument };
         } catch (error) {

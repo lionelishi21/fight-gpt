@@ -40,7 +40,8 @@ export class AdminController extends BaseController {
         try {
             const limit = parseInt(req.query.limit as string) || 20;
             const status = req.query.status as string;
-            const result = await this.adminService.getIngestionJobs(limit, status);
+            const gameId = req.query.gameId as string;
+            const result = await this.adminService.getIngestionJobs(limit, status, gameId);
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
@@ -55,7 +56,9 @@ export class AdminController extends BaseController {
         try {
             const limit = parseInt(req.query.limit as string) || 20;
             const offset = parseInt(req.query.offset as string) || 0;
-            const result = await this.adminService.getAnalyses(limit, offset);
+            const gameId = req.query.gameId as string;
+            const search = req.query.search as string;
+            const result = await this.adminService.getAnalyses(limit, offset, gameId, search);
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');

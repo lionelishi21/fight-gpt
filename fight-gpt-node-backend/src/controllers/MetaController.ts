@@ -11,6 +11,10 @@ export class MetaController extends BaseController {
         super();
     }
 
+    public getMetaService(): IMetaService {
+        return this.metaService;
+    }
+
     /**
      * GET /api/meta/:gameId
      * Get the latest meta report for a game

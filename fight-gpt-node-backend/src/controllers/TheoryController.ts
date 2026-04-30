@@ -21,7 +21,8 @@ export class TheoryController extends BaseController {
     getCharacterTheory = async (req: Request, res: Response): Promise<void> => {
         try {
             const { gameId, characterId } = req.params;
-            const result = await this.theoryService.getCharacterTheory(gameId, characterId);
+            const { skillLevel } = req.query;
+            const result = await this.theoryService.getCharacterTheory(gameId, characterId, skillLevel as any);
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
@@ -43,7 +44,8 @@ export class TheoryController extends BaseController {
     getMatchupTheory = async (req: Request, res: Response): Promise<void> => {
         try {
             const { gameId, charA, charB } = req.params;
-            const result = await this.theoryService.getMatchupTheory(gameId, charA, charB);
+            const { skillLevel } = req.query;
+            const result = await this.theoryService.getMatchupTheory(gameId, charA, charB, skillLevel as any);
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Unknown error');

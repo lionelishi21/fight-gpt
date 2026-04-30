@@ -227,5 +227,9 @@ export class Routes {
   public getRouter(): Router {
     return this.router;
   }
+
+  public getMetaRoutes(): MetaRoutes | null {
+    return this.metaRoutes;
+  }
 }
 

@@ -10,6 +10,7 @@ export interface IMission extends Document {
         coins?: number;
     };
     criteria?: Record<string, any>; // Flexible criteria for future automated checking
+    targetLink?: string; // e.g. /dashboard/scenarios?q=anti-air or /dashboard/meta
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -34,6 +35,7 @@ const MissionSchema: Schema = new Schema(
             coins: { type: Number, default: 0 },
         },
         criteria: { type: Schema.Types.Mixed }, // JSON for flexible criteria
+        targetLink: { type: String },
         isActive: { type: Boolean, default: true },
     },
     { timestamps: true }
