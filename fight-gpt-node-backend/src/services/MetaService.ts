@@ -23,7 +23,63 @@ export interface IMetaService {
  */
 const INVALID_CHARACTER_NAMES = new Set([
     'all', 'unknown', 'n/a', 'none', 'any', 'tbd', '?', '',
+    'p1', 'p2', 'player 1', 'player 2', 'player1', 'player2',
 ]);
+
+/**
+ * Known character names per game, used to extract character data from
+ * scenario context text when characters_involved is missing or null.
+ * Keys are normalised (lowercase, underscores).
+ */
+const KNOWN_CHARACTERS_BY_GAME: Record<string, string[]> = {
+    sf6: [
+        'ryu', 'ken', 'chun-li', 'chunli', 'guile', 'cammy', 'juri',
+        'kimberly', 'manon', 'dee_jay', 'deejay', 'jp', 'lily', 'marisa',
+        'rashid', 'aki', 'ed', 'akuma', 'm_bison', 'bison', 'terry',
+        'honda', 'dhalsim', 'blanka', 'zangief', 'luke', 'jamie', 'sagat',
+        'vega', 'balrog', 'cody', 'poison', 'abigail', 'menat',
+    ],
+    tekken8: [
+        'kazuya', 'jin', 'paul', 'law', 'king', 'yoshimitsu', 'nina',
+        'hwoarang', 'xiaoyu', 'mishima', 'heihachi', 'devil_jin', 'asuka',
+        'lili', 'lars', 'alisa', 'lee', 'bryson', 'steve', 'dragunov',
+        'shaheen', 'claudio', 'katarina', 'lucky_chloe', 'gigas', 'master_raven',
+        'geese', 'noctis', 'lei', 'anna', 'armor_king', 'marduk', 'julia',
+        'zafina', 'ganryu', 'leroy', 'fahkumram', 'kunimitsu', 'lidia',
+        'akuma', 'victor', 'reina', 'azucena', 'raven', 'leo',
+    ],
+    ggst: [
+        'sol', 'ky', 'may', 'axl', 'chipp', 'potemkin', 'faust', 'millia',
+        'zato', 'ramlethal', 'leo', 'nagoriyuki', 'giovanna', 'anji',
+        'i-no', 'goldlewis', 'jack-o', 'happy_chaos', 'baiken', 'testament',
+        'bridget', 'sin', 'bedman', 'asuka', 'johnny', 'elphelt', 'A.B.A.',
+    ],
+    mk1: [
+        'scorpion', 'sub-zero', 'liu_kang', 'kung_lao', 'kitana', 'mileena',
+        'raiden', 'baraka', 'sonya', 'johnny_cage', 'kenshi', 'reptile',
+        'shang_tsung', 'geras', 'sindel', 'ashrah', 'havik', 'tanya',
+        'smoke', 'rain', 'general_shao', 'reiko',
+    ],
+};
+
+/**
+ * Extract known character names from a text string (context or description).
+ * Used as a fallback when characters_involved is empty.
+ */
+function extractCharactersFromText(text: string, gameId: string): string[] {
+    if (!text) return [];
+    const knownChars = KNOWN_CHARACTERS_BY_GAME[gameId] || [];
+    const lower = text.toLowerCase();
+    const found = new Set<string>();
+    for (const name of knownChars) {
+        // Match whole-word occurrences (word boundary or adjacent to non-alpha)
+        const pattern = new RegExp(`(?<![a-z_])${name.replace(/[-]/g, '[-_]?')}(?![a-z_])`, 'i');
+        if (pattern.test(lower)) {
+            found.add(name);
+        }
+    }
+    return Array.from(found);
+}
 
 export class MetaService extends BaseService implements IMetaService {
     private genAI: GoogleGenerativeAI;
@@ -268,7 +324,17 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         const allStrategies: string[] = [];
 
         for (const scenario of scenarios) {
-            const chars: string[] = scenario.characters_involved || [];
+            // Prefer structured characters_involved; fall back to text extraction
+            // for the ~95% of legacy scenarios where Gemini returned P1/P2 placeholders
+            const rawChars: string[] = (scenario.characters_involved || []).filter(
+                (c: any) => c && !INVALID_CHARACTER_NAMES.has(String(c).trim().toLowerCase())
+            );
+            const chars: string[] = rawChars.length > 0
+                ? rawChars
+                : extractCharactersFromText(
+                    `${scenario.context || ''} ${scenario.description || ''}`,
+                    scenario.game_id || ''
+                  );
             const tags: string[] = scenario.tags || [];
 
             // Count character usage

@@ -89,10 +89,12 @@ For each timeline event, you must also classify the match state at that moment:
 - "standing" | "crouching" | "jumping" | "knockdown" | "wakeup" | "pressured" | "attacking" | "blocking"
 
 ### JSON SCHEMA:
+IMPORTANT: For p1_character and p2_character, you MUST return the actual in-game character name (e.g. "Ryu", "Ken", "Akuma", "Chun-Li", "Kazuya", "Sol", etc.). Never return "P1", "P2", "Player 1", "Player 2", or "Unknown" — always identify the character from the video's HUD, character portrait, or move animations.
+
 {
   "game_title": "string",
-  "p1_character": "string",
-  "p2_character": "string",
+  "p1_character": "REQUIRED: exact character name (e.g. 'Ken', 'Akuma', 'Chun-Li') — never 'P1' or 'Player 1'",
+  "p2_character": "REQUIRED: exact character name (e.g. 'Ryu', 'Cammy', 'Guile') — never 'P2' or 'Player 2'",
   "match_winner": "p1 | p2",
   "timeline": [
     {
