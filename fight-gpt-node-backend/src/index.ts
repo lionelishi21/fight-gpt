@@ -272,7 +272,7 @@ export class App {
       res.json({
         success: true,
         message: 'Fight GPT API Gateway is running!',
-        version: 'BUILD_2026_V8',
+        version: '2.0.0',
       });
     });
   }

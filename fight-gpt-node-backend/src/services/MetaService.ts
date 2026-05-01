@@ -138,15 +138,6 @@ export class MetaService extends BaseService implements IMetaService {
             // Build raw stats from scenario data
             const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
 
-            // DEBUG — surface first scenario shape and extraction result in response
-            const debugS0 = scenarios[0] as any;
-            const debugExtracted = debugS0
-                ? extractCharactersFromText(`${debugS0.context || ''} ${debugS0.description || ''}`, debugS0.game_id || '')
-                : [];
-            const debugMsg = debugS0
-                ? `DEBUG: s0.game_id="${debugS0.game_id}" chars_involved=${JSON.stringify(debugS0.characters_involved)} ctx="${String(debugS0.context||'').slice(0,60)}" extracted=${JSON.stringify(debugExtracted)}`
-                : 'DEBUG: no scenarios';
-
             // Augment with character stats from Analysis collection
             let analysisStats: Map<string, { usage: number; wins: number }>;
             try {
@@ -209,7 +200,7 @@ export class MetaService extends BaseService implements IMetaService {
                 },
                 dominant_strategies: dominantStrategies,
                 matchup_insights: matchupInsights,
-                meta_summary: debugMsg + ' || ' + metaSummary,
+                meta_summary: metaSummary,
                 source_scenario_count: scenarios.length,
                 source_video_count: new Set(scenarios.flatMap((s: any) => s.match_references || [])).size,
                 generated_at: new Date(),
@@ -220,7 +211,7 @@ export class MetaService extends BaseService implements IMetaService {
             return {
                 success: true,
                 data: updated as unknown as IMetaReport,
-                message: `META_V2 | generated from ${scenarios.length} scenarios | tierLen=${tierList.length} | ${debugMsg}`,
+                message: `Meta report generated from ${scenarios.length} scenarios`,
             };
         } catch (error) {
             await this.metaRepository.updateReport(reportId, {
@@ -439,17 +430,6 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         const characterMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
         const matchupMap = new Map<string, { wins_a: number; total: number; strategies: string[] }>();
         const allStrategies: string[] = [];
-
-        // DEBUG: log first scenario shape
-        if (scenarios.length > 0) {
-            const s0 = scenarios[0] as any;
-            console.log('[MetaService DEBUG] first scenario keys:', Object.keys(s0).join(','));
-            console.log('[MetaService DEBUG] first scenario game_id:', s0.game_id);
-            console.log('[MetaService DEBUG] first scenario chars_involved:', JSON.stringify(s0.characters_involved));
-            console.log('[MetaService DEBUG] first scenario context[:80]:', String(s0.context || '').slice(0, 80));
-            const debugExtracted = extractCharactersFromText(`${s0.context || ''} ${s0.description || ''}`, s0.game_id || '');
-            console.log('[MetaService DEBUG] extracted from first scenario:', JSON.stringify(debugExtracted));
-        }
 
         for (const scenario of scenarios) {
             // Prefer structured characters_involved; fall back to text extraction
