@@ -4,6 +4,7 @@ import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
 import { IMetaReport, ICharacterMetaStat, IMatchupInsight } from '../models/MetaReport';
+import { Analysis } from '../models/Analysis';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 
@@ -135,7 +136,44 @@ export class MetaService extends BaseService implements IMetaService {
             }
 
             // Build raw stats from scenario data
-            const { tierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+            const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+
+            // Augment with character stats from Analysis collection (authoritative source for
+            // character names — scenarios often have P1/P2 placeholders from legacy analyses)
+            const analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
+            const mergedCharMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
+
+            // Seed from scenario tier list
+            for (const entry of scenarioTierList) {
+                mergedCharMap.set(entry.character_id, {
+                    usage: entry.usage_count,
+                    wins: entry.win_count,
+                    strategies: entry.top_strategies,
+                });
+            }
+
+            // Merge in analysis stats (add to existing or create new entries)
+            for (const [charId, astats] of analysisStats.entries()) {
+                if (mergedCharMap.has(charId)) {
+                    const existing = mergedCharMap.get(charId)!;
+                    existing.usage += astats.usage;
+                    existing.wins += astats.wins;
+                } else {
+                    mergedCharMap.set(charId, { usage: astats.usage, wins: astats.wins, strategies: [] });
+                }
+            }
+
+            const tierList: ICharacterMetaStat[] = Array.from(mergedCharMap.entries())
+                .map(([char_id, stats]) => ({
+                    character_id: char_id,
+                    character_name: char_id,
+                    usage_count: stats.usage,
+                    win_count: stats.wins,
+                    win_rate: stats.usage > 0 ? Math.round((stats.wins / stats.usage) * 100) : 0,
+                    trend: 'stable' as const,
+                    top_strategies: stats.strategies.slice(0, 3),
+                }))
+                .sort((a, b) => b.usage_count - a.usage_count);
 
             // Generate narrative meta summary via Gemini
             const metaSummary = await this.generateMetaSummaryWithGemini(
@@ -309,6 +347,42 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         return (this.vectorRepository as any).model
             ? (this.vectorRepository as any).model.find({ game_id: gameId }, { embedding: 0 }).lean().exec()
             : [];
+    }
+
+    /**
+     * Pull character usage and win-rate stats directly from the Analysis collection.
+     * This is the authoritative source since analyses store the actual Gemini-detected
+     * character names, which scenarios often lack due to legacy P1/P2 placeholders.
+     */
+    private async getCharacterStatsFromAnalyses(
+        gameId: string
+    ): Promise<Map<string, { usage: number; wins: number }>> {
+        const stats = new Map<string, { usage: number; wins: number }>();
+        try {
+            const analyses = await Analysis.find(
+                { game_id: gameId },
+                { 'analysis.p1_character': 1, 'analysis.p2_character': 1, 'analysis.match_winner': 1 }
+            ).lean().exec();
+
+            for (const doc of analyses) {
+                const a = (doc as any).analysis || {};
+                const p1 = typeof a.p1_character === 'string' ? a.p1_character.trim().toLowerCase() : null;
+                const p2 = typeof a.p2_character === 'string' ? a.p2_character.trim().toLowerCase() : null;
+                const winner = typeof a.match_winner === 'string' ? a.match_winner.trim().toLowerCase() : null;
+
+                for (const [char, isWinner] of [[p1, winner === 'p1'], [p2, winner === 'p2']] as [string | null, boolean][]) {
+                    if (!char || INVALID_CHARACTER_NAMES.has(char)) continue;
+                    const normalized = char.replace(/[\s-]+/g, '_');
+                    if (!stats.has(normalized)) stats.set(normalized, { usage: 0, wins: 0 });
+                    const entry = stats.get(normalized)!;
+                    entry.usage++;
+                    if (isWinner) entry.wins++;
+                }
+            }
+        } catch (err) {
+            // Non-fatal — fall back to scenario-only stats
+        }
+        return stats;
     }
 
     /**
