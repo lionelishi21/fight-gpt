@@ -222,6 +222,8 @@ export class AnalysisController extends BaseController implements IAnalysisContr
       });
 
       this.sendResponse(res, result, result.success ? 200 : 500);
+    } catch (error) {
+      this.handleError(error, req, res, next);
     }
   }
 
