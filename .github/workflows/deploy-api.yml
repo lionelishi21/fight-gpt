@@ -62,9 +62,11 @@ jobs:
               yt-dlp -U || true
             fi
 
-            # 2. Pull latest code
-            echo "→ Pulling latest from main..."
-            git pull origin main
+            # 2. Pull latest code — hard reset to origin/main to handle local modifications
+            echo "→ Fetching latest from main..."
+            git fetch origin
+            git reset --hard origin/main
+            echo "→ Now on commit: $(git log -1 --oneline)"
 
             # 3. Install production deps + build tools
             echo "→ Installing dependencies..."
