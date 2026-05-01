@@ -348,13 +348,41 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
     // --- Private helpers ---
 
     /**
-     * Fetch all scenarios for a game directly from MongoDB (not vector search)
+     * Fetch all scenarios for a game directly from MongoDB.
+     * Also runs a one-time idempotent backfill: any scenario with an empty
+     * characters_involved array gets it populated from context/description text.
      */
     private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
-        // VectorRepository uses BaseRepository which has findMany
-        return (this.vectorRepository as any).model
-            ? (this.vectorRepository as any).model.find({ game_id: gameId }, { embedding: 0 }).lean().exec()
-            : [];
+        const model = (this.vectorRepository as any).model;
+        if (!model) return [];
+
+        // Backfill: find scenarios missing character data and fix them in one bulk write
+        try {
+            const empty = await model.find(
+                { game_id: gameId, characters_involved: { $size: 0 } },
+                { _id: 1, context: 1, description: 1 }
+            ).lean().exec();
+
+            if (empty.length > 0) {
+                const ops: any[] = [];
+                for (const s of empty) {
+                    const chars = extractCharactersFromText(
+                        `${s.context || ''} ${s.description || ''}`, gameId
+                    );
+                    if (chars.length > 0) {
+                        ops.push({ updateOne: { filter: { _id: s._id }, update: { $set: { characters_involved: chars } } } });
+                    }
+                }
+                if (ops.length > 0) {
+                    await model.bulkWrite(ops);
+                    console.log(`[MetaService] Backfilled characters_involved for ${ops.length} ${gameId} scenarios`);
+                }
+            }
+        } catch (e) {
+            console.warn('[MetaService] Backfill step failed (non-fatal):', e instanceof Error ? e.message : e);
+        }
+
+        return model.find({ game_id: gameId }, { embedding: 0 }).lean().exec();
     }
 
     /**
