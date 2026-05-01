@@ -76,21 +76,25 @@ jobs:
             npx tsc --noEmit || true
 
             # 5. Build
-            echo "→ Building TypeScript..."
+            echo "→ Building TypeScript from: $(pwd)"
+            echo "→ index.ts version check: $(grep 'BUILD_2026' src/index.ts || echo 'NOT FOUND in src')"
             rm -rf dist
             npm run build
+            echo "→ dist/index.js exists: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND')"
+            echo "→ dist index version: $(grep 'BUILD_2026' dist/index.js 2>/dev/null || echo 'NOT FOUND in dist')"
 
-            # 6. Restart PM2 — delete and re-create from ecosystem.config.js to ensure
-            #    correct CWD, cluster mode, and script path are all picked up fresh.
+            # 6. Restart PM2
             echo "→ Restarting PM2..."
             pm2 delete fightgpt-api || true
+            pm2 list
             pm2 start ecosystem.config.js --env production
+            pm2 list
             pm2 save
 
             # 7. Health check
             echo "→ Health check..."
             sleep 5
-            curl -sf http://localhost:3010/api/health || curl -sf http://localhost:3000/api/health || echo "⚠️  Health check inconclusive — check PM2 logs"
+            curl -sf http://localhost:3010/api/ || curl -sf http://localhost:3000/api/ || echo "⚠️  Health check inconclusive — check PM2 logs"
             echo "✅ Deploy complete"
 
       - name: Notify success
