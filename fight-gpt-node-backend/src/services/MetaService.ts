@@ -405,6 +405,17 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         const matchupMap = new Map<string, { wins_a: number; total: number; strategies: string[] }>();
         const allStrategies: string[] = [];
 
+        // DEBUG: log first scenario shape
+        if (scenarios.length > 0) {
+            const s0 = scenarios[0] as any;
+            console.log('[MetaService DEBUG] first scenario keys:', Object.keys(s0).join(','));
+            console.log('[MetaService DEBUG] first scenario game_id:', s0.game_id);
+            console.log('[MetaService DEBUG] first scenario chars_involved:', JSON.stringify(s0.characters_involved));
+            console.log('[MetaService DEBUG] first scenario context[:80]:', String(s0.context || '').slice(0, 80));
+            const debugExtracted = extractCharactersFromText(`${s0.context || ''} ${s0.description || ''}`, s0.game_id || '');
+            console.log('[MetaService DEBUG] extracted from first scenario:', JSON.stringify(debugExtracted));
+        }
+
         for (const scenario of scenarios) {
             // Prefer structured characters_involved; fall back to text extraction
             // for the ~95% of legacy scenarios where Gemini returned P1/P2 placeholders
