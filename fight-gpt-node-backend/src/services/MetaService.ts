@@ -137,10 +137,18 @@ export class MetaService extends BaseService implements IMetaService {
 
             // Build raw stats from scenario data
             const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+            console.log(`[MetaService DEBUG] scenarioTierList length: ${scenarioTierList.length}, chars: ${scenarioTierList.map(c=>c.character_id).join(',')}`);
 
             // Augment with character stats from Analysis collection (authoritative source for
             // character names — scenarios often have P1/P2 placeholders from legacy analyses)
-            const analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
+            let analysisStats: Map<string, { usage: number; wins: number }>;
+            try {
+                analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
+                console.log(`[MetaService DEBUG] analysisStats size: ${analysisStats.size}, keys: ${Array.from(analysisStats.keys()).join(',')}`);
+            } catch (err) {
+                console.error('[MetaService DEBUG] getCharacterStatsFromAnalyses threw:', err);
+                analysisStats = new Map();
+            }
             const mergedCharMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
 
             // Seed from scenario tier list
