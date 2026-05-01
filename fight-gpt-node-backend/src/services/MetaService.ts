@@ -4,7 +4,6 @@ import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
 import { IMetaReport, ICharacterMetaStat, IMatchupInsight } from '../models/MetaReport';
-import mongoose from 'mongoose';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 
@@ -24,63 +23,7 @@ export interface IMetaService {
  */
 const INVALID_CHARACTER_NAMES = new Set([
     'all', 'unknown', 'n/a', 'none', 'any', 'tbd', '?', '',
-    'p1', 'p2', 'player 1', 'player 2', 'player1', 'player2',
 ]);
-
-/**
- * Known character names per game, used to extract character data from
- * scenario context text when characters_involved is missing or null.
- * Keys are normalised (lowercase, underscores).
- */
-const KNOWN_CHARACTERS_BY_GAME: Record<string, string[]> = {
-    sf6: [
-        'ryu', 'ken', 'chun-li', 'chunli', 'guile', 'cammy', 'juri',
-        'kimberly', 'manon', 'dee_jay', 'deejay', 'jp', 'lily', 'marisa',
-        'rashid', 'aki', 'ed', 'akuma', 'm_bison', 'bison', 'terry',
-        'honda', 'dhalsim', 'blanka', 'zangief', 'luke', 'jamie', 'sagat',
-        'vega', 'balrog', 'cody', 'poison', 'abigail', 'menat',
-    ],
-    tekken8: [
-        'kazuya', 'jin', 'paul', 'law', 'king', 'yoshimitsu', 'nina',
-        'hwoarang', 'xiaoyu', 'mishima', 'heihachi', 'devil_jin', 'asuka',
-        'lili', 'lars', 'alisa', 'lee', 'bryson', 'steve', 'dragunov',
-        'shaheen', 'claudio', 'katarina', 'lucky_chloe', 'gigas', 'master_raven',
-        'geese', 'noctis', 'lei', 'anna', 'armor_king', 'marduk', 'julia',
-        'zafina', 'ganryu', 'leroy', 'fahkumram', 'kunimitsu', 'lidia',
-        'akuma', 'victor', 'reina', 'azucena', 'raven', 'leo',
-    ],
-    ggst: [
-        'sol', 'ky', 'may', 'axl', 'chipp', 'potemkin', 'faust', 'millia',
-        'zato', 'ramlethal', 'leo', 'nagoriyuki', 'giovanna', 'anji',
-        'i-no', 'goldlewis', 'jack-o', 'happy_chaos', 'baiken', 'testament',
-        'bridget', 'sin', 'bedman', 'asuka', 'johnny', 'elphelt', 'A.B.A.',
-    ],
-    mk1: [
-        'scorpion', 'sub-zero', 'liu_kang', 'kung_lao', 'kitana', 'mileena',
-        'raiden', 'baraka', 'sonya', 'johnny_cage', 'kenshi', 'reptile',
-        'shang_tsung', 'geras', 'sindel', 'ashrah', 'havik', 'tanya',
-        'smoke', 'rain', 'general_shao', 'reiko',
-    ],
-};
-
-/**
- * Extract known character names from a text string (context or description).
- * Used as a fallback when characters_involved is empty.
- */
-function extractCharactersFromText(text: string, gameId: string): string[] {
-    if (!text) return [];
-    const knownChars = KNOWN_CHARACTERS_BY_GAME[gameId] || [];
-    const lower = text.toLowerCase();
-    const found = new Set<string>();
-    for (const name of knownChars) {
-        // Match whole-word occurrences (word boundary or adjacent to non-alpha)
-        const pattern = new RegExp(`(?<![a-z_])${name.replace(/[-]/g, '[-_]?')}(?![a-z_])`, 'i');
-        if (pattern.test(lower)) {
-            found.add(name);
-        }
-    }
-    return Array.from(found);
-}
 
 export class MetaService extends BaseService implements IMetaService {
     private genAI: GoogleGenerativeAI;
@@ -136,48 +79,7 @@ export class MetaService extends BaseService implements IMetaService {
             }
 
             // Build raw stats from scenario data
-            const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
-
-            // Augment with character stats from Analysis collection
-            let analysisStats: Map<string, { usage: number; wins: number }>;
-            try {
-                analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
-            } catch (err) {
-                analysisStats = new Map();
-            }
-            const mergedCharMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
-
-            // Seed from scenario tier list
-            for (const entry of scenarioTierList) {
-                mergedCharMap.set(entry.character_id, {
-                    usage: entry.usage_count,
-                    wins: entry.win_count,
-                    strategies: entry.top_strategies,
-                });
-            }
-
-            // Merge in analysis stats (add to existing or create new entries)
-            for (const [charId, astats] of analysisStats.entries()) {
-                if (mergedCharMap.has(charId)) {
-                    const existing = mergedCharMap.get(charId)!;
-                    existing.usage += astats.usage;
-                    existing.wins += astats.wins;
-                } else {
-                    mergedCharMap.set(charId, { usage: astats.usage, wins: astats.wins, strategies: [] });
-                }
-            }
-
-            const tierList: ICharacterMetaStat[] = Array.from(mergedCharMap.entries())
-                .map(([char_id, stats]) => ({
-                    character_id: char_id,
-                    character_name: char_id,
-                    usage_count: stats.usage,
-                    win_count: stats.wins,
-                    win_rate: stats.usage > 0 ? Math.round((stats.wins / stats.usage) * 100) : 0,
-                    trend: 'stable' as const,
-                    top_strategies: stats.strategies.slice(0, 3),
-                }))
-                .sort((a, b) => b.usage_count - a.usage_count);
+            const { tierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
 
             // Generate narrative meta summary via Gemini
             const metaSummary = await this.generateMetaSummaryWithGemini(
@@ -344,79 +246,13 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
     // --- Private helpers ---
 
     /**
-     * Fetch all scenarios for a game directly from MongoDB.
-     * Also runs a one-time idempotent backfill: any scenario with an empty
-     * characters_involved array gets it populated from context/description text.
+     * Fetch all scenarios for a game directly from MongoDB (not vector search)
      */
     private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
-        const model = (this.vectorRepository as any).model;
-        if (!model) return [];
-
-        // Backfill: find scenarios missing character data and fix them in one bulk write
-        try {
-            const empty = await model.find(
-                { game_id: gameId, characters_involved: { $size: 0 } },
-                { _id: 1, context: 1, description: 1 }
-            ).lean().exec();
-
-            if (empty.length > 0) {
-                const ops: any[] = [];
-                for (const s of empty) {
-                    const chars = extractCharactersFromText(
-                        `${s.context || ''} ${s.description || ''}`, gameId
-                    );
-                    if (chars.length > 0) {
-                        ops.push({ updateOne: { filter: { _id: s._id }, update: { $set: { characters_involved: chars } } } });
-                    }
-                }
-                if (ops.length > 0) {
-                    await model.bulkWrite(ops);
-                    console.log(`[MetaService] Backfilled characters_involved for ${ops.length} ${gameId} scenarios`);
-                }
-            }
-        } catch (e) {
-            console.warn('[MetaService] Backfill step failed (non-fatal):', e instanceof Error ? e.message : e);
-        }
-
-        return model.find({ game_id: gameId }, { embedding: 0 }).lean().exec();
-    }
-
-    /**
-     * Pull character usage and win-rate stats directly from the Analysis collection.
-     * This is the authoritative source since analyses store the actual Gemini-detected
-     * character names, which scenarios often lack due to legacy P1/P2 placeholders.
-     */
-    private async getCharacterStatsFromAnalyses(
-        gameId: string
-    ): Promise<Map<string, { usage: number; wins: number }>> {
-        const stats = new Map<string, { usage: number; wins: number }>();
-        try {
-            const AnalysisModel = mongoose.models['Analysis'];
-            if (!AnalysisModel) return stats;
-            const analyses = await AnalysisModel.find(
-                { game_id: gameId },
-                { 'analysis.p1_character': 1, 'analysis.p2_character': 1, 'analysis.match_winner': 1 }
-            ).lean().exec();
-
-            for (const doc of analyses) {
-                const a = (doc as any).analysis || {};
-                const p1 = typeof a.p1_character === 'string' ? a.p1_character.trim().toLowerCase() : null;
-                const p2 = typeof a.p2_character === 'string' ? a.p2_character.trim().toLowerCase() : null;
-                const winner = typeof a.match_winner === 'string' ? a.match_winner.trim().toLowerCase() : null;
-
-                for (const [char, isWinner] of [[p1, winner === 'p1'], [p2, winner === 'p2']] as [string | null, boolean][]) {
-                    if (!char || INVALID_CHARACTER_NAMES.has(char)) continue;
-                    const normalized = char.replace(/[\s-]+/g, '_');
-                    if (!stats.has(normalized)) stats.set(normalized, { usage: 0, wins: 0 });
-                    const entry = stats.get(normalized)!;
-                    entry.usage++;
-                    if (isWinner) entry.wins++;
-                }
-            }
-        } catch (err) {
-            // Non-fatal — fall back to scenario-only stats
-        }
-        return stats;
+        // VectorRepository uses BaseRepository which has findMany
+        return (this.vectorRepository as any).model
+            ? (this.vectorRepository as any).model.find({ game_id: gameId }, { embedding: 0 }).lean().exec()
+            : [];
     }
 
     /**
@@ -432,17 +268,7 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
         const allStrategies: string[] = [];
 
         for (const scenario of scenarios) {
-            // Prefer structured characters_involved; fall back to text extraction
-            // for the ~95% of legacy scenarios where Gemini returned P1/P2 placeholders
-            const rawChars: string[] = (scenario.characters_involved || []).filter(
-                (c: any) => c && !INVALID_CHARACTER_NAMES.has(String(c).trim().toLowerCase())
-            );
-            const chars: string[] = rawChars.length > 0
-                ? rawChars
-                : extractCharactersFromText(
-                    `${scenario.context || ''} ${scenario.description || ''}`,
-                    scenario.game_id || ''
-                  );
+            const chars: string[] = scenario.characters_involved || [];
             const tags: string[] = scenario.tags || [];
 
             // Count character usage
