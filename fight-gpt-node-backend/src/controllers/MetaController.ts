@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { BaseController } from './BaseController';
 import { IMetaService } from '../services/MetaService';
 import { IIngestionService } from '../services/IngestionService';
-import { Scenario } from '../models/Scenario';
+import mongoose from 'mongoose';
 
 export class MetaController extends BaseController {
     constructor(
@@ -151,11 +151,16 @@ export class MetaController extends BaseController {
         }
 
         try {
+            const ScenarioModel = mongoose.models['Scenario'];
+            if (!ScenarioModel) {
+                this.sendError(res, 'Scenario model not registered');
+                return;
+            }
             const gameId = req.body.game_id as string | undefined;
             const filter: Record<string, any> = { characters_involved: { $size: 0 } };
             if (gameId) filter.game_id = gameId;
 
-            const scenarios = await Scenario.find(filter, {
+            const scenarios = await ScenarioModel.find(filter, {
                 _id: 1, game_id: 1, context: 1, description: 1
             }).lean();
 
@@ -178,7 +183,7 @@ export class MetaController extends BaseController {
                 updated++;
             }
 
-            if (ops.length > 0) await Scenario.bulkWrite(ops);
+            if (ops.length > 0) await ScenarioModel.bulkWrite(ops);
 
             this.sendResponse(res, {
                 success: true,

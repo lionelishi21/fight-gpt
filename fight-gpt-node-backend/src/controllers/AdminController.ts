@@ -8,7 +8,7 @@ import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
 import { Character } from '../models/Character';
-import { Scenario } from '../models/Scenario';
+import mongoose from 'mongoose';
 
 export class AdminController extends BaseController {
     constructor(
@@ -503,20 +503,22 @@ export class AdminController extends BaseController {
             const filter: Record<string, any> = { characters_involved: { $size: 0 } };
             if (gameId) filter.game_id = gameId;
 
-            const scenarios = await Scenario.find(filter, { _id: 1, game_id: 1, context: 1, description: 1 }).lean();
+            const ScenarioModel = mongoose.models['Scenario'];
+            if (!ScenarioModel) { this.sendError(res, 'Scenario model not registered'); return; }
+            const scenarios = await ScenarioModel.find(filter, { _id: 1, game_id: 1, context: 1, description: 1 }).lean();
 
             let updated = 0;
             let skipped = 0;
-            const ops = [];
+            const ops: any[] = [];
 
             for (const s of scenarios) {
-                const chars = extractFromText(`${s.context || ''} ${s.description || ''}`, (s as any).game_id || '');
+                const chars = extractFromText(`${(s as any).context || ''} ${(s as any).description || ''}`, (s as any).game_id || '');
                 if (chars.length === 0) { skipped++; continue; }
                 ops.push({ updateOne: { filter: { _id: s._id }, update: { $set: { characters_involved: chars } } } });
                 updated++;
             }
 
-            if (ops.length > 0) await Scenario.bulkWrite(ops as any);
+            if (ops.length > 0) await ScenarioModel.bulkWrite(ops);
 
             this.sendResponse(res, {
                 success: true,

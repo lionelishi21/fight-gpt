@@ -4,7 +4,7 @@ import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
 import { IMetaReport, ICharacterMetaStat, IMatchupInsight } from '../models/MetaReport';
-import { Analysis } from '../models/Analysis';
+import mongoose from 'mongoose';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 
@@ -400,7 +400,9 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
     ): Promise<Map<string, { usage: number; wins: number }>> {
         const stats = new Map<string, { usage: number; wins: number }>();
         try {
-            const analyses = await Analysis.find(
+            const AnalysisModel = mongoose.models['Analysis'];
+            if (!AnalysisModel) return stats;
+            const analyses = await AnalysisModel.find(
                 { game_id: gameId },
                 { 'analysis.p1_character': 1, 'analysis.p2_character': 1, 'analysis.match_winner': 1 }
             ).lean().exec();
