@@ -8,7 +8,6 @@ import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
 import { Character } from '../models/Character';
-import mongoose from 'mongoose';
 
 export class AdminController extends BaseController {
     constructor(
@@ -463,70 +462,6 @@ export class AdminController extends BaseController {
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
-        }
-    };
-
-    /**
-     * POST /api/admin/meta/backfill-characters
-     * One-shot migration: scan all scenarios where characters_involved is empty,
-     * extract character names from context/description text, and persist them to MongoDB.
-     * Run once after deployment to fix legacy scenarios created before the prompt fix.
-     */
-    backfillScenarioCharacters = async (req: Request, res: Response): Promise<void> => {
-        const KNOWN: Record<string, string[]> = {
-            sf6: ['ryu','ken','chun-li','guile','cammy','juri','kimberly','manon','dee_jay','jp','lily',
-                  'marisa','rashid','aki','ed','akuma','m_bison','bison','terry','honda','dhalsim',
-                  'blanka','zangief','luke','jamie','sagat','vega','balrog','cody','poison'],
-            tekken8: ['kazuya','jin','paul','law','king','yoshimitsu','nina','hwoarang','xiaoyu',
-                      'heihachi','devil_jin','asuka','lili','lars','alisa','lee','steve','dragunov',
-                      'shaheen','claudio','victor','reina','azucena','raven','leo'],
-            ggst: ['sol','ky','may','axl','chipp','potemkin','faust','millia','zato','ramlethal',
-                   'leo','nagoriyuki','giovanna','anji','happy_chaos','baiken','testament','bridget'],
-            mk1: ['scorpion','sub-zero','liu_kang','kung_lao','kitana','mileena','raiden','baraka',
-                  'johnny_cage','kenshi','reptile','shang_tsung','geras','sindel','havik','smoke',
-                  'rain','reiko','general_shao','tanya','ashrah'],
-        };
-
-        function extractFromText(text: string, gameId: string): string[] {
-            const chars = KNOWN[gameId] || [];
-            const lower = text.toLowerCase();
-            const found = new Set<string>();
-            for (const name of chars) {
-                const esc = name.replace(/[-]/g, '[-_]?');
-                if (new RegExp(`(?<![a-z_])${esc}(?![a-z_])`, 'i').test(lower)) found.add(name);
-            }
-            return Array.from(found);
-        }
-
-        try {
-            const gameId = req.body.game_id as string | undefined;
-            const filter: Record<string, any> = { characters_involved: { $size: 0 } };
-            if (gameId) filter.game_id = gameId;
-
-            const ScenarioModel = mongoose.models['Scenario'];
-            if (!ScenarioModel) { this.sendError(res, 'Scenario model not registered'); return; }
-            const scenarios = await ScenarioModel.find(filter, { _id: 1, game_id: 1, context: 1, description: 1 }).lean();
-
-            let updated = 0;
-            let skipped = 0;
-            const ops: any[] = [];
-
-            for (const s of scenarios) {
-                const chars = extractFromText(`${(s as any).context || ''} ${(s as any).description || ''}`, (s as any).game_id || '');
-                if (chars.length === 0) { skipped++; continue; }
-                ops.push({ updateOne: { filter: { _id: s._id }, update: { $set: { characters_involved: chars } } } });
-                updated++;
-            }
-
-            if (ops.length > 0) await ScenarioModel.bulkWrite(ops);
-
-            this.sendResponse(res, {
-                success: true,
-                data: { scanned: scenarios.length, updated, skipped },
-                message: `Backfill complete: ${updated} scenarios updated, ${skipped} had no extractable characters`,
-            });
-        } catch (error) {
-            this.sendError(res, error instanceof Error ? error.message : 'Backfill failed');
         }
     };
 }

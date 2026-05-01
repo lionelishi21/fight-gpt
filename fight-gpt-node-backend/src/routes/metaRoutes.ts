@@ -10,8 +10,6 @@ export class MetaRoutes {
     }
 
     private setupRoutes(): void {
-        // One-shot migration (secret-key protected, no auth middleware)
-        this.router.post('/backfill-characters', this.metaController.backfillCharacters);
         // Meta intelligence routes
         this.router.get('/:gameId', this.metaController.getLatestMetaReport);
         this.router.post('/:gameId/generate', this.metaController.generateMetaReport);
