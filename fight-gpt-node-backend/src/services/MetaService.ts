@@ -220,7 +220,7 @@ export class MetaService extends BaseService implements IMetaService {
             return {
                 success: true,
                 data: updated as unknown as IMetaReport,
-                message: `Meta report generated from ${scenarios.length} scenarios`,
+                message: `META_V2 | generated from ${scenarios.length} scenarios | tierLen=${tierList.length} | ${debugMsg}`,
             };
         } catch (error) {
             await this.metaRepository.updateReport(reportId, {
