@@ -80,10 +80,11 @@ jobs:
             rm -rf dist
             npm run build
 
-            # 6. Restart PM2 — delete and re-create to ensure correct CWD and script path
+            # 6. Restart PM2 — delete and re-create from ecosystem.config.js to ensure
+            #    correct CWD, cluster mode, and script path are all picked up fresh.
             echo "→ Restarting PM2..."
             pm2 delete fightgpt-api || true
-            pm2 start "$APP_DIR/dist/index.js" --name fightgpt-api --cwd "$APP_DIR" --update-env
+            pm2 start ecosystem.config.js --env production
             pm2 save
 
             # 7. Health check
