@@ -137,16 +137,21 @@ export class MetaService extends BaseService implements IMetaService {
 
             // Build raw stats from scenario data
             const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
-            console.log(`[MetaService DEBUG] scenarioTierList length: ${scenarioTierList.length}, chars: ${scenarioTierList.map(c=>c.character_id).join(',')}`);
 
-            // Augment with character stats from Analysis collection (authoritative source for
-            // character names — scenarios often have P1/P2 placeholders from legacy analyses)
+            // DEBUG — surface first scenario shape and extraction result in response
+            const debugS0 = scenarios[0] as any;
+            const debugExtracted = debugS0
+                ? extractCharactersFromText(`${debugS0.context || ''} ${debugS0.description || ''}`, debugS0.game_id || '')
+                : [];
+            const debugMsg = debugS0
+                ? `DEBUG: s0.game_id="${debugS0.game_id}" chars_involved=${JSON.stringify(debugS0.characters_involved)} ctx="${String(debugS0.context||'').slice(0,60)}" extracted=${JSON.stringify(debugExtracted)}`
+                : 'DEBUG: no scenarios';
+
+            // Augment with character stats from Analysis collection
             let analysisStats: Map<string, { usage: number; wins: number }>;
             try {
                 analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
-                console.log(`[MetaService DEBUG] analysisStats size: ${analysisStats.size}, keys: ${Array.from(analysisStats.keys()).join(',')}`);
             } catch (err) {
-                console.error('[MetaService DEBUG] getCharacterStatsFromAnalyses threw:', err);
                 analysisStats = new Map();
             }
             const mergedCharMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
@@ -204,7 +209,7 @@ export class MetaService extends BaseService implements IMetaService {
                 },
                 dominant_strategies: dominantStrategies,
                 matchup_insights: matchupInsights,
-                meta_summary: metaSummary,
+                meta_summary: debugMsg + ' || ' + metaSummary,
                 source_scenario_count: scenarios.length,
                 source_video_count: new Set(scenarios.flatMap((s: any) => s.match_references || [])).size,
                 generated_at: new Date(),
