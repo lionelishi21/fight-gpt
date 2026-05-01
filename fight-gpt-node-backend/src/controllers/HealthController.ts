@@ -36,6 +36,7 @@ export class HealthController extends BaseController implements IHealthControlle
       const healthResponse: HealthResponse = {
         status: aiServiceHealthy ? 'ok' : 'degraded',
         service: 'fight-gpt-api-gateway',
+        version: 'BUILD_2026_05_01_V7',
         timestamp: new Date().toISOString(),
         uptime,
       };
