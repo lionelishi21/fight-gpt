@@ -85,12 +85,9 @@ jobs:
             echo "→ dist/index.js exists: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND')"
             echo "→ dist index version: $(grep 'BUILD_2026' dist/index.js 2>/dev/null || echo 'NOT FOUND in dist')"
 
-            # 6. Restart PM2
+            # 6. Restart PM2 — preserve saved config (including PORT from .env) with update-env
             echo "→ Restarting PM2..."
-            pm2 delete fightgpt-api || true
-            pm2 list
-            pm2 start ecosystem.config.js --env production
-            pm2 list
+            pm2 restart fightgpt-api --update-env || pm2 start dist/index.js --name fightgpt-api
             pm2 save
 
             # 7. Health check
