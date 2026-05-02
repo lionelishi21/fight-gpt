@@ -51,7 +51,7 @@ export class PaymentService extends BaseService implements IPaymentService {
     }
 
     async handleWebhook(payload: any, sig: string): Promise<ApiResponse<boolean>> {
-        let event: Stripe.Event;
+        let event: any;
 
         try {
             event = this.stripe.webhooks.constructEvent(
@@ -67,9 +67,9 @@ export class PaymentService extends BaseService implements IPaymentService {
         try {
             switch (event.type) {
                 case 'checkout.session.completed': {
-                    const session = event.data.object as Stripe.Checkout.Session;
+                    const session = event.data.object as any;
                     const userId = session.client_reference_id || session.metadata?.userId;
-                    
+
                     if (userId) {
                         await User.findByIdAndUpdate(userId, {
                             tier: 'pro',
@@ -81,7 +81,7 @@ export class PaymentService extends BaseService implements IPaymentService {
                     break;
                 }
                 case 'customer.subscription.deleted': {
-                    const subscription = event.data.object as Stripe.Subscription;
+                    const subscription = event.data.object as any;
                     await User.findOneAndUpdate(
                         { stripeSubscriptionId: subscription.id },
                         { tier: 'free' }
