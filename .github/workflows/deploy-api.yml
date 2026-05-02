@@ -77,13 +77,10 @@ jobs:
             echo "→ Type checking..."
             npx tsc --noEmit || true
 
-            # 5. Build
-            echo "→ Building TypeScript from: $(pwd)"
-            echo "→ index.ts version check: $(grep 'BUILD_2026' src/index.ts || echo 'NOT FOUND in src')"
-            rm -rf dist
-            npm run build
-            echo "→ dist/index.js exists: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND')"
-            echo "→ dist index version: $(grep 'BUILD_2026' dist/index.js 2>/dev/null || echo 'NOT FOUND in dist')"
+            # 5. Build — dist/ is committed to git so just verify it's present
+            echo "→ Using pre-compiled dist/ from git..."
+            echo "→ dist/index.js: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND — run npm run build locally and commit dist/')"
+            echo "→ dist/services count: $(ls dist/services/*.js 2>/dev/null | wc -l) files"
 
             # 6. Restart PM2 — preserve saved config (including PORT from .env) with update-env
             echo "→ Restarting PM2..."

@@ -1,0 +1,1 @@
+{"version":3,"file":"rivalRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/rivalRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AACjC,OAAO,EAAE,eAAe,EAAE,MAAM,gCAAgC,CAAC;AAGjE,qBAAa,WAAW;IAGR,OAAO,CAAC,QAAQ,CAAC,eAAe;IAF5C,OAAO,CAAC,MAAM,CAAS;gBAEM,eAAe,EAAE,eAAe;IAK7D,OAAO,CAAC,WAAW;IAMZ,SAAS,IAAI,MAAM;CAG7B;AAED,eAAe,WAAW,CAAC"}

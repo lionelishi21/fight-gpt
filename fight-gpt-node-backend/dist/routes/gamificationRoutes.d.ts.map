@@ -1,0 +1,1 @@
+{"version":3,"file":"gamificationRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/gamificationRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAIjC,qBAAa,kBAAkB;IAC3B,OAAO,CAAC,MAAM,CAAS;IACvB,OAAO,CAAC,UAAU,CAAyB;;IAQ3C,OAAO,CAAC,WAAW;IAUZ,SAAS,IAAI,MAAM;CAG7B"}
