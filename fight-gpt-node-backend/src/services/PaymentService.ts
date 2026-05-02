@@ -1,4 +1,5 @@
-import Stripe from 'stripe';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const StripeLib = require('stripe');
 import { AppConfig } from '../config/app';
 import User from '../models/User';
 import { ApiResponse } from '../types';
@@ -11,12 +12,12 @@ export interface IPaymentService {
 }
 
 export class PaymentService extends BaseService implements IPaymentService {
-    private stripe: Stripe;
+    private stripe: any;
 
     constructor() {
         super();
-        this.stripe = new Stripe(AppConfig.STRIPE_SECRET_KEY, {
-            apiVersion: '2023-10-16' as any,
+        this.stripe = new StripeLib(AppConfig.STRIPE_SECRET_KEY, {
+            apiVersion: '2023-10-16',
         });
     }
 

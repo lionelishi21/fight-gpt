@@ -51,9 +51,6 @@ export class AdminRoutes {
         // Auto-Research
         this.router.post('/research/trigger', this.adminController.triggerResearch);
 
-        // One-shot migrations
-        this.router.post('/meta/backfill-characters', this.adminController.backfillScenarioCharacters);
-
         // Admin Invites
         this.router.post('/invites', inviteController.createAdminInvite);
         this.router.get('/invites', inviteController.listAdminInvites);
