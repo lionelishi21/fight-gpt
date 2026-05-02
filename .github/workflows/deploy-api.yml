@@ -71,7 +71,7 @@ jobs:
             # 3. Install production deps + build tools
             echo "→ Installing dependencies..."
             npm ci --omit=dev
-            npm install --save-dev tsx typescript
+            npm install --save-dev tsx typescript@5.3.3
 
             # 4. Type check
             echo "→ Type checking..."
