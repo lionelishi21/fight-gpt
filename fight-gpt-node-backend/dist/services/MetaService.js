@@ -32,10 +32,14 @@ const KNOWN_CHARACTERS = {
         'johnny_cage', 'kenshi', 'reptile', 'shang_tsung', 'geras', 'sindel', 'havik', 'smoke',
         'rain', 'reiko', 'general_shao', 'tanya', 'ashrah'],
 };
-function extractCharactersFromText(text, gameId) {
+/**
+ * Extract known character names from a text string.
+ * Pass `knownChars` from DB to avoid relying on the hardcoded fallback.
+ */
+function extractCharactersFromText(text, gameId, knownChars) {
     if (!text)
         return [];
-    const chars = KNOWN_CHARACTERS[gameId] || [];
+    const chars = knownChars ?? KNOWN_CHARACTERS[gameId] ?? [];
     const lower = text.toLowerCase();
     const found = new Set();
     for (const name of chars) {
@@ -49,12 +53,14 @@ class MetaService extends BaseService_1.BaseService {
     metaRepository;
     vectorRepository;
     geminiApiKey;
+    characterRepository;
     genAI;
-    constructor(metaRepository, vectorRepository, geminiApiKey) {
+    constructor(metaRepository, vectorRepository, geminiApiKey, characterRepository) {
         super();
         this.metaRepository = metaRepository;
         this.vectorRepository = vectorRepository;
         this.geminiApiKey = geminiApiKey;
+        this.characterRepository = characterRepository;
         this.genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
     }
     /**
@@ -379,19 +385,33 @@ Write in a professional, direct tone like a tier list article. Be specific about
         }
     }
     /**
+     * Returns all character name variants for a game, preferring DB over hardcoded list.
+     * Cached per call — single DB round-trip per meta generation run.
+     */
+    async getKnownCharacters(gameId) {
+        if (this.characterRepository) {
+            const names = await this.characterRepository.getNamesByGame(gameId).catch(() => []);
+            if (names.length > 0)
+                return names;
+        }
+        return KNOWN_CHARACTERS[gameId] || [];
+    }
+    /**
      * Fetch scenarios and backfill characters_involved from context text for legacy scenarios
      * that have empty arrays due to Gemini returning P1/P2 placeholders.
+     * Uses DB character names when available so new games/DLC are covered without a deploy.
      */
     async getAllScenariosForGame(gameId) {
         const model = this.vectorRepository.model;
         if (!model)
             return [];
         try {
+            const knownChars = await this.getKnownCharacters(gameId);
             const empty = await model.find({ game_id: gameId, characters_involved: { $size: 0 } }, { _id: 1, context: 1, description: 1 }).lean().exec();
             if (empty.length > 0) {
                 const ops = [];
                 for (const s of empty) {
-                    const chars = extractCharactersFromText(`${s.context || ''} ${s.description || ''}`, gameId);
+                    const chars = extractCharactersFromText(`${s.context || ''} ${s.description || ''}`, gameId, knownChars);
                     if (chars.length > 0) {
                         ops.push({ updateOne: { filter: { _id: s._id }, update: { $set: { characters_involved: chars } } } });
                     }

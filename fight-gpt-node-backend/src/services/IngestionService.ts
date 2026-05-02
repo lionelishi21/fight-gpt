@@ -3,6 +3,8 @@ import { promisify } from 'util';
 import { BaseService } from './BaseService';
 import { IIngestionRepository } from '../repositories/IngestionRepository';
 import { IAnalysisService } from './AnalysisService';
+import { IMetaService } from './MetaService';
+import { IGameSearchStrategyRepository } from '../repositories/GameSearchStrategyRepository';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { Logger } from '../helpers/logger';
@@ -62,8 +64,24 @@ export class IngestionService extends BaseService implements IIngestionService {
     constructor(
         private readonly ingestionRepository: IIngestionRepository,
         private readonly analysisService: IAnalysisService,
+        private readonly metaService?: IMetaService,
+        private readonly searchStrategyRepository?: IGameSearchStrategyRepository,
     ) {
         super();
+    }
+
+    /**
+     * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
+     * This makes queries updatable from the admin panel without a redeploy.
+     */
+    private async getSearchQueries(gameId: string): Promise<string[]> {
+        if (this.searchStrategyRepository) {
+            const strategies = await this.searchStrategyRepository.findActive(gameId).catch(() => []);
+            if (strategies.length > 0) {
+                return strategies.flatMap(s => s.queries);
+            }
+        }
+        return GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
     }
 
     /**
@@ -73,7 +91,7 @@ export class IngestionService extends BaseService implements IIngestionService {
         gameId: string,
         maxVideos: number = 15
     ): Promise<ApiResponse<IngestionTriggerResult>> {
-        const queries = GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
+        const queries = await this.getSearchQueries(gameId);
         const result: IngestionTriggerResult = {
             game_id: gameId,
             queued_count: 0,
@@ -189,6 +207,17 @@ export class IngestionService extends BaseService implements IIngestionService {
                 // Rate limit buffer (e.g. 60s between analysis requests to stay under token limits)
                 if (jobs.indexOf(job) < jobs.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 60000));
+                }
+            }
+
+            // Auto-trigger meta synthesis for any game that got new scenarios
+            if (processed > 0 && this.metaService) {
+                const affectedGames = [...new Set(jobs.map(j => j.game_id))];
+                for (const gid of affectedGames) {
+                    Logger.info(`[IngestionService] Auto-triggering meta synthesis for ${gid} (${processed} new videos)`);
+                    this.metaService.generateMetaReport(gid, 'weekly').catch(e =>
+                        Logger.warn(`[IngestionService] Meta auto-gen failed for ${gid}: ${e instanceof Error ? e.message : e}`)
+                    );
                 }
             }
 

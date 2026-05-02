@@ -103,6 +103,21 @@ class CharacterRepository extends BaseRepository_1.BaseRepository {
         }
         return this.findMany(query, options);
     }
+    /**
+     * Returns all lowercase name variants (name + aliases) for the current patch
+     * roster of a game. Used by MetaService to extract character names from
+     * AI-generated scenario text without hardcoded lists.
+     */
+    async getNamesByGame(gameId) {
+        const chars = await this.model
+            .find({ game_id: gameId, is_current: true }, { name: 1, aliases: 1 })
+            .lean()
+            .exec();
+        return chars.flatMap((c) => {
+            const base = c.name.toLowerCase().replace(/\s+/g, '_');
+            return [base, ...(c.aliases || [])];
+        });
+    }
 }
 exports.CharacterRepository = CharacterRepository;
 //# sourceMappingURL=CharacterRepository.js.map

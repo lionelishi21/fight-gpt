@@ -51,6 +51,7 @@ export interface ICharacter {
   moves: CharacterMove[];
   patch_notes_summary?: string;
   status?: 'released' | 'coming_soon';
+  aliases?: string[];
   created_at?: Date;
   updated_at?: Date;
 }

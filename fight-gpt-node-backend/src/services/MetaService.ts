@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
+import { ICharacterRepository } from '../repositories/CharacterRepository';
 import { IMetaReport, ICharacterMetaStat, IMatchupInsight } from '../models/MetaReport';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
@@ -41,9 +42,13 @@ const KNOWN_CHARACTERS: Record<string, string[]> = {
           'rain','reiko','general_shao','tanya','ashrah'],
 };
 
-function extractCharactersFromText(text: string, gameId: string): string[] {
+/**
+ * Extract known character names from a text string.
+ * Pass `knownChars` from DB to avoid relying on the hardcoded fallback.
+ */
+function extractCharactersFromText(text: string, gameId: string, knownChars?: string[]): string[] {
     if (!text) return [];
-    const chars = KNOWN_CHARACTERS[gameId] || [];
+    const chars = knownChars ?? KNOWN_CHARACTERS[gameId] ?? [];
     const lower = text.toLowerCase();
     const found = new Set<string>();
     for (const name of chars) {
@@ -60,6 +65,7 @@ export class MetaService extends BaseService implements IMetaService {
         private readonly metaRepository: IMetaRepository,
         private readonly vectorRepository: IVectorRepository,
         private readonly geminiApiKey: string,
+        private readonly characterRepository?: ICharacterRepository,
     ) {
         super();
         this.genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -435,14 +441,28 @@ Write in a professional, direct tone like a tier list article. Be specific about
     }
 
     /**
+     * Returns all character name variants for a game, preferring DB over hardcoded list.
+     * Cached per call — single DB round-trip per meta generation run.
+     */
+    private async getKnownCharacters(gameId: string): Promise<string[]> {
+        if (this.characterRepository) {
+            const names = await this.characterRepository.getNamesByGame(gameId).catch(() => []);
+            if (names.length > 0) return names;
+        }
+        return KNOWN_CHARACTERS[gameId] || [];
+    }
+
+    /**
      * Fetch scenarios and backfill characters_involved from context text for legacy scenarios
      * that have empty arrays due to Gemini returning P1/P2 placeholders.
+     * Uses DB character names when available so new games/DLC are covered without a deploy.
      */
     private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
         const model = (this.vectorRepository as any).model;
         if (!model) return [];
 
         try {
+            const knownChars = await this.getKnownCharacters(gameId);
             const empty = await model.find(
                 { game_id: gameId, characters_involved: { $size: 0 } },
                 { _id: 1, context: 1, description: 1 }
@@ -452,7 +472,9 @@ Write in a professional, direct tone like a tier list article. Be specific about
                 const ops: any[] = [];
                 for (const s of empty) {
                     const chars = extractCharactersFromText(
-                        `${(s as any).context || ''} ${(s as any).description || ''}`, gameId
+                        `${(s as any).context || ''} ${(s as any).description || ''}`,
+                        gameId,
+                        knownChars,
                     );
                     if (chars.length > 0) {
                         ops.push({ updateOne: { filter: { _id: (s as any)._id }, update: { $set: { characters_involved: chars } } } });

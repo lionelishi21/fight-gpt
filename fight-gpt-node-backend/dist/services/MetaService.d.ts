@@ -1,6 +1,7 @@
 import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
+import { ICharacterRepository } from '../repositories/CharacterRepository';
 import { IMetaReport } from '../models/MetaReport';
 import { ApiResponse } from '../types';
 export interface IMetaService {
@@ -17,8 +18,9 @@ export declare class MetaService extends BaseService implements IMetaService {
     private readonly metaRepository;
     private readonly vectorRepository;
     private readonly geminiApiKey;
+    private readonly characterRepository?;
     private genAI;
-    constructor(metaRepository: IMetaRepository, vectorRepository: IVectorRepository, geminiApiKey: string);
+    constructor(metaRepository: IMetaRepository, vectorRepository: IVectorRepository, geminiApiKey: string, characterRepository?: ICharacterRepository);
     /**
      * Generate a meta report for a game by synthesizing all stored scenarios
      * in the vector DB via Gemini
@@ -58,8 +60,14 @@ export declare class MetaService extends BaseService implements IMetaService {
      */
     private generateMetaSummaryWithGemini;
     /**
+     * Returns all character name variants for a game, preferring DB over hardcoded list.
+     * Cached per call — single DB round-trip per meta generation run.
+     */
+    private getKnownCharacters;
+    /**
      * Fetch scenarios and backfill characters_involved from context text for legacy scenarios
      * that have empty arrays due to Gemini returning P1/P2 placeholders.
+     * Uses DB character names when available so new games/DLC are covered without a deploy.
      */
     private getAllScenariosForGame;
     /**

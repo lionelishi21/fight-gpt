@@ -72,6 +72,7 @@ import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
+import { GameSearchStrategyRepository } from './repositories/GameSearchStrategyRepository';
 
 // Import middleware
 import { errorMiddleware } from './middleware/errorMiddleware';
@@ -133,8 +134,9 @@ export class App {
       rivalRepository
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
-    const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY) : null as any;
-    this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService) : null;
+    const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;
+    const searchStrategyRepository = AppConfig.MONGODB_URI ? new GameSearchStrategyRepository() : null as any;
+    this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository) : null;
     const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
     const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;

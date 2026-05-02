@@ -71,6 +71,7 @@ const IngestionRepository_1 = require("./repositories/IngestionRepository");
 const TheoryRepository_1 = require("./repositories/TheoryRepository");
 const NotificationRepository_1 = require("./repositories/NotificationRepository");
 const RivalRepository_1 = require("./repositories/RivalRepository");
+const GameSearchStrategyRepository_1 = require("./repositories/GameSearchStrategyRepository");
 // Import middleware
 const errorMiddleware_1 = require("./middleware/errorMiddleware");
 const notFoundMiddleware_1 = require("./middleware/notFoundMiddleware");
@@ -113,8 +114,9 @@ class App {
         const analysisService = app_1.AppConfig.MONGODB_URI ? new AnalysisService_1.AnalysisService(analysisRepository, aiService, gameMetadataService, characterEncyclopediaService, characterService, // Pass characterService for character name lookup
         vectorRepository, notificationService, rivalRepository) : null;
         const gameService = app_1.AppConfig.MONGODB_URI ? new GameService_1.GameService(gameRepository, characterRepository) : null;
-        const metaService = app_1.AppConfig.MONGODB_URI ? new MetaService_1.MetaService(metaRepository, vectorRepository, app_1.AppConfig.GEMINI_API_KEY) : null;
-        this.ingestionService = app_1.AppConfig.MONGODB_URI ? new IngestionService_1.IngestionService(ingestionRepository, analysisService) : null;
+        const metaService = app_1.AppConfig.MONGODB_URI ? new MetaService_1.MetaService(metaRepository, vectorRepository, app_1.AppConfig.GEMINI_API_KEY, characterRepository) : null;
+        const searchStrategyRepository = app_1.AppConfig.MONGODB_URI ? new GameSearchStrategyRepository_1.GameSearchStrategyRepository() : null;
+        this.ingestionService = app_1.AppConfig.MONGODB_URI ? new IngestionService_1.IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository) : null;
         const theoryService = app_1.AppConfig.MONGODB_URI ? new TheoryService_1.TheoryService(theoryRepository, vectorRepository, app_1.AppConfig.GEMINI_API_KEY, notificationService) : null;
         const rivalService = app_1.AppConfig.MONGODB_URI ? new RivalService_1.RivalService(rivalRepository) : null;
         const userService = app_1.AppConfig.MONGODB_URI ? new UserService_1.UserService() : null;

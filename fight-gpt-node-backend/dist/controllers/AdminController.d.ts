@@ -9,6 +9,8 @@ export declare class AdminController extends BaseController {
     private readonly ingestionService?;
     private readonly metaService?;
     private readonly autoResearchService?;
+    private readonly onboardingService;
+    private readonly patchService;
     constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService);
     /**
      * GET /api/admin/stats
@@ -119,5 +121,36 @@ export declare class AdminController extends BaseController {
      * Delete a character
      */
     deleteCharacter: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/onboard
+     * One-call game onboarding: creates Game + Characters + Encyclopedia + SearchStrategies + queues ingestion
+     */
+    onboardGame: (req: Request, res: Response) => Promise<void>;
+    /**
+     * GET /api/admin/games/:gameId/search-strategies
+     * List all search strategies for a game
+     */
+    getSearchStrategies: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/:gameId/search-strategies
+     * Add or replace search strategies for a game
+     */
+    upsertSearchStrategies: (req: Request, res: Response) => Promise<void>;
+    /**
+     * DELETE /api/admin/games/:gameId/search-strategies/:id
+     * Deactivate a search strategy
+     */
+    deactivateSearchStrategy: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/:gameId/patch
+     * Declare a new patch — archives old chars, bumps versions, queues post-patch ingestion
+     * Body: { version, changed_characters[], patch_notes_url? }
+     */
+    declarePatch: (req: Request, res: Response) => Promise<void>;
+    /**
+     * GET /api/admin/games/:gameId/patches
+     * Get patch history for a game
+     */
+    getPatchHistory: (req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=AdminController.d.ts.map

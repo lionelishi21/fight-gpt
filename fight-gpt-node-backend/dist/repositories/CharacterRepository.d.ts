@@ -18,6 +18,8 @@ export interface ICharacterRepository {
     findWithFilters(filters: CharacterFilters, limit?: number): Promise<ICharacterDocument[]>;
     exists(filter: object): Promise<boolean>;
     delete(id: string): Promise<boolean>;
+    /** Returns all lowercase name variants (name + aliases) for a game's current roster. */
+    getNamesByGame(gameId: string): Promise<string[]>;
 }
 /**
  * Character repository implementation
@@ -61,5 +63,11 @@ export declare class CharacterRepository extends BaseRepository<ICharacterDocume
      * Find characters with filters
      */
     findWithFilters(filters: CharacterFilters, limit?: number): Promise<ICharacterDocument[]>;
+    /**
+     * Returns all lowercase name variants (name + aliases) for the current patch
+     * roster of a game. Used by MetaService to extract character names from
+     * AI-generated scenario text without hardcoded lists.
+     */
+    getNamesByGame(gameId: string): Promise<string[]>;
 }
 //# sourceMappingURL=CharacterRepository.d.ts.map

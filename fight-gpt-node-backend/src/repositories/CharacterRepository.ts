@@ -19,6 +19,8 @@ export interface ICharacterRepository {
   findWithFilters(filters: CharacterFilters, limit?: number): Promise<ICharacterDocument[]>;
   exists(filter: object): Promise<boolean>;
   delete(id: string): Promise<boolean>;
+  /** Returns all lowercase name variants (name + aliases) for a game's current roster. */
+  getNamesByGame(gameId: string): Promise<string[]>;
 }
 
 /**
@@ -142,6 +144,23 @@ export class CharacterRepository
     }
 
     return this.findMany(query, options);
+  }
+
+  /**
+   * Returns all lowercase name variants (name + aliases) for the current patch
+   * roster of a game. Used by MetaService to extract character names from
+   * AI-generated scenario text without hardcoded lists.
+   */
+  async getNamesByGame(gameId: string): Promise<string[]> {
+    const chars = await this.model
+      .find({ game_id: gameId, is_current: true }, { name: 1, aliases: 1 })
+      .lean()
+      .exec();
+
+    return chars.flatMap((c: any) => {
+      const base = c.name.toLowerCase().replace(/\s+/g, '_');
+      return [base, ...(c.aliases || [])];
+    });
   }
 }
 

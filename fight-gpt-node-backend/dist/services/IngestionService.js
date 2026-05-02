@@ -73,18 +73,35 @@ const DEFAULT_QUERIES = (gameId) => [
 class IngestionService extends BaseService_1.BaseService {
     ingestionRepository;
     analysisService;
+    metaService;
+    searchStrategyRepository;
     schedulerTimer = null;
     isProcessing = false;
-    constructor(ingestionRepository, analysisService) {
+    constructor(ingestionRepository, analysisService, metaService, searchStrategyRepository) {
         super();
         this.ingestionRepository = ingestionRepository;
         this.analysisService = analysisService;
+        this.metaService = metaService;
+        this.searchStrategyRepository = searchStrategyRepository;
+    }
+    /**
+     * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
+     * This makes queries updatable from the admin panel without a redeploy.
+     */
+    async getSearchQueries(gameId) {
+        if (this.searchStrategyRepository) {
+            const strategies = await this.searchStrategyRepository.findActive(gameId).catch(() => []);
+            if (strategies.length > 0) {
+                return strategies.flatMap(s => s.queries);
+            }
+        }
+        return GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
     }
     /**
      * Search YouTube for fighting game videos and queue them for analysis
      */
     async triggerIngestion(gameId, maxVideos = 15) {
-        const queries = GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
+        const queries = await this.getSearchQueries(gameId);
         const result = {
             game_id: gameId,
             queued_count: 0,
@@ -184,6 +201,14 @@ class IngestionService extends BaseService_1.BaseService {
                 // Rate limit buffer (e.g. 60s between analysis requests to stay under token limits)
                 if (jobs.indexOf(job) < jobs.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 60000));
+                }
+            }
+            // Auto-trigger meta synthesis for any game that got new scenarios
+            if (processed > 0 && this.metaService) {
+                const affectedGames = [...new Set(jobs.map(j => j.game_id))];
+                for (const gid of affectedGames) {
+                    logger_1.Logger.info(`[IngestionService] Auto-triggering meta synthesis for ${gid} (${processed} new videos)`);
+                    this.metaService.generateMetaReport(gid, 'weekly').catch(e => logger_1.Logger.warn(`[IngestionService] Meta auto-gen failed for ${gid}: ${e instanceof Error ? e.message : e}`));
                 }
             }
             return {

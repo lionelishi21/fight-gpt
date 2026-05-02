@@ -1,6 +1,8 @@
 import { BaseService } from './BaseService';
 import { IIngestionRepository } from '../repositories/IngestionRepository';
 import { IAnalysisService } from './AnalysisService';
+import { IMetaService } from './MetaService';
+import { IGameSearchStrategyRepository } from '../repositories/GameSearchStrategyRepository';
 import { ApiResponse } from '../types';
 export interface IngestionTriggerResult {
     game_id: string;
@@ -20,9 +22,16 @@ export interface IIngestionService {
 export declare class IngestionService extends BaseService implements IIngestionService {
     private readonly ingestionRepository;
     private readonly analysisService;
+    private readonly metaService?;
+    private readonly searchStrategyRepository?;
     private schedulerTimer;
     private isProcessing;
-    constructor(ingestionRepository: IIngestionRepository, analysisService: IAnalysisService);
+    constructor(ingestionRepository: IIngestionRepository, analysisService: IAnalysisService, metaService?: IMetaService, searchStrategyRepository?: IGameSearchStrategyRepository);
+    /**
+     * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
+     * This makes queries updatable from the admin panel without a redeploy.
+     */
+    private getSearchQueries;
     /**
      * Search YouTube for fighting game videos and queue them for analysis
      */

@@ -163,6 +163,14 @@ const CharacterSchema: Schema = new Schema(
       required: true,
       index: true,
     },
+    // Lowercase name variations used for text extraction from AI-generated scenarios.
+    // e.g. Chun-Li: ['chun-li', 'chunli', 'chun_li']
+    // e.g. M.Bison: ['m_bison', 'bison', 'm.bison']
+    aliases: {
+      type: [String],
+      default: [],
+      index: true,
+    },
   },
   {
     timestamps: {

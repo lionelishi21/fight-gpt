@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MissionDetailService = void 0;
 const Mission_1 = __importDefault(require("../models/Mission"));
 const User_1 = __importDefault(require("../models/User"));
+const Character_1 = require("../models/Character");
 class MissionDetailService {
     encyclopediaRepository;
     analysisRepository;
@@ -23,17 +24,36 @@ class MissionDetailService {
         const user = await User_1.default.findById(userId);
         if (!user)
             throw new Error('User saved data not found');
-        // Identify active game and character from user slots or preferences
-        const activeSlot = user.slots[user.activeSlotIndex] || {};
-        const gameId = activeSlot.gameId || user.preferences?.favoriteGames?.[0] || 'sf6';
-        const playerChar = activeSlot.characterId || user.preferences?.mainCharacter || 'ryu';
+        // Identify active game — prefer indexed slot, fall back to first slot or preference
+        const indexedSlot = (user.slots?.length ?? 0) > 0
+            ? user.slots[user.activeSlotIndex ?? 0] ?? user.slots[0]
+            : null;
+        const gameId = indexedSlot?.gameId
+            || user.preferences?.favoriteGames?.[0]
+            || 'sf6';
+        // Find the slot for this game (handles multi-game users correctly)
+        const activeSlot = user.slots?.find(s => s.gameId === gameId)
+            ?? indexedSlot;
+        const charSlug = activeSlot?.characterId
+            || user.preferences?.mainCharacter
+            || 'ryu';
+        // Resolve character display name from DB (slug → proper name e.g. "chun-li" → "Chun-Li")
+        const charDoc = await Character_1.Character.findOne({
+            game_id: gameId,
+            $or: [
+                { name: new RegExp(`^${charSlug}$`, 'i') },
+                { aliases: charSlug },
+            ],
+        }, { name: 1 }).lean();
+        const playerChar = charSlug;
+        const characterDisplayName = charDoc?.name ?? charSlug;
         const details = {
             missionId: mission._id?.toString(),
             title: mission.title,
             description: mission.description,
             type: mission.type,
             gameId,
-            targetCharacter: playerChar,
+            targetCharacter: characterDisplayName, // proper display name, not undefined
             trainingTips: [],
         };
         const titleLower = mission.title.toLowerCase();
@@ -95,11 +115,13 @@ class MissionDetailService {
             if (match && analysis.youtube_url) {
                 const videoId = analysis.youtube_url.split('v=')[1]?.split('&')[0];
                 if (videoId) {
+                    const p1 = analysis.p1_name || 'Player 1';
+                    const p2 = analysis.p2_name || 'Player 2';
                     refs.push({
-                        title: `Pro Match Application: ${analysis.p1_name} vs ${analysis.p2_name}`,
+                        title: `Pro Match: ${p1} vs ${p2}`,
                         youtube_id: videoId,
                         timestamp: match.timestamp,
-                        description: match.description
+                        description: match.description,
                     });
                 }
             }

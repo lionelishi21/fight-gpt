@@ -9,17 +9,24 @@ const User_1 = __importDefault(require("../models/User"));
 const Game_1 = require("../models/Game");
 const CharacterEncyclopediaRepository_1 = require("../repositories/CharacterEncyclopediaRepository");
 const Character_1 = require("../models/Character");
+const GameSearchStrategy_1 = require("../models/GameSearchStrategy");
+const GameOnboardingService_1 = require("../services/GameOnboardingService");
+const PatchService_1 = require("../services/PatchService");
 class AdminController extends BaseController_1.BaseController {
     adminService;
     ingestionService;
     metaService;
     autoResearchService;
+    onboardingService;
+    patchService;
     constructor(adminService, ingestionService, metaService, autoResearchService) {
         super();
         this.adminService = adminService;
         this.ingestionService = ingestionService;
         this.metaService = metaService;
         this.autoResearchService = autoResearchService;
+        this.onboardingService = new GameOnboardingService_1.GameOnboardingService(ingestionService);
+        this.patchService = new PatchService_1.PatchService(ingestionService);
     }
     /**
      * GET /api/admin/stats
@@ -428,6 +435,115 @@ class AdminController extends BaseController_1.BaseController {
         }
         catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+    /**
+     * POST /api/admin/games/onboard
+     * One-call game onboarding: creates Game + Characters + Encyclopedia + SearchStrategies + queues ingestion
+     */
+    onboardGame = async (req, res) => {
+        try {
+            const result = await this.onboardingService.onboardGame(req.body);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Onboarding failed');
+        }
+    };
+    /**
+     * GET /api/admin/games/:gameId/search-strategies
+     * List all search strategies for a game
+     */
+    getSearchStrategies = async (req, res) => {
+        try {
+            const { gameId } = req.params;
+            const strategies = await GameSearchStrategy_1.GameSearchStrategy.find({ game_id: gameId })
+                .sort({ priority: -1, created_at: -1 }).lean();
+            this.sendResponse(res, { success: true, data: strategies });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed');
+        }
+    };
+    /**
+     * POST /api/admin/games/:gameId/search-strategies
+     * Add or replace search strategies for a game
+     */
+    upsertSearchStrategies = async (req, res) => {
+        try {
+            const { gameId } = req.params;
+            const { queries, patch_version, priority = 0 } = req.body;
+            if (!Array.isArray(queries) || queries.length === 0) {
+                res.status(400).json({ success: false, error: 'queries array is required' });
+                return;
+            }
+            const strategy = await GameSearchStrategy_1.GameSearchStrategy.create({
+                game_id: gameId,
+                queries,
+                patch_version: patch_version || 'latest',
+                is_active: true,
+                priority,
+            });
+            this.sendResponse(res, { success: true, data: strategy, message: `Added ${queries.length} search queries for ${gameId}` });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed');
+        }
+    };
+    /**
+     * DELETE /api/admin/games/:gameId/search-strategies/:id
+     * Deactivate a search strategy
+     */
+    deactivateSearchStrategy = async (req, res) => {
+        try {
+            const { id } = req.params;
+            await GameSearchStrategy_1.GameSearchStrategy.findByIdAndUpdate(id, { is_active: false });
+            this.sendResponse(res, { success: true, message: 'Strategy deactivated' });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed');
+        }
+    };
+    /**
+     * POST /api/admin/games/:gameId/patch
+     * Declare a new patch — archives old chars, bumps versions, queues post-patch ingestion
+     * Body: { version, changed_characters[], patch_notes_url? }
+     */
+    declarePatch = async (req, res) => {
+        try {
+            const { gameId } = req.params;
+            const { version, changed_characters, patch_notes_url } = req.body;
+            if (!version) {
+                res.status(400).json({ success: false, error: 'version is required' });
+                return;
+            }
+            if (!Array.isArray(changed_characters)) {
+                res.status(400).json({ success: false, error: 'changed_characters array is required' });
+                return;
+            }
+            const result = await this.patchService.declarePatch(gameId, {
+                version,
+                changed_characters,
+                patch_notes_url,
+            });
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Patch declaration failed');
+        }
+    };
+    /**
+     * GET /api/admin/games/:gameId/patches
+     * Get patch history for a game
+     */
+    getPatchHistory = async (req, res) => {
+        try {
+            const { gameId } = req.params;
+            const result = await this.patchService.getPatchHistory(gameId);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed');
         }
     };
 }

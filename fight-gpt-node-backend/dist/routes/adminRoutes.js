@@ -21,11 +21,14 @@ class AdminRoutes {
         // User Management
         this.router.get('/users', this.adminController.getUsers);
         // Game Management
+        this.router.post('/games/onboard', this.adminController.onboardGame); // one-call new game setup
         this.router.get('/games', this.adminController.getGames);
         this.router.post('/games', this.adminController.createGame);
         this.router.put('/games/:gameId', this.adminController.updateGame);
         this.router.patch('/games/:gameId/status', this.adminController.setGameStatus);
         this.router.post('/games/:gameId/bump-patch', this.adminController.bumpEncyclopediaPatch);
+        this.router.post('/games/:gameId/patch', this.adminController.declarePatch);
+        this.router.get('/games/:gameId/patches', this.adminController.getPatchHistory);
         // Character Management
         this.router.get('/characters', this.adminController.getCharacters);
         this.router.post('/characters', this.adminController.createCharacter);
@@ -43,6 +46,10 @@ class AdminRoutes {
         this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
         // Auto-Research
         this.router.post('/research/trigger', this.adminController.triggerResearch);
+        // Search Strategy Management (DB-driven ingestion queries)
+        this.router.get('/games/:gameId/search-strategies', this.adminController.getSearchStrategies);
+        this.router.post('/games/:gameId/search-strategies', this.adminController.upsertSearchStrategies);
+        this.router.delete('/games/:gameId/search-strategies/:id', this.adminController.deactivateSearchStrategy);
         // Admin Invites
         this.router.post('/invites', InviteController_1.inviteController.createAdminInvite);
         this.router.get('/invites', InviteController_1.inviteController.listAdminInvites);
