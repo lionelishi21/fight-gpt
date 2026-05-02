@@ -133,7 +133,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
             }
 
             // TECH_DISCOVERY Alert — only for genuinely novel scenarios
-            if (isNovel && this.notificationRepository) {
+            if (isNovel && this.notificationService) {
               const chars = [
                 this.sanitizeAiString(analysisResponse.p1_character),
                 this.sanitizeAiString(analysisResponse.p2_character)
@@ -151,7 +151,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               }).limit(100);
 
               for (const user of usersToNotify) {
-                await this.notificationRepository.createNotification({
+                await this.notificationService.createNotification({
                   userId: (user as any)._id,
                   type: 'TECH_DISCOVERY',
                   severity: 'high',

@@ -212,8 +212,7 @@ export class AdminService extends BaseService implements IAdminService {
                     is_current_patch: true,
                     moveset: { normals: [], specials: [], ex_moves: [], supers: [] },
                     game_rules: [],
-                    videos: [],
-                    version: '1.0'
+                    videos: []
                 });
             }
 

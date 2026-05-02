@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { EngagementController } from '../controllers/EngagementController';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware } from '../middleware/auth';
 
 export class EngagementRoutes {
     public router: Router;

@@ -2,7 +2,7 @@ import { ICharacterEncyclopediaRepository } from '../repositories/CharacterEncyc
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
 import { IMission } from '../models/Mission';
 import Mission from '../models/Mission';
-import { User } from '../models/User';
+import User from '../models/User';
 
 export interface MissionDetails {
     missionId: string;
@@ -40,7 +40,7 @@ export class MissionDetailService {
         const playerChar = activeSlot.characterId || user.preferences?.mainCharacter || 'ryu';
 
         const details: MissionDetails = {
-            missionId: mission._id,
+            missionId: mission._id?.toString(),
             title: mission.title,
             description: mission.description,
             type: mission.type,

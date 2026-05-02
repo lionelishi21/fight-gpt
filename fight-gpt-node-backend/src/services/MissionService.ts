@@ -1,6 +1,5 @@
 import { IAnalysis } from '../models/Analysis';
-import { User } from '../models/User';
-import { ICharacterTheory } from '../models/CharacterTheory';
+import User from '../models/User';
 
 /**
  * Service to handle tactical verification of practice missions.
@@ -29,9 +28,9 @@ export class MissionService {
       const descLower = (event.description || '').toLowerCase();
       
       // Match key tactical keywords
-      if (goalLower.includes('punish') && event.event_type === 'punish') successCount++;
-      if (goalLower.includes('combo') && event.event_type === 'combo') successCount++;
-      if (goalLower.includes('defense') && event.event_type === 'defense') successCount++;
+      if (goalLower.includes('punish') && (event.event_type === 'punish_missed' || event.event_type === 'whiff_punish')) successCount++;
+      if (goalLower.includes('combo') && event.event_type === 'pro_move') successCount++;
+      if (goalLower.includes('defense') && event.event_type === 'neutral_win') successCount++;
       if (goalLower.includes('counter') && descLower.includes('counter')) successCount++;
     }
 
