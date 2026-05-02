@@ -138,8 +138,17 @@ class App {
         const rivalController = app_1.AppConfig.MONGODB_URI ? new RivalController_1.RivalController(rivalService, auditLogRepository) : null;
         const userController = app_1.AppConfig.MONGODB_URI ? new UserController_1.UserController(userService, auditLogRepository) : null;
         const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined) : null;
-        const paymentService = new PaymentService_1.PaymentService();
-        const paymentController = new PaymentController_1.PaymentController(paymentService);
+        let paymentService;
+        let paymentController;
+        try {
+            paymentService = new PaymentService_1.PaymentService();
+            paymentController = new PaymentController_1.PaymentController(paymentService);
+        }
+        catch (e) {
+            logger_1.Logger.warn('PaymentService failed to initialize (Stripe key may be missing). Payment routes disabled.');
+            paymentService = null;
+            paymentController = new PaymentController_1.PaymentController(null);
+        }
         // Setup routes
         const engagementService = new EngagementService_1.EngagementService(theoryService);
         const engagementController = new EngagementController_1.EngagementController(engagementService);
