@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import cron from 'node-cron';
+import mongoose from 'mongoose';
 import { BaseService } from './BaseService';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
@@ -23,7 +24,34 @@ export interface IMetaService {
  */
 const INVALID_CHARACTER_NAMES = new Set([
     'all', 'unknown', 'n/a', 'none', 'any', 'tbd', '?', '',
+    'p1', 'p2', 'player 1', 'player 2', 'player1', 'player2',
 ]);
+
+const KNOWN_CHARACTERS: Record<string, string[]> = {
+    sf6: ['ryu','ken','chun-li','guile','cammy','juri','kimberly','manon','dee_jay','jp',
+          'lily','marisa','rashid','aki','ed','akuma','m_bison','bison','terry','honda',
+          'dhalsim','blanka','zangief','luke','jamie','sagat','vega','balrog','cody','poison'],
+    tekken8: ['kazuya','jin','paul','law','king','yoshimitsu','nina','hwoarang','xiaoyu',
+              'heihachi','devil_jin','asuka','lili','lars','alisa','lee','steve','dragunov',
+              'victor','reina','azucena','raven','leo'],
+    ggst: ['sol','ky','may','axl','chipp','potemkin','faust','millia','zato','ramlethal',
+           'leo','nagoriyuki','giovanna','anji','happy_chaos','baiken','testament','bridget'],
+    mk1: ['scorpion','sub-zero','liu_kang','kung_lao','kitana','mileena','raiden','baraka',
+          'johnny_cage','kenshi','reptile','shang_tsung','geras','sindel','havik','smoke',
+          'rain','reiko','general_shao','tanya','ashrah'],
+};
+
+function extractCharactersFromText(text: string, gameId: string): string[] {
+    if (!text) return [];
+    const chars = KNOWN_CHARACTERS[gameId] || [];
+    const lower = text.toLowerCase();
+    const found = new Set<string>();
+    for (const name of chars) {
+        const esc = name.replace(/[-]/g, '[-_]?');
+        if (new RegExp(`(?<![a-z_])${esc}(?![a-z_])`, 'i').test(lower)) found.add(name);
+    }
+    return Array.from(found);
+}
 
 export class MetaService extends BaseService implements IMetaService {
     private genAI: GoogleGenerativeAI;
@@ -78,8 +106,20 @@ export class MetaService extends BaseService implements IMetaService {
                 };
             }
 
-            // Build raw stats from scenario data
-            const { tierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+            // Build raw stats from scenario data (uses extracted characters)
+            const { tierList: scenarioTierList, matchupInsights, dominantStrategies } = this.buildRawStats(scenarios);
+
+            // Augment with analysis collection stats (authoritative character names)
+            const analysisStats = await this.getCharacterStatsFromAnalyses(gameId);
+            const mergedMap = new Map<string, { usage: number; wins: number; strategies: string[] }>();
+            for (const e of scenarioTierList) mergedMap.set(e.character_id, { usage: e.usage_count, wins: e.win_count, strategies: e.top_strategies });
+            for (const [id, as] of analysisStats.entries()) {
+                if (mergedMap.has(id)) { mergedMap.get(id)!.usage += as.usage; mergedMap.get(id)!.wins += as.wins; }
+                else mergedMap.set(id, { usage: as.usage, wins: as.wins, strategies: [] });
+            }
+            const tierList: ICharacterMetaStat[] = Array.from(mergedMap.entries())
+                .map(([char_id, s]) => ({ character_id: char_id, character_name: char_id, usage_count: s.usage, win_count: s.wins, win_rate: s.usage > 0 ? Math.round((s.wins / s.usage) * 100) : 0, trend: 'stable' as const, top_strategies: s.strategies.slice(0, 3) }))
+                .sort((a, b) => b.usage_count - a.usage_count);
 
             // Generate narrative meta summary via Gemini
             const metaSummary = await this.generateMetaSummaryWithGemini(
@@ -246,16 +286,6 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
     // --- Private helpers ---
 
     /**
-     * Fetch all scenarios for a game directly from MongoDB (not vector search)
-     */
-    private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
-        // VectorRepository uses BaseRepository which has findMany
-        return (this.vectorRepository as any).model
-            ? (this.vectorRepository as any).model.find({ game_id: gameId }, { embedding: 0 }).lean().exec()
-            : [];
-    }
-
-    /**
      * Build raw character stats and matchup data from scenarios
      */
     private buildRawStats(scenarios: any[]): {
@@ -402,5 +432,73 @@ Write in a professional, direct tone like a tier list article. Be specific about
         } catch {
             return `Meta report generated from ${scenarios.length} analyzed scenarios. Top characters by win rate: ${tierList.slice(0, 3).map(c => c.character_name).join(', ')}.`;
         }
+    }
+
+    /**
+     * Fetch scenarios and backfill characters_involved from context text for legacy scenarios
+     * that have empty arrays due to Gemini returning P1/P2 placeholders.
+     */
+    private async getAllScenariosForGame(gameId: string): Promise<unknown[]> {
+        const model = (this.vectorRepository as any).model;
+        if (!model) return [];
+
+        try {
+            const empty = await model.find(
+                { game_id: gameId, characters_involved: { $size: 0 } },
+                { _id: 1, context: 1, description: 1 }
+            ).lean().exec();
+
+            if (empty.length > 0) {
+                const ops: any[] = [];
+                for (const s of empty) {
+                    const chars = extractCharactersFromText(
+                        `${(s as any).context || ''} ${(s as any).description || ''}`, gameId
+                    );
+                    if (chars.length > 0) {
+                        ops.push({ updateOne: { filter: { _id: (s as any)._id }, update: { $set: { characters_involved: chars } } } });
+                    }
+                }
+                if (ops.length > 0) await model.bulkWrite(ops);
+            }
+        } catch (e) {
+            // non-fatal
+        }
+
+        return model.find({ game_id: gameId }, { embedding: 0 }).lean().exec();
+    }
+
+    /**
+     * Get character usage/win stats from Analysis collection (authoritative source).
+     * Scenarios often have P1/P2 placeholders; analyses store the actual Gemini character names.
+     */
+    private async getCharacterStatsFromAnalyses(gameId: string): Promise<Map<string, { usage: number; wins: number }>> {
+        const stats = new Map<string, { usage: number; wins: number }>();
+        try {
+            const AnalysisModel = mongoose.models['Analysis'];
+            if (!AnalysisModel) return stats;
+            const analyses = await AnalysisModel.find(
+                { game_id: gameId },
+                { 'analysis.p1_character': 1, 'analysis.p2_character': 1, 'analysis.match_winner': 1 }
+            ).lean().exec();
+
+            for (const doc of analyses) {
+                const a = (doc as any).analysis || {};
+                const p1 = typeof a.p1_character === 'string' ? a.p1_character.trim().toLowerCase() : null;
+                const p2 = typeof a.p2_character === 'string' ? a.p2_character.trim().toLowerCase() : null;
+                const winner = typeof a.match_winner === 'string' ? a.match_winner.trim().toLowerCase() : null;
+
+                for (const [char, isWinner] of [[p1, winner === 'p1'], [p2, winner === 'p2']] as [string|null, boolean][]) {
+                    if (!char || INVALID_CHARACTER_NAMES.has(char)) continue;
+                    const normalized = char.replace(/[\s-]+/g, '_');
+                    if (!stats.has(normalized)) stats.set(normalized, { usage: 0, wins: 0 });
+                    const entry = stats.get(normalized)!;
+                    entry.usage++;
+                    if (isWinner) entry.wins++;
+                }
+            }
+        } catch (e) {
+            // non-fatal
+        }
+        return stats;
     }
 }

@@ -46,10 +46,6 @@ export declare class MetaService extends BaseService implements IMetaService {
      */
     startScheduler(): void;
     /**
-     * Fetch all scenarios for a game directly from MongoDB (not vector search)
-     */
-    private getAllScenariosForGame;
-    /**
      * Build raw character stats and matchup data from scenarios
      */
     private buildRawStats;
@@ -61,5 +57,15 @@ export declare class MetaService extends BaseService implements IMetaService {
      * Use Gemini to write a human-readable meta summary from the raw stats
      */
     private generateMetaSummaryWithGemini;
+    /**
+     * Fetch scenarios and backfill characters_involved from context text for legacy scenarios
+     * that have empty arrays due to Gemini returning P1/P2 placeholders.
+     */
+    private getAllScenariosForGame;
+    /**
+     * Get character usage/win stats from Analysis collection (authoritative source).
+     * Scenarios often have P1/P2 placeholders; analyses store the actual Gemini character names.
+     */
+    private getCharacterStatsFromAnalyses;
 }
 //# sourceMappingURL=MetaService.d.ts.map
