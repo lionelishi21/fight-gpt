@@ -4,8 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentService = void 0;
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const StripeLib = require('stripe');
+const stripe_1 = __importDefault(require("stripe"));
 const app_1 = require("../config/app");
 const User_1 = __importDefault(require("../models/User"));
 const BaseService_1 = require("./BaseService");
@@ -14,7 +13,7 @@ class PaymentService extends BaseService_1.BaseService {
     stripe;
     constructor() {
         super();
-        this.stripe = new StripeLib(app_1.AppConfig.STRIPE_SECRET_KEY, {
+        this.stripe = new stripe_1.default(app_1.AppConfig.STRIPE_SECRET_KEY, {
             apiVersion: '2023-10-16',
         });
     }
