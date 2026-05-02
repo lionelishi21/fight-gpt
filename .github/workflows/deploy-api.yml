@@ -90,12 +90,12 @@ jobs:
             # 7. Diagnostics and health check
             echo "→ PORT in .env: $(grep '^PORT=' .env 2>/dev/null || echo 'not set')"
             sleep 10
-            echo "→ Node listening ports:"
-            ss -tlnp 2>/dev/null | grep node || netstat -tlnp 2>/dev/null | grep node || echo "could not check ports"
-            echo "→ PM2 status:"
-            pm2 list 2>/dev/null | grep fightgpt || true
-            echo "→ Last 10 lines of app error log:"
-            tail -10 /var/log/fightgpt/error.log 2>/dev/null || echo "no error log"
+            echo "→ All listening ports:"
+            ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || true
+            echo "→ PM2 full list:"
+            pm2 list 2>/dev/null || true
+            echo "→ PM2 logs (last 20 lines):"
+            timeout 5 pm2 logs fightgpt-api --lines 20 --nostream 2>/dev/null || pm2 logs --lines 20 --nostream 2>/dev/null | tail -20 || true
             echo "→ Health check on 3000..."
             curl -sf http://localhost:3000/api/health && echo "✅ UP on 3000" || echo "❌ 3000 failed"
             echo "→ Health check on 3010..."
