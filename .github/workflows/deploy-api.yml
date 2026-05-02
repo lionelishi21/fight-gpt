@@ -91,9 +91,14 @@ jobs:
             pm2 save
 
             # 7. Health check
-            echo "→ Health check..."
-            sleep 5
-            curl -sf http://localhost:3010/api/ || curl -sf http://localhost:3000/api/ || echo "⚠️  Health check inconclusive — check PM2 logs"
+            echo "→ PORT in .env: $(grep '^PORT=' .env 2>/dev/null || echo 'not set in .env')"
+            echo "→ PM2 process details:"
+            pm2 show fightgpt-api 2>/dev/null | grep -E "status|restart|exec file|cwd|pid|port" || true
+            sleep 8
+            echo "→ Health check on 3010..."
+            curl -sf http://localhost:3010/api/health && echo "✅ UP on 3010" || echo "❌ 3010 failed"
+            echo "→ Health check on 3000..."
+            curl -sf http://localhost:3000/api/health && echo "✅ UP on 3000" || echo "❌ 3000 failed"
             echo "✅ Deploy complete"
 
       - name: Notify success
