@@ -89,6 +89,7 @@ export class App {
   private app: Express;
   private routes: Routes;
   private ingestionService: InstanceType<typeof IngestionService> | null = null;
+  private rosterSyncService: RosterSyncService | null = null;
 
   constructor() {
     // Validate configuration
@@ -144,7 +145,7 @@ export class App {
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
     const adminService = AppConfig.MONGODB_URI ? new AdminService() : null as any;
     const scraperService = AppConfig.MONGODB_URI ? new ScraperService(characterEncyclopediaService) : null as any;
-    const rosterSyncService = AppConfig.MONGODB_URI ? new RosterSyncService(scraperService) : null as any;
+    this.rosterSyncService = AppConfig.MONGODB_URI ? new RosterSyncService(scraperService) : null as any;
     const autoResearchService = AppConfig.MONGODB_URI
         ? new AutoResearchService(theoryService, notificationService)
         : null;
@@ -173,7 +174,7 @@ export class App {
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
     const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
-    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, rosterSyncService ?? undefined) : null;
+    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, this.rosterSyncService ?? undefined) : null;
     let paymentService: PaymentService;
     let paymentController: PaymentController;
     try {
@@ -319,7 +320,7 @@ export class App {
       // Run system initialization (auto-seeding & admin setup)
       const metaRoutes = this.routes.getMetaRoutes();
       const metaService = metaRoutes?.getController()?.getMetaService();
-      await SystemInitializer.run(metaService ?? undefined, rosterSyncService ?? undefined);
+      await SystemInitializer.run(metaService ?? undefined, this.rosterSyncService ?? undefined);
 
       // Start ingestion scheduler (every 6 hours)
       if (this.ingestionService) {
@@ -327,9 +328,7 @@ export class App {
       }
 
       // Start meta synthesis scheduler (every 24 hours)
-      const metaRoutes = this.routes.getMetaRoutes();
       if (metaRoutes) {
-        const metaService = metaRoutes.getController().getMetaService();
         if (metaService) {
           metaService.startScheduler();
         }
