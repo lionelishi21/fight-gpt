@@ -320,7 +320,9 @@ export class App {
       // Run system initialization (auto-seeding & admin setup)
       const metaRoutes = this.routes.getMetaRoutes();
       const metaService = metaRoutes?.getController()?.getMetaService();
-      await SystemInitializer.run(metaService ?? undefined, this.rosterSyncService ?? undefined);
+      SystemInitializer.run(metaService ?? undefined, this.rosterSyncService ?? undefined).catch(err => {
+        Logger.error('SYSTEM_INITIALIZATION: Failed during startup', err);
+      });
 
       // Start ingestion scheduler (every 6 hours)
       if (this.ingestionService) {
