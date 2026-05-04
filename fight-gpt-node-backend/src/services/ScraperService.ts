@@ -3,7 +3,8 @@ import { ICharacterEncyclopediaService } from './CharacterEncyclopediaService';
 
 export class ScraperService {
     private browser: Browser | null = null;
-    private readonly baseUrl: string = "https://wiki.supercombo.gg/w/Street_Fighter_6";
+    private readonly baseUrlSF6: string = "https://wiki.supercombo.gg/w/Street_Fighter_6";
+    private readonly baseUrlT8: string = "https://wiki.supercombo.gg/w/Tekken_8";
 
     constructor(private characterService: ICharacterEncyclopediaService) { }
 
@@ -19,11 +20,8 @@ export class ScraperService {
     }
 
     async scrapeRoster(gameId: string): Promise<{ name: string; status: 'released' | 'coming_soon' }[]> {
-        if (gameId !== 'sf6') {
-            console.log(`Scraping roster for ${gameId} is not supported yet.`);
-            return [];
-        }
-
+        const url = gameId === 'sf6' ? this.baseUrlSF6 : this.baseUrlT8;
+        
         if (!this.browser) await this.initialize();
         const context = await this.browser!.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
@@ -31,8 +29,8 @@ export class ScraperService {
         const page = await context.newPage();
 
         try {
-            console.log(`Scraping roster for ${gameId} at ${this.baseUrl}`);
-            await page.goto(this.baseUrl, { waitUntil: 'networkidle', timeout: 60000 });
+            console.log(`Scraping roster for ${gameId} at ${url}`);
+            await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
             // Wait for characters table or section
             await page.waitForTimeout(5000);
@@ -83,14 +81,15 @@ export class ScraperService {
         }
     }
 
-    async scrapeCharacter(characterName: string): Promise<any> {
+    async scrapeCharacter(characterName: string, gameId: string = 'sf6'): Promise<any> {
         if (!this.browser) await this.initialize();
         const context = await this.browser!.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
         });
         const page = await context.newPage();
+        const baseUrl = gameId === 'sf6' ? this.baseUrlSF6 : this.baseUrlT8;
         const slug = characterName.replace(/ /g, "_");
-        const url = `${this.baseUrl}/${slug}`;
+        const url = gameId === 'sf6' ? `${baseUrl}/${slug}` : `${baseUrl}/${slug.replace(/ /g, "_")}`; // Tekken 8 might need specific slug logic
 
         try {
             console.log(`Scraping ${characterName} at ${url}`);

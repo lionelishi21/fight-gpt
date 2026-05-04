@@ -22,6 +22,8 @@ class TrainingRoutes {
         this.router.get('/plan', auth_1.authMiddleware, this.controller.getMissions);
         // @ts-ignore
         this.router.post('/missions/:id/complete', auth_1.authMiddleware, this.controller.completeMission);
+        // @ts-ignore
+        this.router.post('/missions/:id/proof', auth_1.authMiddleware, this.controller.submitMissionProof);
     }
     getRouter() {
         return this.router;

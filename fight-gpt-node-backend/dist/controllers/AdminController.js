@@ -19,7 +19,8 @@ class AdminController extends BaseController_1.BaseController {
     autoResearchService;
     onboardingService;
     patchService;
-    constructor(adminService, ingestionService, metaService, autoResearchService) {
+    rosterSyncService;
+    constructor(adminService, ingestionService, metaService, autoResearchService, rosterSyncService) {
         super();
         this.adminService = adminService;
         this.ingestionService = ingestionService;
@@ -27,6 +28,7 @@ class AdminController extends BaseController_1.BaseController {
         this.autoResearchService = autoResearchService;
         this.onboardingService = new GameOnboardingService_1.GameOnboardingService(ingestionService);
         this.patchService = new PatchService_1.PatchService(ingestionService);
+        this.rosterSyncService = rosterSyncService;
     }
     /**
      * GET /api/admin/stats
@@ -544,6 +546,89 @@ class AdminController extends BaseController_1.BaseController {
         }
         catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed');
+        }
+    };
+    /**
+     * POST /api/admin/games/:gameId/sync
+     * Manually trigger roster and frame data sync for a game
+     */
+    syncGameData = async (req, res) => {
+        if (!this.rosterSyncService) {
+            res.status(503).json({ success: false, error: 'Roster sync service unavailable' });
+            return;
+        }
+        try {
+            const { gameId } = req.params;
+            const fullSync = req.query.fullSync === 'true';
+            if (!gameId) {
+                res.status(400).json({ success: false, error: 'gameId is required' });
+                return;
+            }
+            // Run in background for SF6 as it takes a while if fullSync is true
+            if (gameId === 'sf6' && fullSync) {
+                this.rosterSyncService.syncRoster(gameId, true).catch(err => {
+                    console.error(`[AdminController] Background sync failed for ${gameId}:`, err);
+                });
+                this.sendResponse(res, {
+                    success: true,
+                    message: `Full sync triggered in background for ${gameId}. This may take several minutes.`
+                });
+            }
+            else {
+                const result = await this.rosterSyncService.syncRoster(gameId, fullSync);
+                this.sendResponse(res, { success: true, data: result });
+            }
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Sync failed');
+        }
+    };
+    /**
+     * GET /api/admin/theory/staging
+     * Get all pending theories for staging
+     */
+    getStagingTheories = async (req, res) => {
+        try {
+            // Import dynamically or assume TheoryDoc is available
+            const { TheoryDoc } = require('../models/TheoryDocument');
+            const status = req.query.status || 'pending';
+            const limit = parseInt(req.query.limit) || 50;
+            const theories = await TheoryDoc.find({ status })
+                .sort({ generated_at: -1 })
+                .limit(limit)
+                .lean();
+            this.sendResponse(res, { success: true, data: theories });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch staging theories');
+        }
+    };
+    /**
+     * PATCH /api/admin/theory/:id/status
+     * Update theory status and optional content
+     */
+    updateTheoryStatus = async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { status, full_theory } = req.body;
+            if (!status || !['pending', 'approved', 'rejected'].includes(status)) {
+                res.status(400).json({ success: false, error: 'Valid status is required' });
+                return;
+            }
+            const { TheoryDoc } = require('../models/TheoryDocument');
+            const updates = { status };
+            if (full_theory) {
+                updates.full_theory = full_theory;
+            }
+            const theory = await TheoryDoc.findByIdAndUpdate(id, updates, { new: true });
+            if (!theory) {
+                res.status(404).json({ success: false, error: 'Theory not found' });
+                return;
+            }
+            this.sendResponse(res, { success: true, data: theory, message: `Theory ${status}` });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to update theory status');
         }
     };
 }

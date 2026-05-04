@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminMiddleware = exports.optionalAuthMiddleware = exports.authMiddleware = void 0;
+exports.premiumMiddleware = exports.adminMiddleware = exports.optionalAuthMiddleware = exports.authMiddleware = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const authMiddleware = (req, res, next) => {
@@ -70,4 +70,40 @@ const adminMiddleware = async (req, res, next) => {
     }
 };
 exports.adminMiddleware = adminMiddleware;
+/**
+ * Middleware to check if user has a premium tier (COMPETITOR or PRO)
+ * Must be used AFTER authMiddleware
+ */
+const premiumMiddleware = async (req, res, next) => {
+    try {
+        // @ts-ignore
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, error: 'Not authorized' });
+            return;
+        }
+        const user = await User_1.default.findById(userId);
+        if (!user) {
+            res.status(404).json({ success: false, error: 'User not found' });
+            return;
+        }
+        // Admins and users with COMPETITOR or PRO tier have premium access
+        if (user.role === 'admin' || user.tier === 'COMPETITOR' || user.tier === 'PRO') {
+            // Attach full user for downstream use
+            req.user = user;
+            next();
+        }
+        else {
+            res.status(403).json({
+                success: false,
+                error: 'Premium subscription required',
+                code: 'PREMIUM_REQUIRED'
+            });
+        }
+    }
+    catch (err) {
+        res.status(500).json({ success: false, error: 'Tier validation error' });
+    }
+};
+exports.premiumMiddleware = premiumMiddleware;
 //# sourceMappingURL=auth.js.map

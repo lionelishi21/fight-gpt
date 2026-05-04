@@ -39,6 +39,7 @@ const util_1 = require("util");
 const BaseService_1 = require("./BaseService");
 const uuidHelper_1 = require("../helpers/uuidHelper");
 const logger_1 = require("../helpers/logger");
+const QueueService_1 = require("./QueueService");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 // Search queries per game — these surface tournament sets, pro player footage, high-level ranked
 const GAME_SEARCH_QUERIES = {
@@ -127,6 +128,12 @@ class IngestionService extends BaseService_1.BaseService {
                             source: 'scheduled',
                             status: 'pending',
                             retry_count: 0,
+                        });
+                        // Enqueue for background processing
+                        await QueueService_1.queueService.addAnalysisJob({
+                            job_id: job.job_id,
+                            game_id: gameId,
+                            youtube_url: url
                         });
                         result.queued_count++;
                     }
@@ -237,7 +244,7 @@ class IngestionService extends BaseService_1.BaseService {
             gameIds.sort((a, b) => (a === 'sf6' ? -1 : b === 'sf6' ? 1 : 0));
             for (const gameId of gameIds) {
                 try {
-                    const maxVideosToFetch = gameId === 'sf6' ? 20 : 10;
+                    const maxVideosToFetch = gameId === 'sf6' ? 50 : 20;
                     await this.triggerIngestion(gameId, maxVideosToFetch);
                 }
                 catch (e) {
@@ -246,9 +253,6 @@ class IngestionService extends BaseService_1.BaseService {
             }
             // 2. Pro Player prioritized ingestion (including Japan)
             await this.ingestProPlayers();
-            // 3. Process the queue
-            await this.processQueue('sf6', 15);
-            await this.processQueue(undefined, 10);
         }, intervalMs);
     }
     /**
@@ -275,6 +279,13 @@ class IngestionService extends BaseService_1.BaseService {
                             source: 'pro_scout',
                             status: 'pending',
                             retry_count: 0,
+                            pro_player_id: pro._id.toString()
+                        });
+                        // Enqueue for background processing
+                        await QueueService_1.queueService.addAnalysisJob({
+                            job_id: job.job_id,
+                            game_id: pro.gameId,
+                            youtube_url: url,
                             pro_player_id: pro._id.toString()
                         });
                     }
@@ -319,6 +330,7 @@ class IngestionService extends BaseService_1.BaseService {
                 maxResults: String(maxResults),
                 videoDuration: 'medium', // 4-20 min — typical match length
                 relevanceLanguage: 'en',
+                order: 'date',
                 key: apiKey,
             });
             const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);

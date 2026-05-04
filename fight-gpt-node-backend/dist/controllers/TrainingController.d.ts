@@ -16,5 +16,9 @@ export declare class TrainingController extends BaseController {
      * Complete a mission manually
      */
     completeMission: (req: Request, res: Response) => Promise<void>;
+    /**
+     * Submit video proof for AI validation
+     */
+    submitMissionProof: (req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=TrainingController.d.ts.map

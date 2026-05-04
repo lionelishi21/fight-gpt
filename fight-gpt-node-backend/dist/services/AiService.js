@@ -167,6 +167,34 @@ class AiService extends BaseService_1.BaseService {
         throw lastError ?? new Error('All Gemini models failed');
     }
     /**
+     * Verify mission proof video
+     */
+    async verifyMissionProof(videoUrl, missionData) {
+        try {
+            let prompt = VersionResolver_1.VersionResolver.resolvePrompt('v1_mission_proof');
+            // Inject mission details into prompt
+            prompt = prompt
+                .replace('{{title}}', missionData.title)
+                .replace('{{description}}', missionData.description)
+                .replace('{{criteria}}', JSON.stringify(missionData.criteria || 'Standard execution.'));
+            const contentParts = [
+                { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+                { text: prompt }
+            ];
+            const model = this.genAI.getGenerativeModel({
+                model: this.modelName,
+                generationConfig: { responseMimeType: 'application/json' },
+            });
+            const result = await model.generateContent(contentParts);
+            let responseText = result.response.text();
+            responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            return JSON.parse(responseText);
+        }
+        catch (error) {
+            throw this.handleError(error, 'verifyMissionProof');
+        }
+    }
+    /**
      * Health check
      */
     async healthCheck() {

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -79,6 +112,44 @@ class TrainingService {
             missionId,
             status: 'COMPLETED',
             rewardedXp: rewardXp,
+        };
+    }
+    /**
+     * Submit video proof for a mission (Tactical Loop)
+     */
+    async submitProof(userId, missionId, proofUrl) {
+        const mission = await Mission_1.default.findById(missionId);
+        if (!mission)
+            throw new Error('Mission not found');
+        // 1. Create/Update UserMission as PENDING
+        let userMission = await UserMission_1.default.findOne({ user: userId, mission: missionId });
+        if (userMission && userMission.status === 'COMPLETED') {
+            throw new Error('Mission already completed');
+        }
+        if (!userMission) {
+            userMission = new UserMission_1.default({
+                user: userId,
+                mission: missionId,
+                status: 'PENDING',
+                metadata: { proofUrl, submittedAt: new Date() }
+            });
+        }
+        else {
+            userMission.status = 'PENDING';
+            userMission.metadata = { ...userMission.metadata, proofUrl, submittedAt: new Date() };
+        }
+        await userMission.save();
+        // 2. Enqueue for AI validation
+        const { queueService } = await Promise.resolve().then(() => __importStar(require('./QueueService')));
+        await queueService.addProofValidationJob({
+            userId,
+            missionId,
+            proofUrl
+        });
+        return {
+            success: true,
+            message: 'Proof submitted for AI verification. You will be notified once validated.',
+            status: 'PENDING'
         };
     }
 }

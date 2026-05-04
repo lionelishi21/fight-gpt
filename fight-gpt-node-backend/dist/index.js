@@ -58,6 +58,8 @@ const RivalService_1 = require("./services/RivalService");
 const UserService_1 = require("./services/UserService");
 const AdminService_1 = require("./services/AdminService");
 const PaymentService_1 = require("./services/PaymentService");
+const RosterSyncService_1 = require("./services/RosterSyncService");
+const ScraperService_1 = require("./services/ScraperService");
 // Import repositories
 const AnalysisRepository_1 = require("./repositories/AnalysisRepository");
 const AuditLogRepository_1 = require("./repositories/AuditLogRepository");
@@ -121,6 +123,8 @@ class App {
         const rivalService = app_1.AppConfig.MONGODB_URI ? new RivalService_1.RivalService(rivalRepository) : null;
         const userService = app_1.AppConfig.MONGODB_URI ? new UserService_1.UserService() : null;
         const adminService = app_1.AppConfig.MONGODB_URI ? new AdminService_1.AdminService() : null;
+        const scraperService = app_1.AppConfig.MONGODB_URI ? new ScraperService_1.ScraperService(characterEncyclopediaService) : null;
+        const rosterSyncService = app_1.AppConfig.MONGODB_URI ? new RosterSyncService_1.RosterSyncService(scraperService) : null;
         const autoResearchService = app_1.AppConfig.MONGODB_URI
             ? new AutoResearchService_1.AutoResearchService(theoryService, notificationService)
             : null;
@@ -139,7 +143,7 @@ class App {
         const notificationController = app_1.AppConfig.MONGODB_URI ? new NotificationController_1.NotificationController(notificationRepository) : null;
         const rivalController = app_1.AppConfig.MONGODB_URI ? new RivalController_1.RivalController(rivalService, auditLogRepository) : null;
         const userController = app_1.AppConfig.MONGODB_URI ? new UserController_1.UserController(userService, auditLogRepository) : null;
-        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined) : null;
+        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, rosterSyncService ?? undefined) : null;
         let paymentService;
         let paymentController;
         try {
@@ -249,7 +253,9 @@ class App {
             // Connect to database
             await database_1.Database.connect();
             // Run system initialization (auto-seeding & admin setup)
-            await SystemInitializer_1.SystemInitializer.run();
+            const metaRoutes = this.routes.getMetaRoutes();
+            const metaService = metaRoutes?.getController()?.getMetaService();
+            await SystemInitializer_1.SystemInitializer.run(metaService ?? undefined, rosterSyncService ?? undefined);
             // Start ingestion scheduler (every 6 hours)
             if (this.ingestionService) {
                 this.ingestionService.startScheduler();

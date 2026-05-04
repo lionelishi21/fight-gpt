@@ -18,6 +18,7 @@ class NotificationRoutes {
         this.router.get('/unread-count', this.notificationController.getUnreadCount);
         this.router.patch('/read-all', this.notificationController.markAllRead);
         this.router.patch('/:id/read', this.notificationController.markAsRead);
+        this.router.post('/push-token', this.notificationController.registerPushToken);
     }
     getRouter() {
         return this.router;

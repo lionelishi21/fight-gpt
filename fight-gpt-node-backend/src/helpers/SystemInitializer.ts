@@ -8,8 +8,16 @@ import User from '../models/User';
  * SystemInitializer handles automatic database setup on startup.
  * Ensures "Proactive Intelligence" data exists and Admin roles are assigned.
  */
+import { RosterSyncService } from '../services/RosterSyncService';
+import { IMetaService } from '../services/MetaService';
+import cron from 'node-cron';
+
+/**
+ * SystemInitializer handles automatic database setup on startup.
+ * Ensures "Proactive Intelligence" data exists and Admin roles are assigned.
+ */
 export class SystemInitializer {
-    public static async run() {
+    public static async run(metaService?: IMetaService, rosterSyncService?: RosterSyncService) {
         try {
             Logger.info('SYSTEM_INITIALIZATION: Starting deep sync...');
 
@@ -28,6 +36,21 @@ export class SystemInitializer {
             // 2. Ensure Master Admin exists
             const masterEmail = process.env.MASTER_ADMIN_EMAIL || 'lionelfrancis7@gmail.com';
             await this.ensureAdmin(masterEmail);
+
+            // 3. Schedule Weekly Roster & Frame Data Sync (Every Sunday at 3am)
+            if (rosterSyncService) {
+                Logger.info('SYSTEM_INITIALIZATION: Running light roster sync for SF6/T8...');
+                // Fast check on startup (Full sync for SF6 to ensure frame data is populated)
+                await rosterSyncService.syncRoster('sf6', true);
+                // Also trigger Tekken 8 light sync
+                await rosterSyncService.syncRoster('tekken8', false); 
+
+                Logger.info('SYSTEM_INITIALIZATION: Scheduling weekly full roster sync (Sunday 3am)');
+                cron.schedule('0 3 * * 0', async () => {
+                    Logger.info('CRON_JOB: Starting weekly full roster sync for SF6...');
+                    await rosterSyncService.syncRoster('sf6', true);
+                });
+            }
 
             Logger.info('SYSTEM_INITIALIZATION: Complete.');
         } catch (error) {

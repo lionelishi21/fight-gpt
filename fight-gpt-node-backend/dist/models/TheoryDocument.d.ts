@@ -37,6 +37,7 @@ export interface ITheoryDocument {
     generated_at: Date;
     created_at?: Date;
     updated_at?: Date;
+    status: 'pending' | 'approved' | 'rejected';
 }
 export interface ITheoryDocumentDocument extends ITheoryDocument, Document {
     _id: mongoose.Types.ObjectId;

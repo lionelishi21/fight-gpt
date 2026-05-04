@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { TheoryController } from '../controllers/TheoryController';
+import { authMiddleware, premiumMiddleware } from '../middleware/auth';
 
 export class TheoryRoutes {
     private router: Router;
@@ -10,7 +11,10 @@ export class TheoryRoutes {
     }
 
     private setupRoutes(): void {
-        // Character theory
+        // All theory routes are premium
+        this.router.use(authMiddleware);
+        this.router.use(premiumMiddleware);
+
         // Character theory
         this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);

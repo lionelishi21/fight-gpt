@@ -31,6 +31,7 @@ export class AdminRoutes {
         this.router.post('/games/:gameId/bump-patch', this.adminController.bumpEncyclopediaPatch);
         this.router.post('/games/:gameId/patch', this.adminController.declarePatch);
         this.router.get('/games/:gameId/patches', this.adminController.getPatchHistory);
+        this.router.post('/games/:gameId/sync', this.adminController.syncGameData);
 
         // Character Management
         this.router.get('/characters', this.adminController.getCharacters);
@@ -58,6 +59,10 @@ export class AdminRoutes {
         this.router.get('/games/:gameId/search-strategies', this.adminController.getSearchStrategies);
         this.router.post('/games/:gameId/search-strategies', this.adminController.upsertSearchStrategies);
         this.router.delete('/games/:gameId/search-strategies/:id', this.adminController.deactivateSearchStrategy);
+
+        // Theory Staging
+        this.router.get('/theory/staging', this.adminController.getStagingTheories);
+        this.router.patch('/theory/:id/status', this.adminController.updateTheoryStatus);
 
         // Admin Invites
         this.router.post('/invites', inviteController.createAdminInvite);

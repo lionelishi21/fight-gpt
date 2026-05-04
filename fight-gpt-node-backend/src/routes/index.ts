@@ -22,6 +22,7 @@ import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
 import matchRouter from './matchRoutes';
+import tournamentRouter from './tournamentRoutes';
 import analyticsRouter from './analyticsRoutes';
 import scenarioRouter from './scenarioRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
@@ -203,6 +204,9 @@ export class Routes {
 
     // Match routes (team-based match analysis - Priority 7)
     this.router.use('/matches', matchRouter);
+
+    // Tournament routes
+    this.router.use('/tournaments', tournamentRouter);
 
     // Scenario explorer routes (authenticated)
     this.router.use('/scenarios', scenarioRouter);

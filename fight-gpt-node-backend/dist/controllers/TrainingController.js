@@ -68,6 +68,26 @@ class TrainingController extends BaseController_1.BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to complete mission', 500);
         }
     };
+    /**
+     * Submit video proof for AI validation
+     */
+    submitMissionProof = async (req, res) => {
+        try {
+            // @ts-ignore
+            const userId = req.user.id;
+            const { id } = req.params;
+            const { proofUrl } = req.body;
+            if (!proofUrl) {
+                this.sendError(res, 'Proof URL is required', 400);
+                return;
+            }
+            const result = await this.service.submitProof(userId, id, proofUrl);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to submit mission proof', 500);
+        }
+    };
 }
 exports.TrainingController = TrainingController;
 //# sourceMappingURL=TrainingController.js.map

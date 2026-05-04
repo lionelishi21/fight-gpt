@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { MetaController } from '../controllers/MetaController';
+import { authMiddleware, premiumMiddleware } from '../middleware/auth';
 
 export class MetaRoutes {
     private router: Router;
@@ -13,8 +14,10 @@ export class MetaRoutes {
         // Meta intelligence routes
         this.router.get('/:gameId', this.metaController.getLatestMetaReport);
         this.router.post('/:gameId/generate', this.metaController.generateMetaReport);
-        this.router.get('/:gameId/history', this.metaController.getMetaHistory);
-        this.router.get('/:gameId/query', this.metaController.queryMetaInsight);
+        
+        // Gated premium routes
+        this.router.get('/:gameId/history', authMiddleware, premiumMiddleware, this.metaController.getMetaHistory);
+        this.router.get('/:gameId/query', authMiddleware, premiumMiddleware, this.metaController.queryMetaInsight);
     }
 
     public getRouter(): Router {

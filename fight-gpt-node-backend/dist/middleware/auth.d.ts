@@ -9,4 +9,9 @@ export declare const authMiddleware: (req: Request, res: Response, next: NextFun
  */
 export declare const optionalAuthMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 export declare const adminMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+/**
+ * Middleware to check if user has a premium tier (COMPETITOR or PRO)
+ * Must be used AFTER authMiddleware
+ */
+export declare const premiumMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
 //# sourceMappingURL=auth.d.ts.map

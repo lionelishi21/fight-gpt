@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TheoryRoutes = void 0;
 const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
 class TheoryRoutes {
     theoryController;
     router;
@@ -11,7 +12,9 @@ class TheoryRoutes {
         this.setupRoutes();
     }
     setupRoutes() {
-        // Character theory
+        // All theory routes are premium
+        this.router.use(auth_1.authMiddleware);
+        this.router.use(auth_1.premiumMiddleware);
         // Character theory
         this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);

@@ -1,1 +1,1 @@
-{"version":3,"file":"trainingRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/trainingRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAIjC,qBAAa,cAAc;IACvB,OAAO,CAAC,MAAM,CAAS;IACvB,OAAO,CAAC,UAAU,CAAqB;;IAQvC,OAAO,CAAC,WAAW;IAYZ,SAAS,IAAI,MAAM;CAG7B"}
+{"version":3,"file":"trainingRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/trainingRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAIjC,qBAAa,cAAc;IACvB,OAAO,CAAC,MAAM,CAAS;IACvB,OAAO,CAAC,UAAU,CAAqB;;IAQvC,OAAO,CAAC,WAAW;IAcZ,SAAS,IAAI,MAAM;CAG7B"}

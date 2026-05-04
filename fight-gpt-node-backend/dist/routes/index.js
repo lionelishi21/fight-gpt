@@ -27,6 +27,7 @@ const engagementRoutes_1 = require("./engagementRoutes");
 const InviteController_1 = require("../controllers/InviteController");
 const auth_1 = require("../middleware/auth");
 const matchRoutes_1 = __importDefault(require("./matchRoutes"));
+const tournamentRoutes_1 = __importDefault(require("./tournamentRoutes"));
 const analyticsRoutes_1 = __importDefault(require("./analyticsRoutes"));
 const scenarioRoutes_1 = __importDefault(require("./scenarioRoutes"));
 /**
@@ -157,6 +158,8 @@ class Routes {
         this.router.get('/users/referral/stats', auth_1.authMiddleware, InviteController_1.inviteController.getReferralStats);
         // Match routes (team-based match analysis - Priority 7)
         this.router.use('/matches', matchRoutes_1.default);
+        // Tournament routes
+        this.router.use('/tournaments', tournamentRoutes_1.default);
         // Scenario explorer routes (authenticated)
         this.router.use('/scenarios', scenarioRoutes_1.default);
         // Analytics routes (Priority 7.3)

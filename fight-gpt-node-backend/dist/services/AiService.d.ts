@@ -8,6 +8,11 @@ import { IGameMetadata, GameRule, GameRule as CharacterGameRule } from '../types
  */
 export interface IAiService {
     analyzeVideo(request: AnalysisRequest): Promise<AnalysisResponse>;
+    verifyMissionProof(videoUrl: string, missionData: {
+        title: string;
+        description: string;
+        criteria?: any;
+    }): Promise<any>;
     healthCheck(): Promise<boolean>;
     getGameMetadata(gameId: string): Promise<IGameMetadata | null>;
     getCharacterGameRules(gameId: string, characterId: string): Promise<CharacterGameRule[] | null>;
@@ -32,6 +37,14 @@ export declare class AiService extends BaseService implements IAiService {
     private uploadToGemini;
     private waitForProcessing;
     private generateAnalysis;
+    /**
+     * Verify mission proof video
+     */
+    verifyMissionProof(videoUrl: string, missionData: {
+        title: string;
+        description: string;
+        criteria?: any;
+    }): Promise<any>;
     /**
      * Health check
      */

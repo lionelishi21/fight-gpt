@@ -12,6 +12,7 @@ export declare class NotificationService {
         link?: string;
         data?: any;
     }, severity?: 'low' | 'medium' | 'high'): Promise<void>;
+    private sendPushToUser;
     broadcast(type: NotificationType, payload: {
         gameId: string;
         title: string;
@@ -20,6 +21,7 @@ export declare class NotificationService {
         link?: string;
         data?: any;
     }, severity?: 'low' | 'medium' | 'high'): Promise<void>;
+    private sendPushToAll;
     techDiscovery(opts: {
         gameId: string;
         scenarioId: string;

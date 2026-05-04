@@ -70,3 +70,39 @@ export const adminMiddleware = async (req: Request, res: Response, next: NextFun
         res.status(500).json({ success: false, error: 'Server validation error' });
     }
 };
+
+/**
+ * Middleware to check if user has a premium tier (COMPETITOR or PRO)
+ * Must be used AFTER authMiddleware
+ */
+export const premiumMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        // @ts-ignore
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, error: 'Not authorized' });
+            return;
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            res.status(404).json({ success: false, error: 'User not found' });
+            return;
+        }
+
+        // Admins and users with COMPETITOR or PRO tier have premium access
+        if (user.role === 'admin' || user.tier === 'COMPETITOR' || user.tier === 'PRO') {
+            // Attach full user for downstream use
+            (req as any).user = user;
+            next();
+        } else {
+            res.status(403).json({
+                success: false,
+                error: 'Premium subscription required',
+                code: 'PREMIUM_REQUIRED'
+            });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Tier validation error' });
+    }
+};

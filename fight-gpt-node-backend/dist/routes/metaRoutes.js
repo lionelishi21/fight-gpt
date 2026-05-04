@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.IngestionRoutes = exports.MetaRoutes = void 0;
 const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
 class MetaRoutes {
     metaController;
     router;
@@ -14,8 +15,9 @@ class MetaRoutes {
         // Meta intelligence routes
         this.router.get('/:gameId', this.metaController.getLatestMetaReport);
         this.router.post('/:gameId/generate', this.metaController.generateMetaReport);
-        this.router.get('/:gameId/history', this.metaController.getMetaHistory);
-        this.router.get('/:gameId/query', this.metaController.queryMetaInsight);
+        // Gated premium routes
+        this.router.get('/:gameId/history', auth_1.authMiddleware, auth_1.premiumMiddleware, this.metaController.getMetaHistory);
+        this.router.get('/:gameId/query', auth_1.authMiddleware, auth_1.premiumMiddleware, this.metaController.queryMetaInsight);
     }
     getRouter() {
         return this.router;

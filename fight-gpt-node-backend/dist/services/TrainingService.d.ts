@@ -26,5 +26,13 @@ export declare class TrainingService {
         status: string;
         rewardedXp: number;
     }>;
+    /**
+     * Submit video proof for a mission (Tactical Loop)
+     */
+    submitProof(userId: string, missionId: string, proofUrl: string): Promise<{
+        success: boolean;
+        message: string;
+        status: string;
+    }>;
 }
 //# sourceMappingURL=TrainingService.d.ts.map

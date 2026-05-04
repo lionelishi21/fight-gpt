@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -16,18 +49,84 @@ class NotificationService {
     async notify(userId, type, payload, severity = 'medium') {
         try {
             await this.repo.createNotification({ userId: new mongoose_1.default.Types.ObjectId(userId.toString()), type, severity, payload });
+            // Trigger Mobile Push
+            this.sendPushToUser(userId.toString(), payload.title, payload.description, payload.data).catch(err => {
+                console.error('[NotificationService] Push delivery failed:', err);
+            });
         }
         catch (e) {
             console.error('[NotificationService] Failed to create notification:', e);
+        }
+    }
+    async sendPushToUser(userId, title, body, data) {
+        try {
+            const user = await User_1.default.findById(userId).select('pushTokens').lean().exec();
+            if (!user || !user.pushTokens || user.pushTokens.length === 0)
+                return;
+            const { Expo } = await Promise.resolve().then(() => __importStar(require('expo-server-sdk')));
+            const expo = new Expo();
+            const messages = [];
+            for (const token of user.pushTokens) {
+                if (!Expo.isExpoPushToken(token)) {
+                    console.error(`Push token ${token} is not a valid Expo push token`);
+                    continue;
+                }
+                messages.push({
+                    to: token,
+                    sound: 'default',
+                    title,
+                    body,
+                    data,
+                });
+            }
+            if (messages.length > 0) {
+                const chunks = expo.chunkPushNotifications(messages);
+                for (const chunk of chunks) {
+                    await expo.sendPushNotificationsAsync(chunk);
+                }
+            }
+        }
+        catch (err) {
+            console.error('[NotificationService] sendPushToUser error:', err);
         }
     }
     // ─── Broadcast to every user ─────────────────────────────────────────────
     async broadcast(type, payload, severity = 'medium') {
         try {
             await this.repo.broadcastToAllUsers({ type, severity, payload });
+            // Trigger Mobile Push Broadcast
+            this.sendPushToAll(payload.title, payload.description, payload.data).catch(err => {
+                console.error('[NotificationService] Broadcast push failed:', err);
+            });
         }
         catch (e) {
             console.error('[NotificationService] Broadcast failed:', e);
+        }
+    }
+    async sendPushToAll(title, body, data) {
+        try {
+            const users = await User_1.default.find({ pushTokens: { $exists: true, $not: { $size: 0 } } }).select('pushTokens').lean().exec();
+            if (users.length === 0)
+                return;
+            const { Expo } = await Promise.resolve().then(() => __importStar(require('expo-server-sdk')));
+            const expo = new Expo();
+            const messages = [];
+            for (const user of users) {
+                for (const token of user.pushTokens) {
+                    if (Expo.isExpoPushToken(token)) {
+                        messages.push({ to: token, sound: 'default', title, body, data });
+                    }
+                }
+            }
+            if (messages.length > 0) {
+                const chunks = expo.chunkPushNotifications(messages);
+                for (const chunk of chunks) {
+                    await expo.sendPushNotificationsAsync(chunk);
+                }
+            }
+        }
+        catch (err) {
+            console.error('[NotificationService] sendPushToAll error:', err);
         }
     }
     // ─── Typed helpers ───────────────────────────────────────────────────────

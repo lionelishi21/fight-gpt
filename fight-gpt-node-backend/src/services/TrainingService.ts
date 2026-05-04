@@ -86,4 +86,45 @@ export class TrainingService {
             rewardedXp: rewardXp,
         };
     }
+
+    /**
+     * Submit video proof for a mission (Tactical Loop)
+     */
+    public async submitProof(userId: string, missionId: string, proofUrl: string) {
+        const mission = await Mission.findById(missionId);
+        if (!mission) throw new Error('Mission not found');
+
+        // 1. Create/Update UserMission as PENDING
+        let userMission = await UserMission.findOne({ user: userId, mission: missionId });
+        if (userMission && userMission.status === 'COMPLETED') {
+            throw new Error('Mission already completed');
+        }
+
+        if (!userMission) {
+            userMission = new UserMission({
+                user: userId,
+                mission: missionId,
+                status: 'PENDING',
+                metadata: { proofUrl, submittedAt: new Date() }
+            });
+        } else {
+            userMission.status = 'PENDING';
+            userMission.metadata = { ...userMission.metadata, proofUrl, submittedAt: new Date() };
+        }
+        await userMission.save();
+
+        // 2. Enqueue for AI validation
+        const { queueService } = await import('./QueueService');
+        await queueService.addProofValidationJob({
+            userId,
+            missionId,
+            proofUrl
+        });
+
+        return {
+            success: true,
+            message: 'Proof submitted for AI verification. You will be notified once validated.',
+            status: 'PENDING'
+        };
+    }
 }

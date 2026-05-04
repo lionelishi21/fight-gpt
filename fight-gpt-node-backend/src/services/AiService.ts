@@ -20,6 +20,7 @@ const execAsync = promisify(exec);
  */
 export interface IAiService {
   analyzeVideo(request: AnalysisRequest): Promise<AnalysisResponse>;
+  verifyMissionProof(videoUrl: string, missionData: { title: string; description: string; criteria?: any }): Promise<any>;
   healthCheck(): Promise<boolean>;
   getGameMetadata(gameId: string): Promise<IGameMetadata | null>;
   getCharacterGameRules(gameId: string, characterId: string): Promise<CharacterGameRule[] | null>;
@@ -159,6 +160,39 @@ export class AiService extends BaseService implements IAiService {
     }
 
     throw lastError ?? new Error('All Gemini models failed');
+  }
+
+  /**
+   * Verify mission proof video
+   */
+  async verifyMissionProof(videoUrl: string, missionData: { title: string; description: string; criteria?: any }): Promise<any> {
+    try {
+      let prompt = VersionResolver.resolvePrompt('v1_mission_proof');
+      
+      // Inject mission details into prompt
+      prompt = prompt
+        .replace('{{title}}', missionData.title)
+        .replace('{{description}}', missionData.description)
+        .replace('{{criteria}}', JSON.stringify(missionData.criteria || 'Standard execution.'));
+
+      const contentParts: any[] = [
+        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+        { text: prompt }
+      ];
+
+      const model = this.genAI.getGenerativeModel({
+        model: this.modelName,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      const result = await model.generateContent(contentParts);
+      let responseText = result.response.text();
+      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      return JSON.parse(responseText);
+    } catch (error) {
+      throw this.handleError(error, 'verifyMissionProof');
+    }
   }
 
   /**

@@ -89,6 +89,23 @@ Use this exact schema:
   }
 }
 `,
+        'v1_mission_proof': `You are an expert Fighting Game Sensei. Your task is to verify if the provided video proof shows the player successfully completing the mission described below.
+Look for technical accuracy in move execution, timing, and situational awareness.
+
+MISSION DETAILS:
+Title: {{title}}
+Description: {{description}}
+Criteria: {{criteria}}
+
+You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this schema:
+{
+  "status": "success | failed",
+  "verified": true | false,
+  "feedback": "Explain why it passed or failed. Be technical.",
+  "technique_score": 0-100,
+  "timestamp_of_success": "MM:SS (if verified, else null)"
+}
+`
     };
     /**
      * Resolves the prompt template for a given version.

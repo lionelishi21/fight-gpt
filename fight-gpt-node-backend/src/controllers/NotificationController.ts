@@ -48,6 +48,28 @@ export class NotificationController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to mark all as read', 500);
         }
     };
+
+    public registerPushToken = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const userId = (req as any).user?.id || (req as any).user?._id;
+            const { token } = req.body;
+            
+            if (!token) {
+                this.sendError(res, 'Push token is required', 400);
+                return;
+            }
+
+            const User = (await import('../models/User')).default;
+            await User.updateOne(
+                { _id: userId },
+                { $addToSet: { pushTokens: token } }
+            );
+
+            this.sendResponse(res, { success: true, message: 'Push token registered successfully' });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to register push token', 500);
+        }
+    };
 }
 
 export default NotificationController;

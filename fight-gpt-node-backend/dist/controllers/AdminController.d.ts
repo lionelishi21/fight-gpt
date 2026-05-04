@@ -4,6 +4,7 @@ import { IAdminService } from '../services/AdminService';
 import { IIngestionService } from '../services/IngestionService';
 import { IMetaService } from '../services/MetaService';
 import { AutoResearchService } from '../services/AutoResearchService';
+import { RosterSyncService } from '../services/RosterSyncService';
 export declare class AdminController extends BaseController {
     private readonly adminService;
     private readonly ingestionService?;
@@ -11,7 +12,8 @@ export declare class AdminController extends BaseController {
     private readonly autoResearchService?;
     private readonly onboardingService;
     private readonly patchService;
-    constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService);
+    private readonly rosterSyncService?;
+    constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService, rosterSyncService?: RosterSyncService);
     /**
      * GET /api/admin/stats
      * Get system health and queue status
@@ -152,5 +154,20 @@ export declare class AdminController extends BaseController {
      * Get patch history for a game
      */
     getPatchHistory: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/:gameId/sync
+     * Manually trigger roster and frame data sync for a game
+     */
+    syncGameData: (req: Request, res: Response) => Promise<void>;
+    /**
+     * GET /api/admin/theory/staging
+     * Get all pending theories for staging
+     */
+    getStagingTheories: (req: Request, res: Response) => Promise<void>;
+    /**
+     * PATCH /api/admin/theory/:id/status
+     * Update theory status and optional content
+     */
+    updateTheoryStatus: (req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=AdminController.d.ts.map

@@ -182,7 +182,7 @@ export class AuthController extends BaseController {
                         // Ensure mainCharacter is reactive for the web frontend
                         preferences: {
                             ...user.preferences,
-                            mainCharacter: activeGame?.character || user.preferences?.mainCharacter
+                            mainCharacter: user.slots[0]?.characterId || activeGame?.character || user.preferences?.mainCharacter
                         }
                     },
                 },

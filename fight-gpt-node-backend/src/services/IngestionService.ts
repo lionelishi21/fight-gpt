@@ -8,6 +8,7 @@ import { IGameSearchStrategyRepository } from '../repositories/GameSearchStrateg
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { Logger } from '../helpers/logger';
+import { queueService } from './QueueService';
 
 const execAsync = promisify(exec);
 
@@ -121,6 +122,14 @@ export class IngestionService extends BaseService implements IIngestionService {
                             status: 'pending',
                             retry_count: 0,
                         });
+
+                        // Enqueue for background processing
+                        await queueService.addAnalysisJob({
+                            job_id: job.job_id,
+                            game_id: gameId,
+                            youtube_url: url
+                        });
+
                         result.queued_count++;
                     } catch (e) {
                         // Likely duplicate URL index violation — skip silently
@@ -250,7 +259,7 @@ export class IngestionService extends BaseService implements IIngestionService {
 
             for (const gameId of gameIds) {
                 try {
-                    const maxVideosToFetch = gameId === 'sf6' ? 20 : 10;
+                    const maxVideosToFetch = gameId === 'sf6' ? 50 : 20;
                     await this.triggerIngestion(gameId, maxVideosToFetch);
                 } catch (e) {
                     Logger.error(`[IngestionService] Scheduler failed for ${gameId}`, e);
@@ -259,10 +268,6 @@ export class IngestionService extends BaseService implements IIngestionService {
 
             // 2. Pro Player prioritized ingestion (including Japan)
             await this.ingestProPlayers();
-
-            // 3. Process the queue
-            await this.processQueue('sf6', 15);
-            await this.processQueue(undefined, 10);
         }, intervalMs);
     }
 
@@ -292,6 +297,14 @@ export class IngestionService extends BaseService implements IIngestionService {
                             source: 'pro_scout',
                             status: 'pending',
                             retry_count: 0,
+                            pro_player_id: (pro as any)._id.toString()
+                        });
+
+                        // Enqueue for background processing
+                        await queueService.addAnalysisJob({
+                            job_id: job.job_id,
+                            game_id: pro.gameId,
+                            youtube_url: url,
                             pro_player_id: (pro as any)._id.toString()
                         });
                     }
@@ -339,6 +352,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                 maxResults: String(maxResults),
                 videoDuration: 'medium', // 4-20 min — typical match length
                 relevanceLanguage: 'en',
+                order: 'date',
                 key: apiKey,
             });
 

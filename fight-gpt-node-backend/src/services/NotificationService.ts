@@ -16,8 +16,47 @@ export class NotificationService {
     ) {
         try {
             await this.repo.createNotification({ userId: new mongoose.Types.ObjectId(userId.toString()), type, severity, payload });
+            
+            // Trigger Mobile Push
+            this.sendPushToUser(userId.toString(), payload.title, payload.description, payload.data).catch(err => {
+                console.error('[NotificationService] Push delivery failed:', err);
+            });
         } catch (e) {
             console.error('[NotificationService] Failed to create notification:', e);
+        }
+    }
+
+    private async sendPushToUser(userId: string, title: string, body: string, data?: any) {
+        try {
+            const user = await User.findById(userId).select('pushTokens').lean().exec();
+            if (!user || !user.pushTokens || user.pushTokens.length === 0) return;
+
+            const { Expo } = await import('expo-server-sdk');
+            const expo = new Expo();
+            const messages = [];
+
+            for (const token of user.pushTokens) {
+                if (!Expo.isExpoPushToken(token)) {
+                    console.error(`Push token ${token} is not a valid Expo push token`);
+                    continue;
+                }
+                messages.push({
+                    to: token,
+                    sound: 'default',
+                    title,
+                    body,
+                    data,
+                });
+            }
+
+            if (messages.length > 0) {
+                const chunks = expo.chunkPushNotifications(messages);
+                for (const chunk of chunks) {
+                    await expo.sendPushNotificationsAsync(chunk);
+                }
+            }
+        } catch (err) {
+            console.error('[NotificationService] sendPushToUser error:', err);
         }
     }
 
@@ -29,8 +68,41 @@ export class NotificationService {
     ) {
         try {
             await this.repo.broadcastToAllUsers({ type, severity, payload });
+            
+            // Trigger Mobile Push Broadcast
+            this.sendPushToAll(payload.title, payload.description, payload.data).catch(err => {
+                console.error('[NotificationService] Broadcast push failed:', err);
+            });
         } catch (e) {
             console.error('[NotificationService] Broadcast failed:', e);
+        }
+    }
+
+    private async sendPushToAll(title: string, body: string, data?: any) {
+        try {
+            const users = await User.find({ pushTokens: { $exists: true, $not: { $size: 0 } } }).select('pushTokens').lean().exec();
+            if (users.length === 0) return;
+
+            const { Expo } = await import('expo-server-sdk');
+            const expo = new Expo();
+            const messages = [];
+
+            for (const user of users) {
+                for (const token of user.pushTokens) {
+                    if (Expo.isExpoPushToken(token)) {
+                        messages.push({ to: token, sound: 'default', title, body, data });
+                    }
+                }
+            }
+
+            if (messages.length > 0) {
+                const chunks = expo.chunkPushNotifications(messages);
+                for (const chunk of chunks) {
+                    await expo.sendPushNotificationsAsync(chunk);
+                }
+            }
+        } catch (err) {
+            console.error('[NotificationService] sendPushToAll error:', err);
         }
     }
 

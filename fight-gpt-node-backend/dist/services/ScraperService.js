@@ -5,7 +5,8 @@ const playwright_1 = require("playwright");
 class ScraperService {
     characterService;
     browser = null;
-    baseUrl = "https://wiki.supercombo.gg/w/Street_Fighter_6";
+    baseUrlSF6 = "https://wiki.supercombo.gg/w/Street_Fighter_6";
+    baseUrlT8 = "https://wiki.supercombo.gg/w/Tekken_8";
     constructor(characterService) {
         this.characterService = characterService;
     }
@@ -19,10 +20,7 @@ class ScraperService {
         }
     }
     async scrapeRoster(gameId) {
-        if (gameId !== 'sf6') {
-            console.log(`Scraping roster for ${gameId} is not supported yet.`);
-            return [];
-        }
+        const url = gameId === 'sf6' ? this.baseUrlSF6 : this.baseUrlT8;
         if (!this.browser)
             await this.initialize();
         const context = await this.browser.newContext({
@@ -30,8 +28,8 @@ class ScraperService {
         });
         const page = await context.newPage();
         try {
-            console.log(`Scraping roster for ${gameId} at ${this.baseUrl}`);
-            await page.goto(this.baseUrl, { waitUntil: 'networkidle', timeout: 60000 });
+            console.log(`Scraping roster for ${gameId} at ${url}`);
+            await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
             // Wait for characters table or section
             await page.waitForTimeout(5000);
             const roster = await page.evaluate(() => {
@@ -74,15 +72,16 @@ class ScraperService {
             await context.close();
         }
     }
-    async scrapeCharacter(characterName) {
+    async scrapeCharacter(characterName, gameId = 'sf6') {
         if (!this.browser)
             await this.initialize();
         const context = await this.browser.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
         });
         const page = await context.newPage();
+        const baseUrl = gameId === 'sf6' ? this.baseUrlSF6 : this.baseUrlT8;
         const slug = characterName.replace(/ /g, "_");
-        const url = `${this.baseUrl}/${slug}`;
+        const url = gameId === 'sf6' ? `${baseUrl}/${slug}` : `${baseUrl}/${slug.replace(/ /g, "_")}`; // Tekken 8 might need specific slug logic
         try {
             console.log(`Scraping ${characterName} at ${url}`);
             // Use networkidle and add a manual wait for the challenge to pass

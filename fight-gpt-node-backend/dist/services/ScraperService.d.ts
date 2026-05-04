@@ -2,7 +2,8 @@ import { ICharacterEncyclopediaService } from './CharacterEncyclopediaService';
 export declare class ScraperService {
     private characterService;
     private browser;
-    private readonly baseUrl;
+    private readonly baseUrlSF6;
+    private readonly baseUrlT8;
     constructor(characterService: ICharacterEncyclopediaService);
     initialize(): Promise<void>;
     close(): Promise<void>;
@@ -10,7 +11,7 @@ export declare class ScraperService {
         name: string;
         status: 'released' | 'coming_soon';
     }[]>;
-    scrapeCharacter(characterName: string): Promise<any>;
+    scrapeCharacter(characterName: string, gameId?: string): Promise<any>;
     scrapeCombos(characterName: string): Promise<any[]>;
     scrapeYouTube(query: string): Promise<any[]>;
     private sanitize;

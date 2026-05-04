@@ -69,6 +69,7 @@ const TheoryDocumentSchema = new mongoose_1.Schema({
             }]
     },
     generated_at: { type: Date, required: true },
+    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
