@@ -10,7 +10,11 @@ export class AppConfig {
   public static get MONGODB_URI(): string { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
   public static get RATE_LIMIT_WINDOW_MS(): number { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
   public static get RATE_LIMIT_MAX_REQUESTS(): number { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10); }
-  public static get CORS_ORIGIN(): string { return process.env.CORS_ORIGIN || 'http://localhost:5174'; }
+  public static get CORS_ORIGINS(): string[] | boolean { 
+    if (process.env.CORS_ORIGIN === '*') return true;
+    if (process.env.CORS_ORIGIN) return process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+    return ['http://localhost:5174', 'http://localhost:3000', 'https://metapunish.com', 'https://www.metapunish.com']; 
+  }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
   public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.5-flash'; }

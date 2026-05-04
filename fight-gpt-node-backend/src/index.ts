@@ -226,7 +226,7 @@ export class App {
     // CORS middleware
     this.app.use(
       cors({
-        origin: AppConfig.CORS_ORIGIN === '*' ? true : AppConfig.CORS_ORIGIN,
+        origin: AppConfig.CORS_ORIGINS,
         credentials: true,
       })
     );
