@@ -175,7 +175,7 @@ export class NotificationService {
             title: `New AI theory — ${char.toUpperCase()}`,
             description: opts.headline,
             characterId: opts.characterName,
-            link: `/dashboard/meta?theory=${opts.theoryId}`,
+            link: `/dashboard/theory/${opts.theoryId}`,
             data: opts,
         }, 'medium');
     }
@@ -185,7 +185,7 @@ export class NotificationService {
             gameId: opts.gameId,
             title: `Matchup theory updated — ${opts.charA} vs ${opts.charB}`,
             description: opts.headline,
-            link: `/dashboard/meta?theory=${opts.theoryId}`,
+            link: `/dashboard/theory/${opts.theoryId}`,
             data: opts,
         }, 'medium');
     }

@@ -18,6 +18,7 @@ export interface ITheoryService {
     getCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;
+    getTheoryById(id: string): Promise<ApiResponse<ITheoryDocument>>;
 }
 
 export class TheoryService extends BaseService implements ITheoryService {
@@ -76,6 +77,7 @@ export class TheoryService extends BaseService implements ITheoryService {
                 patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
+                youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
             });
 
             // Fire notification to all users who might care
@@ -133,6 +135,7 @@ export class TheoryService extends BaseService implements ITheoryService {
                 patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
+                youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
             });
 
             this.notificationService?.matchupTheory({
@@ -182,6 +185,16 @@ export class TheoryService extends BaseService implements ITheoryService {
             return { success: true, data: theories as unknown as ITheoryDocument[] };
         } catch (error) {
             throw this.handleError(error, 'getAllCharacterTheories');
+        }
+    }
+
+    async getTheoryById(id: string): Promise<ApiResponse<ITheoryDocument>> {
+        try {
+            const theory = await this.theoryRepository.getTheoryById(id);
+            if (!theory) return { success: false, error: 'Theory not found' };
+            return { success: true, data: theory as unknown as ITheoryDocument };
+        } catch (error) {
+            throw this.handleError(error, 'getTheoryById');
         }
     }
 

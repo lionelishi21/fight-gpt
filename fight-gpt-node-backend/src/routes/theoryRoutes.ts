@@ -15,6 +15,9 @@ export class TheoryRoutes {
         this.router.use(authMiddleware);
         this.router.use(premiumMiddleware);
 
+        // Direct ID lookup
+        this.router.get('/id/:id', this.theoryController.getTheoryById);
+
         // Character theory
         this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);

@@ -62,4 +62,14 @@ export class TheoryController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
         }
     };
+
+    /** GET /api/theory/:id */
+    getTheoryById = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const result = await this.theoryService.getTheoryById(req.params.id);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
+        }
+    };
 }

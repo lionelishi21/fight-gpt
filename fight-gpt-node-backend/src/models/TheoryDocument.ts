@@ -40,6 +40,7 @@ export interface ITheoryDocument {
     };
 
     generated_at: Date;
+    youtube_url?: string; // Reference video for the theory (e.g. a matchup demonstration)
     created_at?: Date;
     updated_at?: Date;
     status: 'pending' | 'approved' | 'rejected';
@@ -90,6 +91,7 @@ const TheoryDocumentSchema = new Schema<ITheoryDocumentDocument>({
     },
 
     generated_at: { type: Date, required: true },
+    youtube_url: { type: String },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
