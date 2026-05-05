@@ -240,7 +240,7 @@ class NotificationService {
             gameId: opts.gameId,
             title: `RIVAL SPOTTED: ${opts.rivalName}`,
             description: `Your tracked rival ${opts.rivalName} was found in a new match.`,
-            link: opts.youtubeUrl,
+            link: `/dashboard/matches?id=${opts.analysisId}`,
             data: { rivalName: opts.rivalName, analysisId: opts.analysisId }
         }, 'high');
         // 2. Send email alert
@@ -254,6 +254,16 @@ class NotificationService {
         catch (err) {
             console.error('[NotificationService] Failed to send rival watch email:', err);
         }
+    }
+    async proScout(userId, opts) {
+        await this.notify(userId, 'PRO_SCOUT', {
+            gameId: opts.gameId,
+            characterId: opts.characterId,
+            title: `PRO SCOUT: ${opts.proName}`,
+            description: `New high-level footage analyzed for ${opts.proName}.`,
+            link: `/dashboard/matches?id=${opts.analysisId}`,
+            data: { proName: opts.proName, analysisId: opts.analysisId }
+        }, 'medium');
     }
 }
 exports.NotificationService = NotificationService;

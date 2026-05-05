@@ -92,5 +92,11 @@ export declare class NotificationService {
         analysisId: string;
         youtubeUrl?: string;
     }): Promise<void>;
+    proScout(userId: string, opts: {
+        gameId: string;
+        proName: string;
+        analysisId: string;
+        characterId?: string;
+    }): Promise<void>;
 }
 //# sourceMappingURL=NotificationService.d.ts.map

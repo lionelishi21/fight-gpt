@@ -88,7 +88,6 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                       gameName,
                       rivalName: name,
                       analysisId,
-                      youtubeUrl: request.youtube_url
                   });
               }
           }
@@ -115,16 +114,14 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                   }).limit(100);
 
                   for (const user of usersToNotify) {
-                      await this.notificationService.notify((user as any)._id, 'PRO_SCOUT', {
+                      await this.notificationService.proScout(user._id.toString(), {
                           gameId: request.game_id || 'unknown',
+                          proName: name,
+                          analysisId,
                           characterId: (analysisResponse.p1_name?.toLowerCase() === name.toLowerCase()) 
                               ? analysisResponse.p1_character 
                               : analysisResponse.p2_character,
-                          title: `PRO SCOUT: ${name}`,
-                          description: `New high-level footage analyzed for ${name}.`,
-                          link: request.youtube_url || undefined,
-                          data: { proName: name, analysisId }
-                      }, 'medium');
+                      });
                   }
               }
           }
