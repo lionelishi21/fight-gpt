@@ -12,7 +12,7 @@ class AppConfig {
     static get AI_SERVICE_TIMEOUT() { return parseInt(process.env.AI_SERVICE_TIMEOUT || '600000', 10); }
     static get MONGODB_URI() { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
     static get RATE_LIMIT_WINDOW_MS() { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
-    static get RATE_LIMIT_MAX_REQUESTS() { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10); }
+    static get RATE_LIMIT_MAX_REQUESTS() { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10); }
     static get CORS_ORIGINS() {
         if (process.env.CORS_ORIGIN === '*')
             return true;
