@@ -35,5 +35,22 @@ module.exports = {
       // Source maps for better stack traces
       source_map_support: true,
     },
+    {
+      name: 'fightgpt-worker',
+      script: 'dist/worker.js',
+      instances: 1, // Workers should typically run in solo mode to avoid Redis lock contention
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '1G', // Video analysis is memory intensive
+      out_file: 'logs/worker-out.log',
+      error_file: 'logs/worker-error.log',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      env_production: {
+        NODE_ENV: 'production',
+      },
+      watch: false,
+      source_map_support: true,
+    },
   ],
 };
