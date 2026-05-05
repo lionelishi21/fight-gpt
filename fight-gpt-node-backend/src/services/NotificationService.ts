@@ -26,7 +26,7 @@ export class NotificationService {
         }
     }
 
-    private async sendPushToUser(userId: string, title: string, body: string, data?: any) {
+    public async sendPushToUser(userId: string, title: string, body: string, data?: any) {
         try {
             const user = await User.findById(userId).select('pushTokens').lean().exec();
             if (!user || !user.pushTokens || user.pushTokens.length === 0) return;

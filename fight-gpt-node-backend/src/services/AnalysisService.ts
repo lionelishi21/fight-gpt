@@ -151,11 +151,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               }).limit(100);
 
               for (const user of usersToNotify) {
-                await this.notificationService.createNotification({
-                  userId: (user as any)._id,
-                  type: 'TECH_DISCOVERY',
-                  severity: 'high',
-                  payload: {
+                await this.notificationService.notify((user as any)._id, 'TECH_DISCOVERY', {
                     gameId: request.game_id || 'unknown',
                     characterId: this.sanitizeAiString(analysisResponse.p1_character) || undefined,
                     title: `[${charLabel}] New tech — ${(event.event_type || 'Discovery').replace(/_/g, ' ')}`,
@@ -167,8 +163,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
                       youtubeUrl: request.youtube_url,
                       novelty_score: 1 - ((similarScenarios[0] as any)?.score || 0),
                     },
-                  },
-                });
+                }, 'high');
               }
             }
           } catch (e) {

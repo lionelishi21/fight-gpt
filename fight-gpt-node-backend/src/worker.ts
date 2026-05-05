@@ -165,11 +165,7 @@ async function runWorker() {
                         await gamificationService.addXp(userId, mission.reward.xp);
 
                         // 3. Send Notification
-                        await notificationService.sendPushToUser(userId, {
-                            title: 'MISSION VERIFIED',
-                            body: `Sensei validated your technique! +${mission.reward.xp} XP awarded.`,
-                            data: { type: 'mission_completed', missionId }
-                        });
+                        await notificationService.sendPushToUser(userId, 'MISSION VERIFIED', `Sensei validated your technique! +${mission.reward.xp} XP awarded.`, { type: 'mission_completed', missionId });
 
                         Logger.info(`[Worker] Mission ${missionId} verified for User ${userId}`);
                     } else {
@@ -181,11 +177,7 @@ async function runWorker() {
                         };
                         await userMission.save();
 
-                        await notificationService.sendPushToUser(userId, {
-                            title: 'MISSION FAILED',
-                            body: `Sensei review: ${validationResult.feedback}`,
-                            data: { type: 'mission_failed', missionId }
-                        });
+                        await notificationService.sendPushToUser(userId, 'MISSION FAILED', `Sensei review: ${validationResult.feedback}`, { type: 'mission_failed', missionId });
 
                         Logger.info(`[Worker] Mission ${missionId} rejected for User ${userId}`);
                     }

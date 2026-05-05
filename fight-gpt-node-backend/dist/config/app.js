@@ -13,7 +13,13 @@ class AppConfig {
     static get MONGODB_URI() { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
     static get RATE_LIMIT_WINDOW_MS() { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
     static get RATE_LIMIT_MAX_REQUESTS() { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10); }
-    static get CORS_ORIGIN() { return process.env.CORS_ORIGIN || 'http://localhost:5174'; }
+    static get CORS_ORIGINS() {
+        if (process.env.CORS_ORIGIN === '*')
+            return true;
+        if (process.env.CORS_ORIGIN)
+            return process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+        return ['http://localhost:5174', 'http://localhost:3000', 'https://metapunish.com', 'https://www.metapunish.com'];
+    }
     static get LOG_LEVEL() { return process.env.LOG_LEVEL || 'info'; }
     static get GEMINI_API_KEY() { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
     static get GEMINI_MODEL() { return process.env.GEMINI_MODEL || 'gemini-2.5-flash'; }

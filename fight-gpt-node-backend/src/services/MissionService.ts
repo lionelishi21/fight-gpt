@@ -72,24 +72,37 @@ export class MissionService {
     if (!user) return;
 
     if (!user.gamification) {
-      user.gamification = { level: 1, xp: 0, nextLevelXp: 100, rank: 'ROOKIE', stats: {} };
+      user.gamification = { 
+        level: 1, 
+        xp: 0, 
+        rank: 'ROOKIE', 
+        stats: {
+          defense: 50,
+          execution: 50,
+          neutral: 50,
+          knowledge: 50,
+          resourceManagement: 50
+        },
+        heatmap: []
+      };
     }
 
     // Update XP
     user.gamification.xp += xp;
 
-    // Handle Level Up
-    if (user.gamification.xp >= user.gamification.nextLevelXp) {
-        user.gamification.level += 1;
-        user.gamification.xp -= user.gamification.nextLevelXp;
-        user.gamification.nextLevelXp = Math.floor(user.gamification.nextLevelXp * 1.5);
+    // Handle Level Up - Simple XP growth (Levels are every 500 XP)
+    const newLevel = Math.floor(user.gamification.xp / 500) + 1;
+    if (newLevel > user.gamification.level) {
+        user.gamification.level = newLevel;
     }
 
     // Update specific skill
-    const currentStats = user.gamification.stats || {};
-    const currentVal = currentStats[skill] || 50;
-    currentStats[skill] = Math.min(100, currentVal + 5);
+    const currentStats = user.gamification.stats;
+    const skillKey = skill as keyof typeof currentStats;
+    const currentVal = (currentStats as any)[skillKey] || 50;
+    (currentStats as any)[skillKey] = Math.min(100, currentVal + 5);
     user.gamification.stats = currentStats;
+    user.markModified('gamification.stats');
 
     await user.save();
   }

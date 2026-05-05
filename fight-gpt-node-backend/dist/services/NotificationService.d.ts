@@ -12,7 +12,7 @@ export declare class NotificationService {
         link?: string;
         data?: any;
     }, severity?: 'low' | 'medium' | 'high'): Promise<void>;
-    private sendPushToUser;
+    sendPushToUser(userId: string, title: string, body: string, data?: any): Promise<void>;
     broadcast(type: NotificationType, payload: {
         gameId: string;
         title: string;

@@ -86,6 +86,7 @@ class App {
     app;
     routes;
     ingestionService = null;
+    rosterSyncService = null;
     constructor() {
         // Validate configuration
         app_1.AppConfig.validate();
@@ -124,7 +125,7 @@ class App {
         const userService = app_1.AppConfig.MONGODB_URI ? new UserService_1.UserService() : null;
         const adminService = app_1.AppConfig.MONGODB_URI ? new AdminService_1.AdminService() : null;
         const scraperService = app_1.AppConfig.MONGODB_URI ? new ScraperService_1.ScraperService(characterEncyclopediaService) : null;
-        const rosterSyncService = app_1.AppConfig.MONGODB_URI ? new RosterSyncService_1.RosterSyncService(scraperService) : null;
+        this.rosterSyncService = app_1.AppConfig.MONGODB_URI ? new RosterSyncService_1.RosterSyncService(scraperService) : null;
         const autoResearchService = app_1.AppConfig.MONGODB_URI
             ? new AutoResearchService_1.AutoResearchService(theoryService, notificationService)
             : null;
@@ -143,7 +144,7 @@ class App {
         const notificationController = app_1.AppConfig.MONGODB_URI ? new NotificationController_1.NotificationController(notificationRepository) : null;
         const rivalController = app_1.AppConfig.MONGODB_URI ? new RivalController_1.RivalController(rivalService, auditLogRepository) : null;
         const userController = app_1.AppConfig.MONGODB_URI ? new UserController_1.UserController(userService, auditLogRepository) : null;
-        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, rosterSyncService ?? undefined) : null;
+        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, this.rosterSyncService ?? undefined) : null;
         let paymentService;
         let paymentController;
         try {
@@ -174,7 +175,7 @@ class App {
         this.app.use((0, helmet_1.default)());
         // CORS middleware
         this.app.use((0, cors_1.default)({
-            origin: app_1.AppConfig.CORS_ORIGIN === '*' ? true : app_1.AppConfig.CORS_ORIGIN,
+            origin: app_1.AppConfig.CORS_ORIGINS,
             credentials: true,
         }));
         // Compression middleware
@@ -253,19 +254,19 @@ class App {
             // Connect to database
             await database_1.Database.connect();
             // Run system initialization (auto-seeding & admin setup)
-            const metaRoutes = this.routes.getMetaRoutes();
-            const metaService = metaRoutes?.getController()?.getMetaService();
-            await SystemInitializer_1.SystemInitializer.run(metaService ?? undefined, rosterSyncService ?? undefined);
+            const startMetaRoutes = this.routes.getMetaRoutes();
+            const startMetaService = startMetaRoutes?.getController()?.getMetaService();
+            SystemInitializer_1.SystemInitializer.run(startMetaService ?? undefined, this.rosterSyncService ?? undefined).catch(err => {
+                logger_1.Logger.error('SYSTEM_INITIALIZATION: Failed during startup', err);
+            });
             // Start ingestion scheduler (every 6 hours)
             if (this.ingestionService) {
                 this.ingestionService.startScheduler();
             }
             // Start meta synthesis scheduler (every 24 hours)
-            const metaRoutes = this.routes.getMetaRoutes();
-            if (metaRoutes) {
-                const metaService = metaRoutes.getController().getMetaService();
-                if (metaService) {
-                    metaService.startScheduler();
+            if (startMetaRoutes) {
+                if (startMetaService) {
+                    startMetaService.startScheduler();
                 }
             }
             // Start server

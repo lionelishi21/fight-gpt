@@ -10,7 +10,7 @@ export declare class AppConfig {
     static get MONGODB_URI(): string;
     static get RATE_LIMIT_WINDOW_MS(): number;
     static get RATE_LIMIT_MAX_REQUESTS(): number;
-    static get CORS_ORIGIN(): string;
+    static get CORS_ORIGINS(): string[] | boolean;
     static get LOG_LEVEL(): string;
     static get GEMINI_API_KEY(): string;
     static get GEMINI_MODEL(): string;

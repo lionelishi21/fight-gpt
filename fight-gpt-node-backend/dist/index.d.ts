@@ -8,6 +8,7 @@ export declare class App {
     private app;
     private routes;
     private ingestionService;
+    private rosterSyncService;
     constructor();
     /**
      * Setup middleware

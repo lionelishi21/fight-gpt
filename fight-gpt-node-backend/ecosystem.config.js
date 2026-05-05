@@ -18,8 +18,8 @@ module.exports = {
       max_memory_restart: '512M',
 
       // Logging
-      out_file: '/var/log/fightgpt/out.log',
-      error_file: '/var/log/fightgpt/error.log',
+      out_file: 'logs/pm2-out.log',
+      error_file: 'logs/pm2-error.log',
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
 

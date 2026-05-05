@@ -318,9 +318,9 @@ export class App {
       await Database.connect();
 
       // Run system initialization (auto-seeding & admin setup)
-      const metaRoutes = this.routes.getMetaRoutes();
-      const metaService = metaRoutes?.getController()?.getMetaService();
-      SystemInitializer.run(metaService ?? undefined, this.rosterSyncService ?? undefined).catch(err => {
+      const startMetaRoutes = this.routes.getMetaRoutes();
+      const startMetaService = startMetaRoutes?.getController()?.getMetaService();
+      SystemInitializer.run(startMetaService ?? undefined, this.rosterSyncService ?? undefined).catch(err => {
         Logger.error('SYSTEM_INITIALIZATION: Failed during startup', err);
       });
 
@@ -330,9 +330,9 @@ export class App {
       }
 
       // Start meta synthesis scheduler (every 24 hours)
-      if (metaRoutes) {
-        if (metaService) {
-          metaService.startScheduler();
+      if (startMetaRoutes) {
+        if (startMetaService) {
+          startMetaService.startScheduler();
         }
       }
 

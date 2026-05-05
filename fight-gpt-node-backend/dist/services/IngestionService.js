@@ -120,7 +120,7 @@ class IngestionService extends BaseService_1.BaseService {
                             result.skipped_count++;
                             continue;
                         }
-                        await this.ingestionRepository.createJob({
+                        const job = await this.ingestionRepository.createJob({
                             job_id: uuidHelper_1.UuidHelper.generate(),
                             game_id: gameId,
                             youtube_url: url,
@@ -271,7 +271,7 @@ class IngestionService extends BaseService_1.BaseService {
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing)
                             continue;
-                        await this.ingestionRepository.createJob({
+                        const job = await this.ingestionRepository.createJob({
                             job_id: uuidHelper_1.UuidHelper.generate(),
                             game_id: pro.gameId,
                             youtube_url: url,

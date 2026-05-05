@@ -113,7 +113,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             continue;
                         }
 
-                        await this.ingestionRepository.createJob({
+                        const job = await this.ingestionRepository.createJob({
                             job_id: UuidHelper.generate(),
                             game_id: gameId,
                             youtube_url: url,
@@ -289,7 +289,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) continue;
 
-                        await this.ingestionRepository.createJob({
+                        const job = await this.ingestionRepository.createJob({
                             job_id: UuidHelper.generate(),
                             game_id: pro.gameId,
                             youtube_url: url,

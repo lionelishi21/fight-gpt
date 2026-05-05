@@ -228,7 +228,7 @@ export class ScraperService {
         });
         const page = await context.newPage();
         const slug = characterName.replace(/ /g, "_");
-        const url = `${this.baseUrl}/${slug}/Combos`;
+        const url = `${this.baseUrlSF6}/${slug}/Combos`;
 
         try {
             console.log(`Scraping combos for ${characterName} at ${url}`);

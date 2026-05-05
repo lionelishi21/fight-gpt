@@ -36,10 +36,10 @@ class SystemInitializer {
             // 3. Schedule Weekly Roster & Frame Data Sync (Every Sunday at 3am)
             if (rosterSyncService) {
                 logger_1.Logger.info('SYSTEM_INITIALIZATION: Running light roster sync for SF6/T8...');
-                // Fast check on startup (Full sync for SF6 to ensure frame data is populated)
-                await rosterSyncService.syncRoster('sf6', true);
+                // Fast check on startup (Full sync for SF6 to ensure frame data is populated, running asynchronously)
+                rosterSyncService.syncRoster('sf6', true).catch(err => logger_1.Logger.error('SF6 Sync Error', err));
                 // Also trigger Tekken 8 light sync
-                await rosterSyncService.syncRoster('tekken8', false);
+                rosterSyncService.syncRoster('tekken8', false).catch(err => logger_1.Logger.error('T8 Sync Error', err));
                 logger_1.Logger.info('SYSTEM_INITIALIZATION: Scheduling weekly full roster sync (Sunday 3am)');
                 node_cron_1.default.schedule('0 3 * * 0', async () => {
                     logger_1.Logger.info('CRON_JOB: Starting weekly full roster sync for SF6...');
