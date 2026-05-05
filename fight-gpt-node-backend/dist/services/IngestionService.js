@@ -238,7 +238,7 @@ class IngestionService extends BaseService_1.BaseService {
             return;
         }
         logger_1.Logger.info(`[IngestionService] Starting ingestion scheduler (every ${intervalMs / 3600000}h)`);
-        this.schedulerTimer = setInterval(async () => {
+        const runIngestion = async () => {
             // 1. Regular search-based ingestion
             const gameIds = Object.keys(GAME_SEARCH_QUERIES);
             gameIds.sort((a, b) => (a === 'sf6' ? -1 : b === 'sf6' ? 1 : 0));
@@ -253,7 +253,12 @@ class IngestionService extends BaseService_1.BaseService {
             }
             // 2. Pro Player prioritized ingestion (including Japan)
             await this.ingestProPlayers();
-        }, intervalMs);
+        };
+        // Run once immediately on startup
+        runIngestion().catch(err => {
+            logger_1.Logger.error('[IngestionService] Initial ingestion run failed', err);
+        });
+        this.schedulerTimer = setInterval(runIngestion, intervalMs);
     }
     /**
      * Specialized ingestion for top-tier players
