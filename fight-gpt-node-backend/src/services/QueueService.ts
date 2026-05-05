@@ -84,14 +84,17 @@ export class QueueService {
     }
 
     /**
-     * Check if any workers are active on the analysis queue
+     * Check if the worker process is alive by reading its heartbeat key from Redis.
+     * The worker writes 'metapunish:worker:heartbeat' every 30s with a 60s TTL.
+     * This approach works on any Redis version (no 6.2+ requirement).
+     * Returns true if the key exists (worker alive), false if expired or missing.
      */
     public async getWorkerStatus(): Promise<boolean> {
         try {
-            const workers = await this.analysisQueue.getWorkers();
-            return workers.length > 0;
+            const val = await connection.get('metapunish:worker:heartbeat');
+            return val !== null;
         } catch (error) {
-            Logger.error(`[QueueService] Failed to get worker status: ${error}`);
+            Logger.error(`[QueueService] Failed to read worker heartbeat: ${error}`);
             return false;
         }
     }

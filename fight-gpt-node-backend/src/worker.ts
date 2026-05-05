@@ -128,6 +128,22 @@ async function runWorker() {
 
         Logger.info('Worker is listening for jobs on "analysis-queue"');
 
+        // Heartbeat — writes a Redis key every 30s so the API can detect this worker
+        // is alive without needing Redis 6.2+ getWorkers() support.
+        // Key expires in 60s, so if the worker dies the status flips offline within 1 minute.
+        const heartbeatConnection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
+        const HEARTBEAT_KEY = 'metapunish:worker:heartbeat';
+        const writeHeartbeat = async () => {
+            try {
+                await heartbeatConnection.set(HEARTBEAT_KEY, Date.now().toString(), 'EX', 60);
+            } catch (e) {
+                Logger.warn('[Worker] Heartbeat write failed');
+            }
+        };
+        await writeHeartbeat(); // write immediately on startup
+        const heartbeatInterval = setInterval(writeHeartbeat, 30000);
+
+
         // 5. Setup Mission Proof Validation Worker
         const proofWorker = new Worker<ProofValidationJobData>(
             'proof-validation-queue',
@@ -195,10 +211,13 @@ async function runWorker() {
         // Graceful shutdown
         process.on('SIGTERM', async () => {
             Logger.info('Worker shutting down...');
+            clearInterval(heartbeatInterval);
+            await heartbeatConnection.del(HEARTBEAT_KEY); // signal offline immediately
             await worker.close();
             await proofWorker.close();
             await Database.disconnect();
             process.exit(0);
+
         });
 
     } catch (e) {
