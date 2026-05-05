@@ -35,5 +35,10 @@ export declare class AnalysisService extends BaseService implements IAnalysisSer
     private getCachedAnalysis;
     private validateAnalysisRequest;
     private enrichRequestWithGameContext;
+    /**
+     * Processes the timeline events from an analysis and stores them in the vector database
+     * if they are novel, or links them to existing scenarios if they are similar.
+     */
+    processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse): Promise<void>;
 }
 //# sourceMappingURL=AnalysisService.d.ts.map

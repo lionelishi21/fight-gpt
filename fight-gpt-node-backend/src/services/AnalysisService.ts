@@ -68,108 +68,10 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       await this.analysisRepository.createAnalysis(request, analysisResponse, analysisId, userId);
 
       // --- VECTOR STORAGE & INTELLIGENCE LOOP ---
-      if (this.vectorRepository && analysisResponse.timeline) {
-        for (const event of analysisResponse.timeline) {
-          try {
-            const p1 = this.sanitizeAiString(analysisResponse.p1_character) || 'P1';
-            const p2 = this.sanitizeAiString(analysisResponse.p2_character) || 'P2';
-            const contextParts = [
-              `Game: ${request.game_id || 'Unknown'}.`,
-              `Matchup: ${p1} vs ${p2}.`,
-              `Situation: ${event.description}.`,
-              `Advice: ${event.coach_advice}.`,
-            ];
-            if (event.neutral_state)   contextParts.push(`Phase: ${event.neutral_state}.`);
-            if (event.turn_owner)      contextParts.push(`Turn: ${event.turn_owner}.`);
-            if (event.spacing)         contextParts.push(`Spacing: ${event.spacing}.`);
-            if (event.frame_advantage) contextParts.push(`Frame advantage: ${event.frame_advantage}.`);
-            if (event.p1_state)        contextParts.push(`${analysisResponse.p1_character || 'P1'} state: ${event.p1_state}.`);
-            if (event.p2_state)        contextParts.push(`${analysisResponse.p2_character || 'P2'} state: ${event.p2_state}.`);
-
-            const contextText = contextParts.join(' ');
-            const embedding = await this.aiService.generateEmbedding(contextText);
-
-            // NOVELTY CHECK
-            const similarScenarios = await this.vectorRepository.findSimilarScenarios(
-              embedding,
-              request.game_id || 'unknown',
-              1
-            );
-
-            let isNovel = true;
-            if (similarScenarios && similarScenarios.length > 0) {
-              const topScore = (similarScenarios[0] as any).score || 1;
-              if (topScore > 0.15) isNovel = false;
-            }
-
-            // Save scenario ONLY IF NOVEL to avoid duplicates
-            const scenarioId = UuidHelper.generate();
-            if (isNovel) {
-              await this.vectorRepository.createScenario({
-                scenario_id: scenarioId,
-                game_id: request.game_id || 'unknown',
-                pro_player_id: (request as any).pro_player_id,
-                description: event.description,
-                context: contextText,
-                characters_involved: [
-                  this.sanitizeAiString(analysisResponse.p1_character),
-                  this.sanitizeAiString(analysisResponse.p2_character)
-                ].filter(Boolean) as string[],
-                embedding,
-                match_references: [analysisId],
-                tags: [event.event_type],
-                turn_owner: event.turn_owner,
-                neutral_state: event.neutral_state,
-                spacing: event.spacing,
-                frame_advantage: event.frame_advantage,
-                p1_state: event.p1_state,
-                p2_state: event.p2_state,
-                timestamp: event.timestamp ? Number(event.timestamp) : undefined,
-              });
-            } else if (similarScenarios && similarScenarios.length > 0) {
-              // If not novel, link this match to the existing scenario instead of creating a duplicate
-              const existingScenario = similarScenarios[0] as any;
-              await (this.vectorRepository as any).addMatchReference(existingScenario.scenario_id, analysisId);
-            }
-
-            // TECH_DISCOVERY Alert — only for genuinely novel scenarios
-            if (isNovel && this.notificationService) {
-              const chars = [
-                this.sanitizeAiString(analysisResponse.p1_character),
-                this.sanitizeAiString(analysisResponse.p2_character)
-              ].filter(Boolean) as string[];
-              const charLabel = chars.length > 0
-                ? chars.map(c => c.toUpperCase()).join(' & ')
-                : (request.game_id || 'UNKNOWN').toUpperCase();
-              const shortCtx = contextText.length > 120
-                ? contextText.slice(0, 117) + '…'
-                : contextText;
-
-              const usersToNotify = await User.find({
-                'slots.gameId': request.game_id,
-                'slots.notificationsEnabled': true
-              }).limit(100);
-
-              for (const user of usersToNotify) {
-                await this.notificationService.notify((user as any)._id, 'TECH_DISCOVERY', {
-                    gameId: request.game_id || 'unknown',
-                    characterId: this.sanitizeAiString(analysisResponse.p1_character) || undefined,
-                    title: `[${charLabel}] New tech — ${(event.event_type || 'Discovery').replace(/_/g, ' ')}`,
-                    description: shortCtx,
-                    // Internal route — NOT the YouTube URL
-                    link: `/dashboard/tech/${scenarioId}`,
-                    data: {
-                      scenarioId,
-                      youtubeUrl: request.youtube_url,
-                      novelty_score: 1 - ((similarScenarios[0] as any)?.score || 0),
-                    },
-                }, 'high');
-              }
-            }
-          } catch (e) {
-            console.error('[AnalysisService] Vector processing failed:', e);
-          }
-        }
+      try {
+        await this.processVectorIntelligence(analysisId, request, analysisResponse);
+      } catch (e) {
+        console.error('[AnalysisService] Vector processing failed:', e);
       }
 
       // RIVAL_WATCH Alert
@@ -340,5 +242,116 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       console.error(`[AnalysisService] Enrichment failed:`, e);
     }
     return enrichedRequest;
+  }
+
+  /**
+   * Processes the timeline events from an analysis and stores them in the vector database
+   * if they are novel, or links them to existing scenarios if they are similar.
+   */
+  public async processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse): Promise<void> {
+    if (!this.vectorRepository || !analysisResponse.timeline) return;
+
+    for (const event of analysisResponse.timeline) {
+      try {
+        const p1 = this.sanitizeAiString(analysisResponse.p1_character) || 'P1';
+        const p2 = this.sanitizeAiString(analysisResponse.p2_character) || 'P2';
+        const contextParts = [
+          `Game: ${request.game_id || 'Unknown'}.`,
+          `Matchup: ${p1} vs ${p2}.`,
+          `Situation: ${event.description}.`,
+          `Advice: ${event.coach_advice}.`,
+        ];
+        if (event.neutral_state)   contextParts.push(`Phase: ${event.neutral_state}.`);
+        if (event.turn_owner)      contextParts.push(`Turn: ${event.turn_owner}.`);
+        if (event.spacing)         contextParts.push(`Spacing: ${event.spacing}.`);
+        if (event.frame_advantage) contextParts.push(`Frame advantage: ${event.frame_advantage}.`);
+        if (event.p1_state)        contextParts.push(`${analysisResponse.p1_character || 'P1'} state: ${event.p1_state}.`);
+        if (event.p2_state)        contextParts.push(`${analysisResponse.p2_character || 'P2'} state: ${event.p2_state}.`);
+
+        const contextText = contextParts.join(' ');
+        const embedding = await this.aiService.generateEmbedding(contextText);
+
+        // NOVELTY CHECK
+        const similarScenarios = await this.vectorRepository.findSimilarScenarios(
+          embedding,
+          request.game_id || 'unknown',
+          1
+        );
+
+        let isNovel = true;
+        let topScore = 0;
+
+        if (similarScenarios && similarScenarios.length > 0) {
+          topScore = (similarScenarios[0] as any).score || 0;
+          // Threshold increased to 0.85 for better variety
+          if (topScore > 0.85) isNovel = false;
+          
+          console.log(`[VectorIntelligence] Situation: ${event.description.slice(0, 30)}... Score: ${topScore.toFixed(4)} -> Novel: ${isNovel}`);
+        } else {
+          console.log(`[VectorIntelligence] No similar scenarios found. Situation is unique.`);
+        }
+
+        // Save scenario ONLY IF NOVEL to avoid duplicates
+        const scenarioId = UuidHelper.generate();
+        if (isNovel) {
+          await this.vectorRepository.createScenario({
+            scenario_id: scenarioId,
+            game_id: request.game_id || 'unknown',
+            pro_player_id: (request as any).pro_player_id,
+            description: event.description,
+            context: contextText,
+            characters_involved: [
+              this.sanitizeAiString(analysisResponse.p1_character),
+              this.sanitizeAiString(analysisResponse.p2_character)
+            ].filter(Boolean) as string[],
+            embedding,
+            match_references: [analysisId],
+            tags: [event.event_type],
+            turn_owner: event.turn_owner,
+            neutral_state: event.neutral_state,
+            spacing: event.spacing,
+            frame_advantage: event.frame_advantage,
+            p1_state: event.p1_state,
+            p2_state: event.p2_state,
+            timestamp: event.timestamp ? Number(event.timestamp) : undefined,
+          });
+          
+          // TECH_DISCOVERY Alert — only for genuinely novel scenarios
+          if (this.notificationService) {
+            const chars = [
+              this.sanitizeAiString(analysisResponse.p1_character),
+              this.sanitizeAiString(analysisResponse.p2_character)
+            ].filter(Boolean) as string[];
+            const charLabel = chars.length > 0
+              ? chars.map(c => c.toUpperCase()).join(' & ')
+              : (request.game_id || 'UNKNOWN').toUpperCase();
+            const shortCtx = contextText.length > 120
+              ? contextText.slice(0, 117) + '…'
+              : contextText;
+
+            const usersToNotify = await User.find({
+              'slots.gameId': request.game_id,
+              'slots.notificationsEnabled': true
+            }).limit(100);
+
+            for (const user of usersToNotify) {
+              await this.notificationService.notify((user as any)._id, 'TECH_DISCOVERY', {
+                  gameId: request.game_id || 'unknown',
+                  characterId: this.sanitizeAiString(analysisResponse.p1_character) || undefined,
+                  title: `[${charLabel}] New tech — ${(event.event_type || 'Discovery').replace(/_/g, ' ')}`,
+                  description: shortCtx,
+                  link: `/dashboard/tech/${scenarioId}`,
+              });
+            }
+          }
+        } else if (similarScenarios && similarScenarios.length > 0) {
+          // If not novel, link this match to the existing scenario
+          const existingScenario = similarScenarios[0] as any;
+          await (this.vectorRepository as any).addMatchReference(existingScenario.scenario_id, analysisId);
+        }
+      } catch (e) {
+        console.error(`[VectorIntelligence] Failed for event:`, e);
+      }
+    }
   }
 }
