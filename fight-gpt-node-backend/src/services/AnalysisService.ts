@@ -187,9 +187,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async getDiscoveryAnalyses(limit: number = 20): Promise<ApiResponse<any[]>> {
+  async getDiscoveryAnalyses(limit: number = 20, gameId?: string): Promise<ApiResponse<any[]>> {
     try {
-      const analyses = await this.analysisRepository.getRecentAnalyses(limit);
+      const analyses = await this.analysisRepository.getRecentAnalyses(limit, undefined, gameId);
       return {
         success: true,
         data: analyses.map(a => ({

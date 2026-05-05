@@ -97,6 +97,48 @@ async function seedRoster() {
             }
         }
 
+        // Additional Rosters
+        const otherGames = [
+            {
+                id: 'ggst',
+                chars: ['Sol Badguy', 'Ky Kiske', 'May', 'Potemkin', 'Faust', 'Ramlethal', 'Happy Chaos', 'Baiken']
+            },
+            {
+                id: 'mk1',
+                chars: ['Scorpion', 'Sub-Zero', 'Liu Kang', 'Raiden', 'Kung Lao', 'Kitana', 'Mileena', 'Johnny Cage']
+            },
+            {
+                id: 'dbfz',
+                chars: ['Goku (SSJ)', 'Vegeta (SSJ)', 'Gohan (Teen)', 'Frieza', 'Cell', 'Majin Buu', 'Beerus', 'Hit']
+            },
+            {
+                id: 'mvc3',
+                chars: ['Ryu', 'Wolverine', 'Iron Man', 'Morrigan', 'Dante', 'Wesker', 'Doom', 'Strider']
+            }
+        ];
+
+        for (const game of otherGames) {
+            console.log(`\nProcessing ${game.id.toUpperCase()} characters...`);
+            for (const name of game.chars) {
+                const existingChar = await Character.findOne({ game_id: game.id, name });
+                if (!existingChar) {
+                    const newChar = new Character({
+                        game_id: game.id,
+                        name,
+                        version: '1.0',
+                        is_current: true,
+                        status: 'released',
+                        stats: {},
+                        moves: []
+                    });
+                    await newChar.save();
+                    console.log(`[NEW] Inserted ${name} for ${game.id}`);
+                } else {
+                    console.log(`[SKIP] ${name} already exists for ${game.id}`);
+                }
+            }
+        }
+
     } catch (error) {
         console.error('Error during seeding:', error);
     } finally {

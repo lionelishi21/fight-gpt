@@ -208,7 +208,8 @@ export class AnalysisController extends BaseController implements IAnalysisContr
 
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-      const result = await this.analysisService.getDiscoveryAnalyses(limit);
+      const gameId = req.query.gameId as string;
+      const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId);
 
       const responseTime = Date.now() - startTime;
       await this.auditLogRepository.createAuditLog({

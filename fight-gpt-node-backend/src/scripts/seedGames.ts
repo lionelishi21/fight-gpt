@@ -37,6 +37,46 @@ async function seedGames() {
                 genre: 'Fighting',
                 is_active: true,
                 latest_version: '1.0'
+            },
+            {
+                game_id: 'ggst',
+                name: 'Guilty Gear Strive',
+                full_name: 'Guilty Gear -Strive-',
+                publisher: 'Arc System Works',
+                developer: 'Arc System Works',
+                genre: 'Fighting',
+                is_active: true,
+                latest_version: '1.0'
+            },
+            {
+                game_id: 'mk1',
+                name: 'Mortal Kombat 1',
+                full_name: 'Mortal Kombat 1',
+                publisher: 'Warner Bros.',
+                developer: 'NetherRealm Studios',
+                genre: 'Fighting',
+                is_active: true,
+                latest_version: '1.0'
+            },
+            {
+                game_id: 'dbfz',
+                name: 'Dragon Ball FighterZ',
+                full_name: 'Dragon Ball FighterZ',
+                publisher: 'Bandai Namco',
+                developer: 'Arc System Works',
+                genre: 'Fighting',
+                is_active: true,
+                latest_version: '1.0'
+            },
+            {
+                game_id: 'mvc3',
+                name: 'Marvel vs. Capcom 3',
+                full_name: 'Ultimate Marvel vs. Capcom 3',
+                publisher: 'Capcom',
+                developer: 'Capcom',
+                genre: 'Fighting',
+                is_active: true,
+                latest_version: '1.0'
             }
         ];
 
