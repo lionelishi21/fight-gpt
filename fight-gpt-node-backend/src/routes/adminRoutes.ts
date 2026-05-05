@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
+import { adminKeyAuth } from '../middleware/adminKeyAuth';
 
 export class AdminRoutes {
     private router: Router;
@@ -12,7 +13,10 @@ export class AdminRoutes {
     }
 
     private setupRoutes(): void {
-        // All routes here are protected by adminMiddleware
+        // Admin routes require BOTH:
+        // 1. x-admin-key header (bypasses global IP rate limiter — checked first)
+        // 2. Valid JWT + admin role (standard auth chain)
+        this.router.use(adminKeyAuth);
         this.router.use(authMiddleware);
         this.router.use(adminMiddleware);
 

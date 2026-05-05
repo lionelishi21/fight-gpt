@@ -4,6 +4,7 @@ exports.AdminRoutes = void 0;
 const express_1 = require("express");
 const InviteController_1 = require("../controllers/InviteController");
 const auth_1 = require("../middleware/auth");
+const adminKeyAuth_1 = require("../middleware/adminKeyAuth");
 class AdminRoutes {
     adminController;
     router;
@@ -13,7 +14,10 @@ class AdminRoutes {
         this.setupRoutes();
     }
     setupRoutes() {
-        // All routes here are protected by adminMiddleware
+        // Admin routes require BOTH:
+        // 1. x-admin-key header (bypasses global IP rate limiter — checked first)
+        // 2. Valid JWT + admin role (standard auth chain)
+        this.router.use(adminKeyAuth_1.adminKeyAuth);
         this.router.use(auth_1.authMiddleware);
         this.router.use(auth_1.adminMiddleware);
         // Stats & Monitoring

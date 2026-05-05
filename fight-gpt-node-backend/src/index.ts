@@ -260,7 +260,10 @@ export class App {
       this.app.use(morgan('combined'));
     }
 
-    // Rate limiting middleware
+    // Global rate limiter — applied to all user-facing API routes.
+    // Admin routes (/api/admin/) are EXCLUDED: they are protected by
+    // the x-admin-key secret header instead, so they never compete
+    // with real user traffic for the same IP bucket.
     const limiter = rateLimit({
       windowMs: AppConfig.RATE_LIMIT_WINDOW_MS,
       max: AppConfig.RATE_LIMIT_MAX_REQUESTS,
@@ -270,9 +273,26 @@ export class App {
       },
       standardHeaders: true,
       legacyHeaders: false,
+      skip: (req) => req.path.startsWith('/admin/'),
+    });
+
+    // Dedicated brute-force limiter for auth routes.
+    // Much stricter: 10 attempts per 15 minutes per IP.
+    // Applies to login and register independently of the global limiter.
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 10,
+      message: {
+        success: false,
+        error: 'Too many login attempts from this IP, please try again in 15 minutes.',
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
     });
 
     this.app.use('/api/', limiter);
+    this.app.use('/api/auth/login', authLimiter);
+    this.app.use('/api/auth/register', authLimiter);
   }
 
   /**
