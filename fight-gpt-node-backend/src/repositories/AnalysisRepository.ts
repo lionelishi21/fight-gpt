@@ -12,6 +12,7 @@ export interface IAnalysisRepository {
   findByAnalysisId(analysisId: string): Promise<IAnalysis | null>;
   getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<IAnalysis[]>;
   createAnalysis(request: AnalysisRequest, response: AnalysisResponse, analysisId: string, userId?: string): Promise<IAnalysis>;
+  countRecentAnalysesByUser(userId: string, hours: number): Promise<number>;
 }
 
 /**
@@ -79,6 +80,19 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
     };
 
     return this.create(data);
+  }
+
+  /**
+   * Count analyses created by a user within a certain time window
+   */
+  async countRecentAnalysesByUser(userId: string, hours: number): Promise<number> {
+    const dateLimit = new Date();
+    dateLimit.setHours(dateLimit.getHours() - hours);
+    
+    return this.model.countDocuments({
+      user_id: userId,
+      created_at: { $gte: dateLimit }
+    });
   }
 }
 

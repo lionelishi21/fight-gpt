@@ -52,6 +52,25 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     try {
       this.validateAnalysisRequest(request);
 
+      // --- TIER CHECK ---
+      if (userId) {
+        const user = await User.findById(userId);
+        if (user && user.role !== 'admin') { // Admins have infinite scans
+          const tier = user.tier || 'FREE';
+          const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId, 24);
+          
+          const maxFree = 1;
+          const maxCompetitor = 10;
+          
+          if (tier === 'FREE' && recentCount >= maxFree) {
+            return { success: false, error: 'FREE_TIER_LIMIT: You have used your 1 daily AI scan. Upgrade to Pro for unlimited analysis.' };
+          }
+          if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
+            return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };
+          }
+        }
+      }
+
       const cachedAnalysis = await this.getCachedAnalysis(request);
       if (cachedAnalysis) {
         return {

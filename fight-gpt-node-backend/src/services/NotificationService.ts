@@ -216,7 +216,7 @@ export class NotificationService {
             gameId: opts.gameId,
             title: 'Your match analysis is ready',
             description: opts.summary,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: opts,
         }, 'high');
     }
@@ -237,7 +237,7 @@ export class NotificationService {
             gameId: opts.gameId,
             title: `RIVAL SPOTTED: ${opts.rivalName}`,
             description: `Your tracked rival ${opts.rivalName} was found in a new match.`,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: { rivalName: opts.rivalName, analysisId: opts.analysisId }
         }, 'high');
 
@@ -245,7 +245,7 @@ export class NotificationService {
         try {
             const user = await User.findById(userId).select('email name').lean().exec();
             if (user && user.email) {
-                const analysisUrl = `https://metapunish.com/dashboard/matches?id=${opts.analysisId}`;
+                const analysisUrl = `https://metapunish.com/dashboard/matches/${opts.analysisId}`;
                 await emailService.sendRivalWatchAlert(user.email, user.name, opts.rivalName, opts.gameName, analysisUrl);
             }
         } catch (err) {
@@ -259,7 +259,7 @@ export class NotificationService {
             characterId: opts.characterId,
             title: `PRO SCOUT: ${opts.proName}`,
             description: `New high-level footage analyzed for ${opts.proName}.`,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: { proName: opts.proName, analysisId: opts.analysisId }
         }, 'medium');
     }
