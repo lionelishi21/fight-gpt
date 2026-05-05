@@ -12,12 +12,13 @@ const Character_1 = require("../models/Character");
 const Game_1 = require("../models/Game");
 const CharacterEncyclopediaRepository_1 = require("../repositories/CharacterEncyclopediaRepository");
 const BaseService_1 = require("./BaseService");
+const QueueService_1 = require("./QueueService");
 class AdminService extends BaseService_1.BaseService {
     async getSystemStats() {
         try {
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
-            const [totalUsers, totalAnalyses, totalScenarios, pendingJobs, failedJobs, dailyAnalyses, dailyScenarios, latestAnalysesToday] = await Promise.all([
+            const [totalUsers, totalAnalyses, totalScenarios, pendingJobs, failedJobs, dailyAnalyses, dailyScenarios, latestAnalysesToday, isWorkerOnline] = await Promise.all([
                 User_1.default.countDocuments(),
                 Analysis_1.Analysis.countDocuments(),
                 Scenario_1.Scenario.countDocuments(),
@@ -29,7 +30,8 @@ class AdminService extends BaseService_1.BaseService {
                     .sort({ created_at: -1 })
                     .limit(10)
                     .select('analysis_id game_id youtube_url created_at')
-                    .lean()
+                    .lean(),
+                QueueService_1.queueService.getWorkerStatus()
             ]);
             return {
                 success: true,
@@ -45,6 +47,10 @@ class AdminService extends BaseService_1.BaseService {
                         analyses: dailyAnalyses,
                         scenarios: dailyScenarios,
                         latest: latestAnalysesToday
+                    },
+                    worker: {
+                        status: isWorkerOnline ? 'online' : 'offline',
+                        timestamp: new Date().toISOString()
                     }
                 }
             };

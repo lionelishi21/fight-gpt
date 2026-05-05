@@ -7,6 +7,7 @@ import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
+import { queueService } from './QueueService';
 
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
@@ -36,7 +37,8 @@ export class AdminService extends BaseService implements IAdminService {
                 failedJobs,
                 dailyAnalyses,
                 dailyScenarios,
-                latestAnalysesToday
+                latestAnalysesToday,
+                isWorkerOnline
             ] = await Promise.all([
                 User.countDocuments(),
                 Analysis.countDocuments(),
@@ -49,7 +51,8 @@ export class AdminService extends BaseService implements IAdminService {
                     .sort({ created_at: -1 })
                     .limit(10)
                     .select('analysis_id game_id youtube_url created_at')
-                    .lean()
+                    .lean(),
+                queueService.getWorkerStatus()
             ]);
 
             return {
@@ -66,6 +69,10 @@ export class AdminService extends BaseService implements IAdminService {
                         analyses: dailyAnalyses,
                         scenarios: dailyScenarios,
                         latest: latestAnalysesToday
+                    },
+                    worker: {
+                        status: isWorkerOnline ? 'online' : 'offline',
+                        timestamp: new Date().toISOString()
                     }
                 }
             };

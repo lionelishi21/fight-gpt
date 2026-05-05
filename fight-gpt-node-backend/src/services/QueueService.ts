@@ -82,6 +82,19 @@ export class QueueService {
     public getAnalysisQueue(): Queue<AnalysisJobData> {
         return this.analysisQueue;
     }
+
+    /**
+     * Check if any workers are active on the analysis queue
+     */
+    public async getWorkerStatus(): Promise<boolean> {
+        try {
+            const workers = await this.analysisQueue.getWorkers();
+            return workers.length > 0;
+        } catch (error) {
+            Logger.error(`[QueueService] Failed to get worker status: ${error}`);
+            return false;
+        }
+    }
 }
 
 export const queueService = QueueService.getInstance();
