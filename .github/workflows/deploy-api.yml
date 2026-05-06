@@ -44,11 +44,19 @@ jobs:
             sed -i "s|^INTERNAL_WEBHOOK_SECRET=.*|INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}|" .env || true
             sed -i "s|^MASTER_ADMIN_EMAIL=.*|MASTER_ADMIN_EMAIL=${{ secrets.MASTER_ADMIN_EMAIL }}|" .env || true
             sed -i "s|^DEFAULT_ADMIN_PASSWORD=.*|DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}|" .env || true
+            sed -i "s|^STRIPE_SECRET_KEY=.*|STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}|" .env || true
+            sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}|" .env || true
+            sed -i "s|^GOOGLE_CLOUD_PROJECT=.*|GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }}|" .env || true
+            sed -i "s|^GOOGLE_STORAGE_BUCKET=.*|GOOGLE_STORAGE_BUCKET=${{ secrets.GOOGLE_STORAGE_BUCKET }}|" .env || true
             grep -q "^GEMINI_API_KEY=" .env || echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
             grep -q "^JWT_SECRET=" .env || echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
             grep -q "^INTERNAL_WEBHOOK_SECRET=" .env || echo "INTERNAL_WEBHOOK_SECRET=${{ secrets.INTERNAL_WEBHOOK_SECRET }}" >> .env
             grep -q "^MASTER_ADMIN_EMAIL=" .env || echo "MASTER_ADMIN_EMAIL=${{ secrets.MASTER_ADMIN_EMAIL }}" >> .env
             grep -q "^DEFAULT_ADMIN_PASSWORD=" .env || echo "DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}" >> .env
+            grep -q "^STRIPE_SECRET_KEY=" .env || echo "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" >> .env
+            grep -q "^STRIPE_WEBHOOK_SECRET=" .env || echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> .env
+            grep -q "^GOOGLE_CLOUD_PROJECT=" .env || echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }}" >> .env
+            grep -q "^GOOGLE_STORAGE_BUCKET=" .env || echo "GOOGLE_STORAGE_BUCKET=${{ secrets.GOOGLE_STORAGE_BUCKET }}" >> .env
 
             # 1. Ensure yt-dlp is installed (required for ingestion pipeline)
             echo "→ Checking yt-dlp..."
@@ -82,9 +90,9 @@ jobs:
             echo "→ dist/index.js: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND — run npm run build locally and commit dist/')"
             echo "→ dist/services count: $(ls dist/services/*.js 2>/dev/null | wc -l) files"
 
-            # 6. Restart PM2 — preserve saved config (including PORT from .env) with update-env
-            echo "→ Restarting PM2..."
-            pm2 restart fightgpt-api --update-env || pm2 start dist/index.js --name fightgpt-api
+            # 6. Restart PM2 — use ecosystem config to ensure all apps (API + Worker) are running
+            echo "→ Restarting PM2 apps..."
+            pm2 startOrRestart ecosystem.config.js --env production --update-env
             pm2 save
 
             # 7. Diagnostics and health check
