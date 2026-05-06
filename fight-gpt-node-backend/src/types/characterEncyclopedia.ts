@@ -73,6 +73,7 @@ export interface Move {
   category: MoveCategory;
   properties?: string[]; // e.g., ["High", "Armor", "Projectile", "Cancelable"]
   frame_data: FrameData;
+  video_url?: string; // demonstration video
   // Team-based move properties (for assists, DHC, team supers)
   team_member?: string;
   team_position?: number;
