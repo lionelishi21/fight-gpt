@@ -95,7 +95,12 @@ jobs:
             pm2 startOrRestart ecosystem.config.js --env production --update-env
             pm2 save
 
-            # 7. Diagnostics and health check
+            # 7. Seed games and pro players (ensure registry is synced)
+            echo "→ Seeding database registries..."
+            npx tsx src/scripts/seedGames.ts || true
+            npx tsx src/scripts/seedProPlayers.ts || true
+
+            # 8. Diagnostics and health check
             echo "→ PORT in .env: $(grep '^PORT=' .env 2>/dev/null || echo 'not set')"
             sleep 10
             echo "→ All listening ports:"

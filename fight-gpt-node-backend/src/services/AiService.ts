@@ -255,13 +255,16 @@ export class AiService extends BaseService implements IAiService {
   async generateEmbedding(text: string): Promise<number[]> {
     try {
       const model = this.vertexAI.getGenerativeModel({ model: 'text-embedding-004' });
-      const result = await model.embedContent({
+      // In @google-cloud/vertexai, the method is embedContent but the response structure 
+      // might differ slightly from the AI Studio SDK.
+      const result = await (model as any).embedContent({
         content: { role: 'user', parts: [{ text }] }
       });
-      return result.embeddings[0].values;
+      return result.embeddings?.[0]?.values || result.embedding?.values || [];
     } catch (error) {
       throw this.handleError(error, 'generateEmbedding');
     }
   }
+}
 
 
