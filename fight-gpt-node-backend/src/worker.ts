@@ -185,8 +185,8 @@ async function runWorker() {
 
                         Logger.info(`[Worker] Mission ${missionId} verified for User ${userId}`);
                     } else {
-                        // Mark as failed/pending retry
-                        userMission.status = 'PENDING';
+                        // Mark as failed
+                        userMission.status = 'FAILED';
                         userMission.metadata = { 
                             ...userMission.metadata, 
                             ai_feedback: validationResult.feedback 

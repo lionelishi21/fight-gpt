@@ -1,4 +1,4 @@
-import { VertexAI, GenerativeModel, Part } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI, GenerativeModel, Part } from '@google/generative-ai';
 import { Storage } from '@google-cloud/storage';
 import { AnalysisRequest, AnalysisResponse } from '../types';
 import { BaseService } from './BaseService';
@@ -29,34 +29,35 @@ export interface IAiService {
  * AI Service implementation (Google Cloud Vertex AI)
  */
 export class AiService extends BaseService implements IAiService {
-  private vertexAI: VertexAI;
-  private storage: Storage;
+  private genAI: GoogleGenerativeAI;
+  private model: GenerativeModel;
   private modelName: string;
   private readonly gameMetadataService: IGameMetadataService;
   private readonly characterEncyclopediaService: ICharacterEncyclopediaService;
 
   constructor(
     apiKey: string,
-    modelName: string = 'gemini-2.5-flash',
+    modelName: string,
     gameMetadataService: IGameMetadataService,
     characterEncyclopediaService: ICharacterEncyclopediaService
   ) {
     super();
     
-    if (!AppConfig.GOOGLE_CLOUD_PROJECT) {
-      throw new Error('GOOGLE_CLOUD_PROJECT is required for Vertex AI Service');
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY is required for AiService');
     }
 
-    this.vertexAI = new VertexAI({
-      project: AppConfig.GOOGLE_CLOUD_PROJECT,
-      location: AppConfig.GOOGLE_CLOUD_LOCATION,
+    this.genAI = new GoogleGenerativeAI(apiKey);
+    this.modelName = modelName;
+    this.model = this.genAI.getGenerativeModel({ 
+      model: this.modelName,
+      generationConfig: { responseMimeType: 'application/json' }
     });
     
     this.storage = new Storage({
       projectId: AppConfig.GOOGLE_CLOUD_PROJECT,
     });
 
-    this.modelName = 'gemini-2.5-flash';
     this.gameMetadataService = gameMetadataService;
     this.characterEncyclopediaService = characterEncyclopediaService;
   }
@@ -128,54 +129,33 @@ export class AiService extends BaseService implements IAiService {
       fullPrompt += `\n\nContext:\n${request.ai_context}`;
     }
 
-    const contentParts: Part[] = [];
+    const contentParts: any[] = [];
     
-    // If we have a video (GCS or YouTube), add it to the parts
+    // If we have a video (YouTube), add it to the parts
+    // Note: Google AI Studio Gemini models in 2026 support direct YouTube URLs in prompts
     const finalUri = videoUri || request.youtube_url;
     if (finalUri) {
         contentParts.push({
-            fileData: {
-                mimeType: 'video/mp4',
-                fileUri: finalUri
-            }
+            text: `Video source: ${finalUri}`
         });
     }
 
     contentParts.push({ text: fullPrompt });
 
-    // Try primary model, fall back on 503/overload
-    const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-pro'];
-    const modelsToTry = [this.modelName, ...FALLBACK_MODELS.filter(m => m !== this.modelName)];
-    let lastError: Error | null = null;
-
-    for (const modelName of modelsToTry) {
+    try {
+      const result = await this.model.generateContent(contentParts);
+      const responseText = result.response.text() || '';
+      const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
       try {
-        const model = this.vertexAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: { responseMimeType: 'application/json' },
-        });
-        
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: contentParts }]
-        });
-        
-        const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        
-        try {
-          return JSON.parse(sanitizedJson) as AnalysisResponse;
-        } catch (e) {
-          console.error('Failed to parse Vertex response', responseText);
-          throw new Error('Invalid JSON response from Vertex AI');
-        }
-      } catch (e: any) {
-        lastError = e;
-        const isRetryable = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('429');
-        if (!isRetryable) throw e; 
+        return JSON.parse(sanitizedJson) as AnalysisResponse;
+      } catch (e) {
+        console.error('Failed to parse Gemini response', responseText);
+        throw new Error('Invalid JSON response from Gemini API');
       }
+    } catch (e: any) {
+      throw this.handleError(e, 'generateAnalysis');
     }
-
-    throw lastError ?? new Error('All Vertex AI models failed');
   }
 
   /**
@@ -190,21 +170,13 @@ export class AiService extends BaseService implements IAiService {
         .replace('{{description}}', missionData.description)
         .replace('{{criteria}}', JSON.stringify(missionData.criteria || 'Standard execution.'));
 
-      const contentParts: Part[] = [
-        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+      const contentParts: any[] = [
+        { text: `Proof Video: ${videoUrl}` },
         { text: prompt }
       ];
 
-      const model = this.vertexAI.getGenerativeModel({
-        model: this.modelName,
-        generationConfig: { responseMimeType: 'application/json' },
-      });
-
-      const result = await model.generateContent({
-          contents: [{ role: 'user', parts: contentParts }]
-      });
-      
-      const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const result = await this.model.generateContent(contentParts);
+      const responseText = result.response.text() || '';
       const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
       return JSON.parse(sanitizedJson);

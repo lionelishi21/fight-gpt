@@ -1,30 +1,36 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import path from 'path';
+import { Database } from './src/config/database';
 import { Analysis } from './src/models/Analysis';
-import { Scenario } from './src/models/Scenario';
+import { IngestionJob } from './src/models/IngestionJob';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
-async function check() {
-    await mongoose.connect(process.env.MONGODB_URI!);
-    const analysisCounts = await Analysis.aggregate([
-        { $group: { _id: "$game_id", count: { $sum: 1 } } }
-    ]);
-    console.log('Analysis counts per game:', analysisCounts);
+async function checkCounts() {
+    await Database.connect();
+    const analysisCount = await Analysis.countDocuments();
+    const jobCount = await IngestionJob.countDocuments();
+    const processingJobs = await IngestionJob.find({ status: 'processing' });
+    const pendingJobs = await IngestionJob.find({ status: 'pending' });
+    const completedJobs = await IngestionJob.find({ status: 'completed' });
+    const failedJobs = await IngestionJob.find({ status: 'failed' });
 
-    const scenarioCount = await Scenario.countDocuments();
-    console.log('Total Vector Scenarios:', scenarioCount);
+    console.log('Analysis Count:', analysisCount);
+    console.log('Total Jobs:', jobCount);
+    console.log('Processing Jobs:', processingJobs.length);
+    console.log('Pending Jobs:', pendingJobs.length);
+    console.log('Completed Jobs:', completedJobs.length);
+    console.log('Failed Jobs:', failedJobs.length);
 
-    const sample = await Scenario.findOne().select('description game_id embedding');
-    if (sample) {
-        console.log('Sample Scenario Found:', sample.description);
-        console.log('Embedding present:', !!sample.embedding && (sample.embedding as any).length > 0);
-    } else {
-        console.log('No Scenarios found in vector DB yet.');
+    if (processingJobs.length > 0) {
+        console.log('Processing Job Details:', processingJobs.map(j => ({
+            id: j.job_id,
+            url: j.youtube_url,
+            game: j.game_id,
+            created: j.created_at
+        })));
     }
 
-    await mongoose.disconnect();
+    process.exit(0);
 }
 
-check();
+checkCounts();

@@ -179,7 +179,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           youtube_url: a.youtube_url,
           game_id: a.game_id,
           created_at: a.created_at,
-          ...(a.analysis as object),
+          ...(a.analysis || {} as object),
         })),
       };
     } catch (error) {
@@ -198,7 +198,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           youtube_url: a.youtube_url,
           game_id: a.game_id,
           created_at: a.created_at,
-          ...(a.analysis as object),
+          ...(a.analysis || {} as object),
         })),
       };
     } catch (error) {
