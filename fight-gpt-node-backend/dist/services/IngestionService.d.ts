@@ -49,7 +49,22 @@ export declare class IngestionService extends BaseService implements IIngestionS
      */
     startScheduler(intervalMs?: number): void;
     /**
-     * Specialized ingestion for top-tier players
+     * Specialized ingestion for top-tier players using Direct Playlist Tracking (Cheapest Quota)
+     * This uses playlistItems.list which costs only 1 unit per call (vs 100 for search).
+     */
+    ingestProPlayersDirect(): Promise<void>;
+    /**
+     * Fetch the 5 most recent videos from a playlist using the YouTube API.
+     * COST: 1 unit per call.
+     */
+    private fetchRecentVideosViaPlaylist;
+    /**
+     * Fetch the 15 most recent videos from a YouTube channel RSS feed.
+     * ZERO API QUOTA USAGE (but prone to 404s due to YouTube rate-limiting).
+     */
+    private fetchRecentVideosFromRss;
+    /**
+     * Legacy Search-based ingestion (CONSUMES QUOTA)
      */
     ingestProPlayers(): Promise<void>;
     stopScheduler(): void;

@@ -21,21 +21,21 @@ export interface IAiService {
     generateEmbedding(text: string): Promise<number[]>;
 }
 /**
- * AI Service implementation (Node.js Unified Stack)
+ * AI Service implementation (Google Cloud Vertex AI)
  */
 export declare class AiService extends BaseService implements IAiService {
     private genAI;
-    private fileManager;
+    private model;
     private modelName;
     private readonly gameMetadataService;
     private readonly characterEncyclopediaService;
     constructor(apiKey: string, modelName: string, gameMetadataService: IGameMetadataService, characterEncyclopediaService: ICharacterEncyclopediaService);
     /**
-     * Analyze video using Gemini Native API
+     * Analyze video using Vertex AI Gemini
      */
     analyzeVideo(request: AnalysisRequest): Promise<AnalysisResponse>;
-    private uploadToGemini;
-    private waitForProcessing;
+    private uploadToGcs;
+    private deleteFromGcs;
     private generateAnalysis;
     /**
      * Verify mission proof video

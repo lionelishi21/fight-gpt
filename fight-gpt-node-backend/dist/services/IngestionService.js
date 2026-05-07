@@ -64,6 +64,10 @@ const GAME_SEARCH_QUERIES = {
     dbfz: [
         'DBFZ World Tour 2024 top 8 tournament',
     ],
+    mvc3: [
+        'UMVC3 tournament grand finals high level',
+        'Marvel vs Capcom 3 pro player tournament match',
+    ],
 };
 // Default fallback queries for any game not in the list
 const DEFAULT_QUERIES = (gameId) => [
@@ -252,7 +256,8 @@ class IngestionService extends BaseService_1.BaseService {
                 }
             }
             // 2. Pro Player prioritized ingestion (including Japan)
-            await this.ingestProPlayers();
+            // Using Direct Playlist Tracking to save quota (1 unit vs 100 units for search)
+            await this.ingestProPlayersDirect();
         };
         // Run once immediately on startup
         runIngestion().catch(err => {
@@ -261,7 +266,131 @@ class IngestionService extends BaseService_1.BaseService {
         this.schedulerTimer = setInterval(runIngestion, intervalMs);
     }
     /**
-     * Specialized ingestion for top-tier players
+     * Specialized ingestion for top-tier players using Direct Playlist Tracking (Cheapest Quota)
+     * This uses playlistItems.list which costs only 1 unit per call (vs 100 for search).
+     */
+    async ingestProPlayersDirect() {
+        try {
+            const { ProPlayer } = await Promise.resolve().then(() => __importStar(require('../models/ProPlayer')));
+            const pros = await ProPlayer.find({ isVerified: true }).lean().exec();
+            logger_1.Logger.info(`[IngestionService] Starting Direct Playlist scan for ${pros.length} verified pros`);
+            const apiKey = process.env.YOUTUBE_API_KEY;
+            if (!apiKey) {
+                logger_1.Logger.warn('[IngestionService] Skipping direct scan: YOUTUBE_API_KEY missing');
+                return;
+            }
+            for (const pro of pros) {
+                for (const channel of pro.channels) {
+                    // Extract channel ID if it's a full URL
+                    const channelId = channel.includes('/') ? channel.split('/').pop() : channel;
+                    if (!channelId || !channelId.startsWith('UC'))
+                        continue;
+                    // Uploads Playlist ID is the Channel ID with 'UU' instead of 'UC'
+                    const uploadsPlaylistId = 'UU' + channelId.slice(2);
+                    const urls = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
+                    for (const url of urls) {
+                        const existing = await this.ingestionRepository.findByUrl(url);
+                        if (existing)
+                            continue;
+                        const job = await this.ingestionRepository.createJob({
+                            job_id: uuidHelper_1.UuidHelper.generate(),
+                            game_id: pro.gameId,
+                            youtube_url: url,
+                            search_query: `PLAYLIST_TRACK: ${pro.name} (${pro.region})`,
+                            source: 'pro_scout',
+                            status: 'pending',
+                            retry_count: 0,
+                            pro_player_id: pro._id.toString()
+                        });
+                        // Enqueue for background processing
+                        await QueueService_1.queueService.addAnalysisJob({
+                            job_id: job.job_id,
+                            game_id: pro.gameId,
+                            youtube_url: url,
+                            pro_player_id: pro._id.toString()
+                        });
+                        logger_1.Logger.info(`[IngestionService] Queued new pro match via Playlist Tracking: ${url} (${pro.name})`);
+                    }
+                }
+                // Mark pro as recently updated
+                await ProPlayer.updateOne({ _id: pro._id }, { lastIngestJobAt: new Date() });
+            }
+        }
+        catch (e) {
+            logger_1.Logger.error('[IngestionService] Pro player direct ingestion failed', e);
+        }
+    }
+    /**
+     * Fetch the 5 most recent videos from a playlist using the YouTube API.
+     * COST: 1 unit per call.
+     */
+    async fetchRecentVideosViaPlaylist(playlistId, apiKey) {
+        try {
+            const params = new URLSearchParams({
+                part: 'snippet',
+                playlistId: playlistId,
+                maxResults: '5',
+                key: apiKey,
+            });
+            const response = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${params}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                logger_1.Logger.warn(`[IngestionService] Playlist API error for ${playlistId}: ${errorText.slice(0, 100)}`);
+                return [];
+            }
+            const data = await response.json();
+            return (data.items || [])
+                .map((item) => `https://www.youtube.com/watch?v=${item.snippet?.resourceId?.videoId}`)
+                .filter((url) => url.includes('watch?v='));
+        }
+        catch (e) {
+            logger_1.Logger.error(`[IngestionService] Playlist fetch error for ${playlistId}:`, e);
+            return [];
+        }
+    }
+    /**
+     * Fetch the 15 most recent videos from a YouTube channel RSS feed.
+     * ZERO API QUOTA USAGE (but prone to 404s due to YouTube rate-limiting).
+     */
+    async fetchRecentVideosFromRss(channelId) {
+        try {
+            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+            const response = await fetch(rssUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            });
+            if (!response.ok) {
+                logger_1.Logger.warn(`[IngestionService] RSS feed unavailable for ${channelId}: ${response.status}`);
+                return [];
+            }
+            const xml = await response.text();
+            // Extract video IDs using regex from <yt:videoId> tags
+            const videoIdMatches = xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g);
+            const urls = [];
+            for (const match of videoIdMatches) {
+                if (match[1]) {
+                    urls.push(`https://www.youtube.com/watch?v=${match[1]}`);
+                }
+            }
+            // Also check for <link href=".../watch?v=..."/>
+            const linkMatches = xml.matchAll(/href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/g);
+            for (const match of linkMatches) {
+                if (match[1]) {
+                    const url = `https://www.youtube.com/watch?v=${match[1]}`;
+                    if (!urls.includes(url))
+                        urls.push(url);
+                }
+            }
+            return urls.slice(0, 15); // Return most recent
+        }
+        catch (e) {
+            logger_1.Logger.error(`[IngestionService] RSS fetch error for ${channelId}:`, e);
+            return [];
+        }
+    }
+    /**
+     * Legacy Search-based ingestion (CONSUMES QUOTA)
      */
     async ingestProPlayers() {
         try {

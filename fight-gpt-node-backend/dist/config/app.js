@@ -26,6 +26,9 @@ class AppConfig {
     static get STRIPE_SECRET_KEY() { return process.env.STRIPE_SECRET_KEY || ''; }
     static get STRIPE_WEBHOOK_SECRET() { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
     static get APP_URL() { return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; }
+    static get GOOGLE_CLOUD_PROJECT() { return process.env.GOOGLE_CLOUD_PROJECT || ''; }
+    static get GOOGLE_CLOUD_LOCATION() { return process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'; }
+    static get GOOGLE_STORAGE_BUCKET() { return process.env.GOOGLE_STORAGE_BUCKET || ''; }
     /**
      * Validate required configuration
      */

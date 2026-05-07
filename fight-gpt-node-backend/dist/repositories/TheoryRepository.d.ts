@@ -7,6 +7,7 @@ export interface ITheoryRepository {
     getMatchupTheory(gameId: string, charA: string, charB: string, skillLevel?: string): Promise<ITheoryDocumentDocument | null>;
     getAllCharacterTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
     getAllMatchupTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
+    getTheoryById(id: string): Promise<ITheoryDocumentDocument | null>;
 }
 export declare class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> implements ITheoryRepository {
     constructor();
@@ -16,5 +17,6 @@ export declare class TheoryRepository extends BaseRepository<ITheoryDocumentDocu
     getMatchupTheory(gameId: string, charA: string, charB: string, skillLevel?: string): Promise<ITheoryDocumentDocument | null>;
     getAllCharacterTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
     getAllMatchupTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
+    getTheoryById(id: string): Promise<ITheoryDocumentDocument | null>;
 }
 //# sourceMappingURL=TheoryRepository.d.ts.map

@@ -15,6 +15,8 @@ class TheoryRoutes {
         // All theory routes are premium
         this.router.use(auth_1.authMiddleware);
         this.router.use(auth_1.premiumMiddleware);
+        // Direct ID lookup
+        this.router.get('/id/:id', this.theoryController.getTheoryById);
         // Character theory
         this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
         this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);

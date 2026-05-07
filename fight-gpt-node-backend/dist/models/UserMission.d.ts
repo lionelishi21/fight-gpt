@@ -2,7 +2,7 @@ import mongoose, { Document } from 'mongoose';
 export interface IUserMission extends Document {
     user: mongoose.Types.ObjectId;
     mission: mongoose.Types.ObjectId;
-    status: 'PENDING' | 'COMPLETED';
+    status: 'PENDING' | 'COMPLETED' | 'FAILED';
     completedAt?: Date;
     metadata?: Record<string, any>;
     createdAt: Date;

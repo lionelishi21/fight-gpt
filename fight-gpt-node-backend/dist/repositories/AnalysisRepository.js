@@ -59,6 +59,17 @@ class AnalysisRepository extends BaseRepository_1.BaseRepository {
         };
         return this.create(data);
     }
+    /**
+     * Count analyses created by a user within a certain time window
+     */
+    async countRecentAnalysesByUser(userId, hours) {
+        const dateLimit = new Date();
+        dateLimit.setHours(dateLimit.getHours() - hours);
+        return this.model.countDocuments({
+            user_id: userId,
+            created_at: { $gte: dateLimit }
+        });
+    }
 }
 exports.AnalysisRepository = AnalysisRepository;
 //# sourceMappingURL=AnalysisRepository.js.map

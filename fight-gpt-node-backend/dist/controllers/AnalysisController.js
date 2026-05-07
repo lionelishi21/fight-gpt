@@ -170,7 +170,8 @@ class AnalysisController extends BaseController_1.BaseController {
         const startTime = Date.now();
         try {
             const limit = req.query.limit ? parseInt(req.query.limit) : 20;
-            const result = await this.analysisService.getDiscoveryAnalyses(limit);
+            const gameId = req.query.gameId;
+            const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId);
             const responseTime = Date.now() - startTime;
             await this.auditLogRepository.createAuditLog({
                 request_id: requestId,

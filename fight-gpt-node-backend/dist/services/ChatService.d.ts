@@ -58,17 +58,16 @@ export interface SmartChatResponse extends ChatResponse {
     };
 }
 /**
- * Chat Service implementation with Gemini AI
+ * Chat Service implementation with Google Cloud Vertex AI
  * Specialized for fighting games only
- * Follows Single Responsibility Principle - handles chat communication with Gemini
  */
 export declare class ChatService extends BaseService implements IChatService {
-    private genAI;
+    private vertexAI;
     private model;
     private readonly systemPrompt;
     constructor();
     /**
-     * Send a message to Gemini AI with gaming context
+     * Send a message to Vertex AI with gaming context
      */
     sendMessage(message: string, conversationHistory?: ChatMessage[]): Promise<ChatResponse>;
     /**

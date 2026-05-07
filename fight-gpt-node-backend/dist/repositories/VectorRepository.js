@@ -18,27 +18,37 @@ class VectorRepository extends BaseRepository_1.BaseRepository {
      * Pre-requisite: An Atlas Vector Search index needs to be created on the `Scenario` collection.
      */
     async findSimilarScenarios(vector, gameId, limit = 5) {
-        // Uses MongoDB Atlas `$vectorSearch` operator (Requires MongoDB v6.0.11+ / Atlas)
-        return this.model.aggregate([
-            {
-                $vectorSearch: {
-                    index: 'vector_index', // Needs to match the index name created in Atlas
-                    path: 'embedding',
-                    queryVector: vector,
-                    numCandidates: limit * 10, // Recommended 10x the limit
-                    limit: limit,
-                    filter: {
-                        game_id: gameId // Pre-filtering by game
+        try {
+            // Uses MongoDB Atlas `$vectorSearch` operator (Requires MongoDB v6.0.11+ / Atlas)
+            return await this.model.aggregate([
+                {
+                    $vectorSearch: {
+                        index: 'vector_index', // Needs to match the index name created in Atlas
+                        path: 'embedding',
+                        queryVector: vector,
+                        numCandidates: limit * 10, // Recommended 10x the limit
+                        limit: limit,
+                        filter: {
+                            game_id: gameId // Pre-filtering by game
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        embedding: 0, // Exclude the heavy vector array from results
+                        score: { $meta: 'vectorSearchScore' } // Include similarity score if needed
                     }
                 }
-            },
-            {
-                $project: {
-                    embedding: 0, // Exclude the heavy vector array from results
-                    score: { $meta: 'vectorSearchScore' } // Include similarity score if needed
-                }
+            ]).exec();
+        }
+        catch (error) {
+            // Fallback for local MongoDB (non-Atlas) environments
+            if (error.message?.includes('$vectorSearch') || error.code === 6047401) {
+                console.warn('[VectorRepository] Atlas Vector Search is not available (likely local DB). Skipping similarity check.');
+                return [];
             }
-        ]).exec();
+            throw error;
+        }
     }
     async addMatchReference(scenarioId, analysisId) {
         await this.model.updateOne({ scenario_id: scenarioId }, { $addToSet: { match_references: analysisId } });

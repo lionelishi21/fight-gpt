@@ -6,6 +6,8 @@ import { Express } from 'express';
  */
 export declare class App {
     private app;
+    private server;
+    private io;
     private routes;
     private ingestionService;
     private rosterSyncService;
@@ -22,6 +24,10 @@ export declare class App {
      * Setup error handling
      */
     private setupErrorHandling;
+    /**
+     * Setup Socket.io events
+     */
+    private setupSocketEvents;
     /**
      * Start the application
      */

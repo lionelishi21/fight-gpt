@@ -11,6 +11,7 @@ export interface ITheoryService {
     getCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;
+    getTheoryById(id: string): Promise<ApiResponse<ITheoryDocument>>;
 }
 export declare class TheoryService extends BaseService implements ITheoryService {
     private readonly theoryRepository;
@@ -30,6 +31,7 @@ export declare class TheoryService extends BaseService implements ITheoryService
     getCharacterTheory(gameId: string, characterId: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getMatchupTheory(gameId: string, charA: string, charB: string, targetSkillLevel?: SkillLevel): Promise<ApiResponse<ITheoryDocument>>;
     getAllCharacterTheories(gameId: string): Promise<ApiResponse<ITheoryDocument[]>>;
+    getTheoryById(id: string): Promise<ApiResponse<ITheoryDocument>>;
     private getCurrentPatchVersion;
     private getScenariosForCharacter;
     private getScenariosForMatchup;

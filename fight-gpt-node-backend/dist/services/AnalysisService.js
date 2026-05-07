@@ -44,11 +44,35 @@ class AnalysisService extends BaseService_1.BaseService {
     async analyzeVideo(request, userId) {
         try {
             this.validateAnalysisRequest(request);
+            // --- TIER CHECK ---
+            if (userId) {
+                const user = await User_1.default.findById(userId);
+                if (user && user.role !== 'admin') { // Admins have infinite scans
+                    const tier = user.tier || 'FREE';
+                    const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId, 24);
+                    const maxFree = 1;
+                    const maxCompetitor = 10;
+                    if (tier === 'FREE' && recentCount >= maxFree) {
+                        return { success: false, error: 'FREE_TIER_LIMIT: You have used your 1 daily AI scan. Upgrade to Pro for unlimited analysis.' };
+                    }
+                    if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
+                        return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };
+                    }
+                }
+            }
             const cachedAnalysis = await this.getCachedAnalysis(request);
             if (cachedAnalysis) {
+                // If this authenticated user doesn't have their own record for this analysis,
+                // save one so it appears on their dashboard. Silently ignores errors.
+                if (userId && cachedAnalysis.user_id !== userId) {
+                    const analysisId = uuidHelper_1.UuidHelper.generate();
+                    this.analysisRepository
+                        .createAnalysis(request, cachedAnalysis.analysis, analysisId, userId)
+                        .catch(() => { });
+                }
                 return {
                     success: true,
-                    data: cachedAnalysis.analysis,
+                    data: { ...cachedAnalysis.analysis, analysis_id: cachedAnalysis.analysis_id },
                     message: 'Analysis retrieved from cache',
                 };
             }
@@ -143,7 +167,7 @@ class AnalysisService extends BaseService_1.BaseService {
                     youtube_url: a.youtube_url,
                     game_id: a.game_id,
                     created_at: a.created_at,
-                    ...a.analysis,
+                    ...(a.analysis || {}),
                 })),
             };
         }
@@ -151,9 +175,9 @@ class AnalysisService extends BaseService_1.BaseService {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
         }
     }
-    async getDiscoveryAnalyses(limit = 20) {
+    async getDiscoveryAnalyses(limit = 20, gameId) {
         try {
-            const analyses = await this.analysisRepository.getRecentAnalyses(limit);
+            const analyses = await this.analysisRepository.getRecentAnalyses(limit, undefined, gameId);
             return {
                 success: true,
                 data: analyses.map(a => ({
@@ -162,7 +186,7 @@ class AnalysisService extends BaseService_1.BaseService {
                     youtube_url: a.youtube_url,
                     game_id: a.game_id,
                     created_at: a.created_at,
-                    ...a.analysis,
+                    ...(a.analysis || {}),
                 })),
             };
         }

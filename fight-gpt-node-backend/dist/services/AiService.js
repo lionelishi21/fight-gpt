@@ -35,136 +35,126 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiService = void 0;
 const generative_ai_1 = require("@google/generative-ai");
-const server_1 = require("@google/generative-ai/server");
+const storage_1 = require("@google-cloud/storage");
 const BaseService_1 = require("./BaseService");
 const VersionResolver_1 = require("../helpers/VersionResolver");
+const app_1 = require("../config/app");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
-const child_process_1 = require("child_process");
-const util_1 = require("util");
-const execAsync = (0, util_1.promisify)(child_process_1.exec);
 /**
- * AI Service implementation (Node.js Unified Stack)
+ * AI Service implementation (Google Cloud Vertex AI)
  */
 class AiService extends BaseService_1.BaseService {
     genAI;
-    fileManager;
+    model;
     modelName;
     gameMetadataService;
     characterEncyclopediaService;
-    constructor(apiKey, modelName = 'gemini-2.5-flash', gameMetadataService, characterEncyclopediaService) {
+    constructor(apiKey, modelName, gameMetadataService, characterEncyclopediaService) {
         super();
+        if (!apiKey) {
+            throw new Error('GEMINI_API_KEY is required for AiService');
+        }
         this.genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-        this.fileManager = new server_1.GoogleAIFileManager(apiKey);
         this.modelName = modelName;
+        this.model = this.genAI.getGenerativeModel({
+            model: this.modelName,
+            generationConfig: { responseMimeType: 'application/json' }
+        });
+        this.storage = new storage_1.Storage({
+            projectId: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
+        });
         this.gameMetadataService = gameMetadataService;
         this.characterEncyclopediaService = characterEncyclopediaService;
     }
     /**
-     * Analyze video using Gemini Native API
+     * Analyze video using Vertex AI Gemini
      */
     async analyzeVideo(request) {
-        let localVideoPath = null;
-        let uploadResponse = null;
+        let gcsUri = null;
+        let fileName = null;
         try {
             if (!request.video_path && !request.youtube_url) {
                 throw new Error('Video path or YouTube URL is required for analysis');
             }
-            // If a local file is provided, we must upload it using GoogleAIFileManager
+            // If a local file is provided, upload to GCS
             if (request.video_path) {
-                localVideoPath = request.video_path;
-                uploadResponse = await this.uploadToGemini(localVideoPath);
-                await this.waitForProcessing(uploadResponse.file.name);
+                fileName = `analysis/${Date.now()}-${path.basename(request.video_path)}`;
+                gcsUri = await this.uploadToGcs(request.video_path, fileName);
             }
-            // Pass the uploaded file OR the direct YouTube URL to generateAnalysis
-            const result = await this.generateAnalysis(uploadResponse, request);
-            if (uploadResponse) {
-                await this.fileManager.deleteFile(uploadResponse.file.name);
+            // Generate analysis using the GCS URI or YouTube URL
+            const result = await this.generateAnalysis(gcsUri, request);
+            // Cleanup GCS file after analysis
+            if (fileName) {
+                await this.deleteFromGcs(fileName).catch(e => console.warn('[AiService] GCS Cleanup failed:', e));
             }
             return result;
         }
         catch (error) {
-            if (uploadResponse) {
+            if (fileName) {
                 try {
-                    await this.fileManager.deleteFile(uploadResponse.file.name);
+                    await this.deleteFromGcs(fileName);
                 }
                 catch { }
             }
             throw this.handleError(error, 'analyzeVideo');
         }
         finally {
-            if (localVideoPath && fs.existsSync(localVideoPath)) {
+            if (request.video_path && fs.existsSync(request.video_path)) {
                 try {
-                    fs.unlinkSync(localVideoPath);
+                    fs.unlinkSync(request.video_path);
                 }
                 catch { }
             }
         }
     }
-    async uploadToGemini(filePath) {
-        return await this.fileManager.uploadFile(filePath, {
-            mimeType: 'video/mp4',
-            displayName: path.basename(filePath),
+    async uploadToGcs(filePath, destination) {
+        if (!app_1.AppConfig.GOOGLE_STORAGE_BUCKET) {
+            throw new Error('GOOGLE_STORAGE_BUCKET is required for video analysis');
+        }
+        const bucket = this.storage.bucket(app_1.AppConfig.GOOGLE_STORAGE_BUCKET);
+        await bucket.upload(filePath, {
+            destination,
+            metadata: { contentType: 'video/mp4' },
         });
+        return `gs://${app_1.AppConfig.GOOGLE_STORAGE_BUCKET}/${destination}`;
     }
-    async waitForProcessing(fileName) {
-        let file = await this.fileManager.getFile(fileName);
-        while (file.state === server_1.FileState.PROCESSING) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            file = await this.fileManager.getFile(fileName);
-        }
-        if (file.state === server_1.FileState.FAILED) {
-            throw new Error('Video processing failed');
-        }
+    async deleteFromGcs(fileName) {
+        if (!app_1.AppConfig.GOOGLE_STORAGE_BUCKET)
+            return;
+        await this.storage.bucket(app_1.AppConfig.GOOGLE_STORAGE_BUCKET).file(fileName).delete();
     }
-    async generateAnalysis(fileResponse, request) {
+    async generateAnalysis(videoUri, request) {
         const prompt = VersionResolver_1.VersionResolver.resolvePrompt('v1');
         let fullPrompt = prompt;
         if (request.ai_context) {
             fullPrompt += `\n\nContext:\n${request.ai_context}`;
         }
         const contentParts = [];
-        if (fileResponse) {
+        // If we have a video (YouTube), add it to the parts
+        // Note: Google AI Studio Gemini models in 2026 support direct YouTube URLs in prompts
+        const finalUri = videoUri || request.youtube_url;
+        if (finalUri) {
             contentParts.push({
-                fileData: { mimeType: fileResponse.mimeType, fileUri: fileResponse.uri },
-            });
-        }
-        else if (request.youtube_url) {
-            // Direct YouTube URL pass as supported by newer Gemini API
-            contentParts.push({
-                fileData: { mimeType: 'video/mp4', fileUri: request.youtube_url }
+                text: `Video source: ${finalUri}`
             });
         }
         contentParts.push({ text: fullPrompt });
-        // Try primary model, fall back on 503/overload
-        const FALLBACK_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
-        const modelsToTry = [this.modelName, ...FALLBACK_MODELS.filter(m => m !== this.modelName)];
-        let lastError = null;
-        for (const modelName of modelsToTry) {
+        try {
+            const result = await this.model.generateContent(contentParts);
+            const responseText = result.response.text() || '';
+            const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             try {
-                const model = this.genAI.getGenerativeModel({
-                    model: modelName,
-                    generationConfig: { responseMimeType: 'application/json' },
-                });
-                const result = await model.generateContent(contentParts);
-                let responseText = result.response.text();
-                responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                try {
-                    return JSON.parse(responseText);
-                }
-                catch (e) {
-                    console.error('Failed to parse Gemini response', responseText);
-                    throw new Error('Invalid JSON response from AI');
-                }
+                return JSON.parse(sanitizedJson);
             }
             catch (e) {
-                lastError = e;
-                const is503 = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('high demand');
-                if (!is503)
-                    throw e; // non-transient errors bubble immediately
+                console.error('Failed to parse Gemini response', responseText);
+                throw new Error('Invalid JSON response from Gemini API');
             }
         }
-        throw lastError ?? new Error('All Gemini models failed');
+        catch (e) {
+            throw this.handleError(e, 'generateAnalysis');
+        }
     }
     /**
      * Verify mission proof video
@@ -172,23 +162,18 @@ class AiService extends BaseService_1.BaseService {
     async verifyMissionProof(videoUrl, missionData) {
         try {
             let prompt = VersionResolver_1.VersionResolver.resolvePrompt('v1_mission_proof');
-            // Inject mission details into prompt
             prompt = prompt
                 .replace('{{title}}', missionData.title)
                 .replace('{{description}}', missionData.description)
                 .replace('{{criteria}}', JSON.stringify(missionData.criteria || 'Standard execution.'));
             const contentParts = [
-                { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+                { text: `Proof Video: ${videoUrl}` },
                 { text: prompt }
             ];
-            const model = this.genAI.getGenerativeModel({
-                model: this.modelName,
-                generationConfig: { responseMimeType: 'application/json' },
-            });
-            const result = await model.generateContent(contentParts);
-            let responseText = result.response.text();
-            responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            return JSON.parse(responseText);
+            const result = await this.model.generateContent(contentParts);
+            const responseText = result.response.text() || '';
+            const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            return JSON.parse(sanitizedJson);
         }
         catch (error) {
             throw this.handleError(error, 'verifyMissionProof');
@@ -198,7 +183,7 @@ class AiService extends BaseService_1.BaseService {
      * Health check
      */
     async healthCheck() {
-        return true; // Simple check since we are using Library
+        return true;
     }
     /**
      * Get game metadata
@@ -232,9 +217,13 @@ class AiService extends BaseService_1.BaseService {
     }
     async generateEmbedding(text) {
         try {
-            const model = this.genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-            const result = await model.embedContent(text);
-            return result.embedding.values;
+            const model = this.vertexAI.getGenerativeModel({ model: 'text-embedding-004' });
+            // In @google-cloud/vertexai, the method is embedContent but the response structure 
+            // might differ slightly from the AI Studio SDK.
+            const result = await model.embedContent({
+                content: { role: 'user', parts: [{ text }] }
+            });
+            return result.embeddings?.[0]?.values || result.embedding?.values || [];
         }
         catch (error) {
             throw this.handleError(error, 'generateEmbedding');

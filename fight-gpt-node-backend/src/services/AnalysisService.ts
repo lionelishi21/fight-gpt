@@ -73,9 +73,17 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       const cachedAnalysis = await this.getCachedAnalysis(request);
       if (cachedAnalysis) {
+        // If this authenticated user doesn't have their own record for this analysis,
+        // save one so it appears on their dashboard. Silently ignores errors.
+        if (userId && cachedAnalysis.user_id !== userId) {
+          const analysisId = UuidHelper.generate();
+          this.analysisRepository
+            .createAnalysis(request, cachedAnalysis.analysis as AnalysisResponse, analysisId, userId)
+            .catch(() => {});
+        }
         return {
           success: true,
-          data: cachedAnalysis.analysis as AnalysisResponse,
+          data: { ...(cachedAnalysis.analysis as AnalysisResponse), analysis_id: cachedAnalysis.analysis_id },
           message: 'Analysis retrieved from cache',
         };
       }

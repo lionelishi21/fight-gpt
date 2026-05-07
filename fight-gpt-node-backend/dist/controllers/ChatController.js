@@ -12,6 +12,7 @@ class ChatController extends BaseController_1.BaseController {
     rivalRepository;
     gameRepository;
     analysisRepository;
+    io;
     constructor(chatService, auditLogRepository, rivalRepository, gameRepository, analysisRepository) {
         super();
         this.chatService = chatService;
@@ -20,6 +21,27 @@ class ChatController extends BaseController_1.BaseController {
         this.gameRepository = gameRepository;
         this.analysisRepository = analysisRepository;
     }
+    setIo(io) {
+        this.io = io;
+    }
+    getHistory = async (req, res, next) => {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                this.sendResponse(res, { success: false, error: 'Unauthorized' }, 401);
+                return;
+            }
+            const ChatMessage = require('../models/ChatMessage').default;
+            const history = await ChatMessage.find({ userId })
+                .sort({ createdAt: 1 })
+                .limit(50)
+                .lean();
+            this.sendResponse(res, { success: true, data: history }, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    };
     sendMessage = async (req, res, next) => {
         try {
             const { message, history } = req.body;
@@ -88,6 +110,36 @@ class ChatController extends BaseController_1.BaseController {
                 }).catch(() => { });
             }
             if (response.success) {
+                // Save to database if authenticated
+                if (userId) {
+                    const ChatMessage = require('../models/ChatMessage').default;
+                    // Save user message
+                    const userMsg = await ChatMessage.create({
+                        userId,
+                        role: 'user',
+                        content: message.trim(),
+                        metadata: {
+                            gameId: ctx?.slots?.[0]?.gameId,
+                            characterId: ctx?.slots?.[0]?.characterId,
+                        }
+                    });
+                    // Save assistant message
+                    const assistantMsg = await ChatMessage.create({
+                        userId,
+                        role: 'assistant',
+                        content: response.message,
+                        metadata: {
+                            detectedEntities: response.detectedEntities,
+                        }
+                    });
+                    // Broadcast to all user's devices via Socket.io
+                    if (this.io) {
+                        this.io.to(`user_${userId}`).emit('new_message', {
+                            userMessage: userMsg,
+                            assistantMessage: assistantMsg
+                        });
+                    }
+                }
                 this.sendResponse(res, {
                     success: true,
                     data: {
@@ -109,6 +161,11 @@ class ChatController extends BaseController_1.BaseController {
     };
     clearChat = async (req, res, next) => {
         try {
+            const userId = req.user?.id;
+            if (userId) {
+                const ChatMessage = require('../models/ChatMessage').default;
+                await ChatMessage.deleteMany({ userId });
+            }
             if (this.auditLogRepository) {
                 const requestId = this.getRequestId(req);
                 await this.auditLogRepository.createAuditLog({

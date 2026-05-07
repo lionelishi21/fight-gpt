@@ -39,7 +39,7 @@ const UserMissionSchema = new mongoose_1.Schema({
     mission: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Mission', required: true },
     status: {
         type: String,
-        enum: ['PENDING', 'COMPLETED'],
+        enum: ['PENDING', 'COMPLETED', 'FAILED'],
         default: 'PENDING',
     },
     completedAt: { type: Date },

@@ -72,8 +72,10 @@ class TrainingService {
                 reward: `${mission.reward.xp} XP`, // Formatting for UI
                 rewardValue: mission.reward.xp,
                 targetLink: mission.targetLink,
-                status: userEntry ? userEntry.status : 'AVAILABLE', // AVAILABLE means not started/tracked yet
+                status: userEntry ? userEntry.status : 'AVAILABLE',
                 completed: userEntry?.status === 'COMPLETED',
+                feedback: userEntry?.metadata?.ai_feedback,
+                score: userEntry?.metadata?.technique_score
             };
         });
     }

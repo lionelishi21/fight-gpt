@@ -11,6 +11,7 @@ export interface IAnalysisRepository {
     findByAnalysisId(analysisId: string): Promise<IAnalysis | null>;
     getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<IAnalysis[]>;
     createAnalysis(request: AnalysisRequest, response: AnalysisResponse, analysisId: string, userId?: string): Promise<IAnalysis>;
+    countRecentAnalysesByUser(userId: string, hours: number): Promise<number>;
 }
 /**
  * Analysis repository implementation
@@ -39,5 +40,9 @@ export declare class AnalysisRepository extends BaseRepository<IAnalysis> implem
      * Create new analysis record
      */
     createAnalysis(request: AnalysisRequest, response: AnalysisResponse, analysisId: string, userId?: string): Promise<IAnalysis>;
+    /**
+     * Count analyses created by a user within a certain time window
+     */
+    countRecentAnalysesByUser(userId: string, hours: number): Promise<number>;
 }
 //# sourceMappingURL=AnalysisRepository.d.ts.map

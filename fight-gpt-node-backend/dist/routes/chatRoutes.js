@@ -24,8 +24,10 @@ class ChatRoutes {
     setupRoutes() {
         // POST /api/chat - Send a chat message (optional auth for user context)
         this.router.post('/', auth_1.optionalAuthMiddleware, this.validateSendMessage(), validationMiddleware_1.validateRequest, (req, res, next) => this.controller.sendMessage(req, res, next));
+        // GET /api/chat/history - Get chat history
+        this.router.get('/history', auth_1.optionalAuthMiddleware, (req, res, next) => this.controller.getHistory(req, res, next));
         // POST /api/chat/clear - Clear chat history
-        this.router.post('/clear', (req, res, next) => this.controller.clearChat(req, res, next));
+        this.router.post('/clear', auth_1.optionalAuthMiddleware, (req, res, next) => this.controller.clearChat(req, res, next));
     }
     /**
      * Validation for sending a message

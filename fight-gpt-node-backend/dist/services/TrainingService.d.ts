@@ -16,6 +16,8 @@ export declare class TrainingService {
         targetLink: string;
         status: string;
         completed: boolean;
+        feedback: any;
+        score: any;
     }[]>;
     /**
      * Complete a mission manually (e.g. user clicks "Claim" or "I did this")

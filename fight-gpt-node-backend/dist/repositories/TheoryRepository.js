@@ -39,6 +39,9 @@ class TheoryRepository extends BaseRepository_1.BaseRepository {
     async getAllMatchupTheories(gameId) {
         return this.model.find({ game_id: gameId, type: 'matchup' }).sort({ generated_at: -1 }).exec();
     }
+    async getTheoryById(id) {
+        return this.model.findOne({ theory_id: id }).exec();
+    }
 }
 exports.TheoryRepository = TheoryRepository;
 //# sourceMappingURL=TheoryRepository.js.map

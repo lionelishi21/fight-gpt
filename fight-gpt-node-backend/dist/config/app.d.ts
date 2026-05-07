@@ -17,6 +17,9 @@ export declare class AppConfig {
     static get STRIPE_SECRET_KEY(): string;
     static get STRIPE_WEBHOOK_SECRET(): string;
     static get APP_URL(): string;
+    static get GOOGLE_CLOUD_PROJECT(): string;
+    static get GOOGLE_CLOUD_LOCATION(): string;
+    static get GOOGLE_STORAGE_BUCKET(): string;
     /**
      * Validate required configuration
      */

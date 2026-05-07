@@ -35,6 +35,7 @@ export interface ITheoryDocument {
         }>;
     };
     generated_at: Date;
+    youtube_url?: string;
     created_at?: Date;
     updated_at?: Date;
     status: 'pending' | 'approved' | 'rejected';

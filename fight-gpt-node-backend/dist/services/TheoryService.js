@@ -55,6 +55,7 @@ class TheoryService extends BaseService_1.BaseService {
                 patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
+                youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
             });
             // Fire notification to all users who might care
             this.notificationService?.characterTheory({
@@ -101,6 +102,7 @@ class TheoryService extends BaseService_1.BaseService {
                 patch_version: patchVersion || 'LIVE',
                 is_current_patch: true,
                 generated_at: new Date(),
+                youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
             });
             this.notificationService?.matchupTheory({
                 gameId,
@@ -149,6 +151,17 @@ class TheoryService extends BaseService_1.BaseService {
         }
         catch (error) {
             throw this.handleError(error, 'getAllCharacterTheories');
+        }
+    }
+    async getTheoryById(id) {
+        try {
+            const theory = await this.theoryRepository.getTheoryById(id);
+            if (!theory)
+                return { success: false, error: 'Theory not found' };
+            return { success: true, data: theory };
+        }
+        catch (error) {
+            throw this.handleError(error, 'getTheoryById');
         }
     }
     async getCurrentPatchVersion(gameId) {

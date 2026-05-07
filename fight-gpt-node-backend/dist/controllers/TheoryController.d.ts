@@ -14,5 +14,7 @@ export declare class TheoryController extends BaseController {
     getMatchupTheory: (req: Request, res: Response) => Promise<void>;
     /** POST /api/theory/:gameId/matchups/:charA/vs/:charB/generate */
     generateMatchupTheory: (req: Request, res: Response) => Promise<void>;
+    /** GET /api/theory/:id */
+    getTheoryById: (req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=TheoryController.d.ts.map

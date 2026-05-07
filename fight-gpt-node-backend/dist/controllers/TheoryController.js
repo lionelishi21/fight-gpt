@@ -64,6 +64,16 @@ class TheoryController extends BaseController_1.BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
         }
     };
+    /** GET /api/theory/:id */
+    getTheoryById = async (req, res) => {
+        try {
+            const result = await this.theoryService.getTheoryById(req.params.id);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
+        }
+    };
 }
 exports.TheoryController = TheoryController;
 //# sourceMappingURL=TheoryController.js.map

@@ -184,7 +184,7 @@ class NotificationService {
             title: `New AI theory — ${char.toUpperCase()}`,
             description: opts.headline,
             characterId: opts.characterName,
-            link: `/dashboard/meta?theory=${opts.theoryId}`,
+            link: `/dashboard/theory/${opts.theoryId}`,
             data: opts,
         }, 'medium');
     }
@@ -193,7 +193,7 @@ class NotificationService {
             gameId: opts.gameId,
             title: `Matchup theory updated — ${opts.charA} vs ${opts.charB}`,
             description: opts.headline,
-            link: `/dashboard/meta?theory=${opts.theoryId}`,
+            link: `/dashboard/theory/${opts.theoryId}`,
             data: opts,
         }, 'medium');
     }
@@ -221,7 +221,7 @@ class NotificationService {
             gameId: opts.gameId,
             title: 'Your match analysis is ready',
             description: opts.summary,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: opts,
         }, 'high');
     }
@@ -240,14 +240,14 @@ class NotificationService {
             gameId: opts.gameId,
             title: `RIVAL SPOTTED: ${opts.rivalName}`,
             description: `Your tracked rival ${opts.rivalName} was found in a new match.`,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: { rivalName: opts.rivalName, analysisId: opts.analysisId }
         }, 'high');
         // 2. Send email alert
         try {
             const user = await User_1.default.findById(userId).select('email name').lean().exec();
             if (user && user.email) {
-                const analysisUrl = `https://metapunish.com/dashboard/matches?id=${opts.analysisId}`;
+                const analysisUrl = `https://metapunish.com/dashboard/matches/${opts.analysisId}`;
                 await EmailService_1.emailService.sendRivalWatchAlert(user.email, user.name, opts.rivalName, opts.gameName, analysisUrl);
             }
         }
@@ -261,7 +261,7 @@ class NotificationService {
             characterId: opts.characterId,
             title: `PRO SCOUT: ${opts.proName}`,
             description: `New high-level footage analyzed for ${opts.proName}.`,
-            link: `/dashboard/matches?id=${opts.analysisId}`,
+            link: `/dashboard/matches/${opts.analysisId}`,
             data: { proName: opts.proName, analysisId: opts.analysisId }
         }, 'medium');
     }

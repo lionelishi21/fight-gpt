@@ -84,6 +84,8 @@ const notFoundMiddleware_1 = require("./middleware/notFoundMiddleware");
  */
 class App {
     app;
+    server;
+    io;
     routes;
     ingestionService = null;
     rosterSyncService = null;
@@ -92,6 +94,18 @@ class App {
         app_1.AppConfig.validate();
         // Initialize Express app
         this.app = (0, express_1.default)();
+        // Setup HTTP server and Socket.io
+        const { createServer } = require('http');
+        const { Server } = require('socket.io');
+        this.server = createServer(this.app);
+        this.io = new Server(this.server, {
+            cors: {
+                origin: app_1.AppConfig.CORS_ORIGINS,
+                credentials: true
+            }
+        });
+        // Initialize Socket.io events
+        this.setupSocketEvents();
         // Setup middleware
         this.setupMiddleware();
         // Initialize dependencies (dependency injection)
@@ -161,6 +175,8 @@ class App {
         const engagementController = new EngagementController_1.EngagementController(engagementService);
         const engagementRoutes = new engagementRoutes_1.EngagementRoutes(engagementController);
         this.routes = new routes_1.Routes(analysisController, healthController, characterController, gameController, gameMetadataController, characterEncyclopediaController, chatController, metaController, theoryController, notificationController, rivalController, userController, adminController, paymentController, engagementController);
+        // Inject Socket.io into chat controller
+        chatController.setIo(this.io);
         this.setupRoutes();
         // Setup error handling
         this.setupErrorHandling();
@@ -266,6 +282,24 @@ class App {
         this.app.use(errorMiddleware_1.errorMiddleware);
     }
     /**
+     * Setup Socket.io events
+     */
+    setupSocketEvents() {
+        this.io.on('connection', (socket) => {
+            logger_1.Logger.info(`SOCKET_LINK: Client connected [${socket.id}]`);
+            // Handle user join room (specific to userId for cross-device sync)
+            socket.on('join_user_room', (userId) => {
+                if (userId) {
+                    socket.join(`user_${userId}`);
+                    logger_1.Logger.info(`SOCKET_LINK: User ${userId} joined their neural room`);
+                }
+            });
+            socket.on('disconnect', () => {
+                logger_1.Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
+            });
+        });
+    }
+    /**
      * Start the application
      */
     async start() {
@@ -289,7 +323,7 @@ class App {
                 }
             }
             // Start server
-            this.app.listen(app_1.AppConfig.PORT, () => {
+            this.server.listen(app_1.AppConfig.PORT, () => {
                 logger_1.Logger.info(`Server running on port ${app_1.AppConfig.PORT} in ${app_1.AppConfig.NODE_ENV} mode`);
                 logger_1.Logger.info(`API Gateway: http://localhost:${app_1.AppConfig.PORT}`);
                 logger_1.Logger.info(`Health check: http://localhost:${app_1.AppConfig.PORT}/api/health`);

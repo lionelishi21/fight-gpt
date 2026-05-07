@@ -1,27 +1,29 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatService = void 0;
-const generative_ai_1 = require("@google/generative-ai");
+const vertexai_1 = require("@google-cloud/vertexai");
 const BaseService_1 = require("./BaseService");
 const app_1 = require("../config/app");
 /**
- * Chat Service implementation with Gemini AI
+ * Chat Service implementation with Google Cloud Vertex AI
  * Specialized for fighting games only
- * Follows Single Responsibility Principle - handles chat communication with Gemini
  */
 class ChatService extends BaseService_1.BaseService {
-    genAI;
+    vertexAI;
     model;
     systemPrompt;
     constructor() {
         super();
-        if (!app_1.AppConfig.GEMINI_API_KEY) {
-            throw new Error('GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required');
+        if (!app_1.AppConfig.GOOGLE_CLOUD_PROJECT) {
+            throw new Error('GOOGLE_CLOUD_PROJECT environment variable is required for Vertex AI');
         }
-        this.genAI = new generative_ai_1.GoogleGenerativeAI(app_1.AppConfig.GEMINI_API_KEY);
+        this.vertexAI = new vertexai_1.VertexAI({
+            project: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
+            location: app_1.AppConfig.GOOGLE_CLOUD_LOCATION || 'us-central1',
+        });
         // Primary model from env — falls back through the list on 503/overload
-        const modelName = app_1.AppConfig.GEMINI_MODEL || 'gemini-2.0-flash';
-        this.model = this.genAI.getGenerativeModel({ model: modelName });
+        const modelName = app_1.AppConfig.GEMINI_MODEL || 'gemini-2.5-flash';
+        this.model = this.vertexAI.getGenerativeModel({ model: modelName });
         // Custom system prompt specialized for fighting games
         this.systemPrompt = `You are Fight GPT, an expert AI assistant specialized exclusively in fighting games. Your knowledge includes:
 
@@ -63,6 +65,7 @@ Your knowledge includes:
 - Game-specific mechanics (Drive System, EX moves, Supers, etc.)
 - Patch notes, balance changes, and tier lists
 - Tournament play and competitive strategies
+- Patch notes and balance updates
 
 **Rules:**
 1. ONLY answer questions about fighting games, characters, mechanics, strategies, and related topics
@@ -78,7 +81,7 @@ Your knowledge includes:
 Help players improve their skills, understand game mechanics, learn characters, optimize combos, and strategize for matches.`;
     }
     /**
-     * Send a message to Gemini AI with gaming context
+     * Send a message to Vertex AI with gaming context
      */
     async sendMessage(message, conversationHistory = []) {
         try {
@@ -114,28 +117,28 @@ Help players improve their skills, understand game mechanics, learn characters, 
                 topP: 0.95,
                 maxOutputTokens: 2048,
             };
-            // Try primary model, fall back to gemini-2.0-flash on 503/overload
+            // Try primary model, fall back on 503/overload
             const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
             let lastError = null;
-            const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
+            const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.vertexAI.getGenerativeModel({ model: m }))];
             for (const modelInstance of modelsToTry) {
                 try {
                     const chat = modelInstance.startChat({ history: historyItems, generationConfig });
                     const result = await chat.sendMessage(message);
-                    const text = result.response.text();
+                    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     return { success: true, message: text };
                 }
                 catch (e) {
                     lastError = e;
                     // Only retry on 503 overload — other errors bubble up immediately
-                    const is503 = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('high demand');
-                    if (!is503)
+                    const isRetryable = e?.message?.includes('503') || e?.message?.includes('overload') || e?.message?.includes('high demand') || e?.message?.includes('429');
+                    if (!isRetryable)
                         break;
                 }
             }
             const errorMessage = lastError?.message || 'Unknown error occurred';
             console.error('[ChatService] All models failed:', errorMessage);
-            return { success: false, message: '', error: `Failed to get response: ${errorMessage}` };
+            return { success: false, message: '', error: `Failed to get response from Vertex AI: ${errorMessage}` };
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

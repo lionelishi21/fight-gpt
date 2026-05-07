@@ -66,6 +66,7 @@ export interface Move {
     category: MoveCategory;
     properties?: string[];
     frame_data: FrameData;
+    video_url?: string;
     team_member?: string;
     team_position?: number;
     requirements?: {

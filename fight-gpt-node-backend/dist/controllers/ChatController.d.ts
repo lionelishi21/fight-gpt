@@ -11,7 +11,10 @@ export declare class ChatController extends BaseController {
     private readonly rivalRepository?;
     private readonly gameRepository?;
     private readonly analysisRepository?;
+    private io;
     constructor(chatService: ChatService, auditLogRepository: AuditLogRepository | null, rivalRepository?: IRivalRepository, gameRepository?: IGameRepository, analysisRepository?: IAnalysisRepository);
+    setIo(io: any): void;
+    getHistory: (req: Request, res: Response, next: NextFunction) => Promise<void>;
     sendMessage: (req: Request, res: Response, next: NextFunction) => Promise<void>;
     clearChat: (req: Request, res: Response, next: NextFunction) => Promise<void>;
 }
