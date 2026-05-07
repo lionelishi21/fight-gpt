@@ -72,7 +72,7 @@ export class PaymentService extends BaseService implements IPaymentService {
 
                     if (userId) {
                         await User.findByIdAndUpdate(userId, {
-                            tier: 'pro',
+                            tier: 'PRO',
                             stripeCustomerId: session.customer as string,
                             stripeSubscriptionId: session.subscription as string,
                         });
@@ -84,7 +84,7 @@ export class PaymentService extends BaseService implements IPaymentService {
                     const subscription = event.data.object as any;
                     await User.findOneAndUpdate(
                         { stripeSubscriptionId: subscription.id },
-                        { tier: 'free' }
+                        { tier: 'FREE' }
                     );
                     Logger.info(`Subscription ${subscription.id} cancelled. User downgraded to free.`);
                     break;

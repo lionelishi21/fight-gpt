@@ -10,6 +10,7 @@ import { IMetaService } from '../services/MetaService';
  */
 export declare class SystemInitializer {
     static run(metaService?: IMetaService, rosterSyncService?: RosterSyncService): Promise<void>;
+    private static seedCharacterAliases;
     private static ensureAdmin;
     private static seedDeepMeta;
     private static seedDeepTheories;

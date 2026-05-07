@@ -9,6 +9,7 @@ const MetaReport_1 = require("../models/MetaReport");
 const TheoryDocument_1 = require("../models/TheoryDocument");
 const Scenario_1 = require("../models/Scenario");
 const User_1 = __importDefault(require("../models/User"));
+const Character_1 = require("../models/Character");
 const node_cron_1 = __importDefault(require("node-cron"));
 /**
  * SystemInitializer handles automatic database setup on startup.
@@ -30,7 +31,9 @@ class SystemInitializer {
             else {
                 logger_1.Logger.info(`SYSTEM_INITIALIZATION: Detected ${reportCount} meta reports. System state healthy.`);
             }
-            // 2. Ensure Master Admin exists
+            // 2. Seed character aliases (idempotent — only patches empty arrays)
+            await this.seedCharacterAliases();
+            // 3. Ensure Master Admin exists
             const masterEmail = process.env.MASTER_ADMIN_EMAIL || 'lionelfrancis7@gmail.com';
             await this.ensureAdmin(masterEmail);
             // 3. Schedule Weekly Roster & Frame Data Sync (Every Sunday at 3am)
@@ -51,6 +54,42 @@ class SystemInitializer {
         catch (error) {
             logger_1.Logger.error('SYSTEM_INITIALIZATION: Failed during deep sync sequence', error);
         }
+    }
+    static async seedCharacterAliases() {
+        const ALIASES = {
+            // SF6
+            'Ryu': ['ryu'], 'Ken': ['ken'], 'Chun-Li': ['chun-li', 'chunli', 'chun_li'],
+            'Guile': ['guile'], 'Cammy': ['cammy'], 'Juri': ['juri'], 'Blanka': ['blanka'],
+            'Dhalsim': ['dhalsim'], 'E. Honda': ['e_honda', 'honda', 'e.honda'],
+            'Dee Jay': ['dee_jay', 'deejay', 'dee jay'], 'Manon': ['manon'], 'Marisa': ['marisa'],
+            'Lily': ['lily'], 'JP': ['jp'], 'Kimberly': ['kimberly'], 'Luke': ['luke'],
+            'Jamie': ['jamie'], 'Zangief': ['zangief'], 'M. Bison': ['m_bison', 'bison', 'm.bison'],
+            'C. Viper': ['c_viper', 'cviper'], 'Rashid': ['rashid'], 'AKI': ['aki'],
+            'Ed': ['ed'], 'Akuma': ['akuma'], 'Terry': ['terry'], 'Mai': ['mai'],
+            'Elena': ['elena'], 'Sagat': ['sagat'],
+            // Tekken 8
+            'Jin Kazama': ['jin', 'jin_kazama'], 'Kazuya Mishima': ['kazuya', 'kazuya_mishima'],
+            'Paul Phoenix': ['paul', 'paul_phoenix'], 'Marshall Law': ['law', 'marshall_law'],
+            'King': ['king'], 'Asuka Kazama': ['asuka', 'asuka_kazama'],
+            'Nina Williams': ['nina', 'nina_williams'], 'Hwoarang': ['hwoarang'],
+            'Sergei Dragunov': ['dragunov', 'sergei_dragunov'], 'Reina': ['reina'],
+            'Jack-8': ['jack', 'jack_8', 'jack8'], 'Steve Fox': ['steve', 'steve_fox'],
+            'Lars Alexandersson': ['lars', 'lars_alexandersson'], 'Yoshimitsu': ['yoshimitsu'],
+            'Jun Kazama': ['jun', 'jun_kazama'], 'Eddy Gordo': ['eddy', 'eddy_gordo'],
+            'Lidia Sobieska': ['lidia', 'lidia_sobieska'], 'Heihachi Mishima': ['heihachi', 'heihachi_mishima'],
+            'Clive Rosfield': ['clive', 'clive_rosfield'], 'Victor Chevalier': ['victor', 'victor_chevalier'],
+            'Devil Jin': ['devil_jin', 'deviljin'], 'Lili': ['lili'],
+            'Leo Kliesen': ['leo', 'leo_kliesen'], 'Feng Wei': ['feng', 'feng_wei'],
+            'Alisa Bosconovitch': ['alisa', 'alisa_bosconovitch'], 'Bryan Fury': ['bryan', 'bryan_fury'],
+            'Azucena': ['azucena'], 'Raven': ['raven'], 'Shaheen': ['shaheen'],
+        };
+        let patched = 0;
+        for (const [name, aliases] of Object.entries(ALIASES)) {
+            const result = await Character_1.Character.updateMany({ name, aliases: { $size: 0 } }, { $set: { aliases } }).catch(() => ({ modifiedCount: 0 }));
+            patched += result.modifiedCount;
+        }
+        if (patched > 0)
+            logger_1.Logger.info(`SYSTEM_INITIALIZATION: Seeded aliases for ${patched} characters`);
     }
     static async ensureAdmin(email) {
         let user = await User_1.default.findOne({ email });

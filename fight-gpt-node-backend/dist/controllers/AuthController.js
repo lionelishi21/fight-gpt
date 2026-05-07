@@ -152,24 +152,32 @@ class AuthController extends BaseController_1.BaseController {
                 this.sendError(res, 'User not found', 404);
                 return;
             }
-            // Fetch the primary active game slot for this user to determine main character
-            const activeGame = await UserGame_1.default.findOne({ user: userId, isActive: true }).sort({ createdAt: -1 });
-            // Derive planType from user.tier — this is the single source of truth updated by Stripe.
-            // UserGame.planType is NOT used here because it is never synced on upgrade and would return stale 'free'.
-            // Admins always get premium access regardless of their Stripe tier.
-            const planType = (user.role === 'admin' || user.tier !== 'FREE') ? 'premium' : 'free';
+            // Fetch the primary active game slot + populate the character reference so we get
+            // the character slug (e.g. 'ryu') not a raw ObjectId.
+            const activeGame = await UserGame_1.default.findOne({ user: userId, isActive: true })
+                .sort({ createdAt: -1 })
+                .populate('character', 'name aliases');
+            // Resolve main character: prefer slot (string slug) → populated UserGame character name → preferences fallback
+            const resolvedMainCharacter = user.slots?.[0]?.characterId ||
+                activeGame?.character?.name?.toLowerCase().replace(/\s+/g, '_') ||
+                user.preferences?.mainCharacter ||
+                '';
+            // Derive planType from user.tier — single source of truth updated by Stripe.
+            // Case-insensitive: handles both 'PRO' and legacy 'pro' values.
+            const tierUpper = (user.tier || 'FREE').toUpperCase();
+            const planType = (user.role === 'admin' || tierUpper !== 'FREE') ? 'premium' : 'free';
             this.sendResponse(res, {
                 success: true,
                 data: {
                     user: {
                         ...user.toObject(),
                         planType,
+                        tier: tierUpper, // always return uppercase so frontend comparisons are consistent
                         slots: user.slots || [],
-                        // Ensure mainCharacter is reactive for the web frontend
                         preferences: {
                             ...user.preferences,
-                            mainCharacter: user.slots[0]?.characterId || activeGame?.character || user.preferences?.mainCharacter
-                        }
+                            mainCharacter: resolvedMainCharacter,
+                        },
                     },
                 },
             });

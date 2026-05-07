@@ -91,7 +91,9 @@ export const premiumMiddleware = async (req: Request, res: Response, next: NextF
         }
 
         // Admins and users with COMPETITOR or PRO tier have premium access
-        if (user.role === 'admin' || user.tier === 'COMPETITOR' || user.tier === 'PRO') {
+        // Case-insensitive to handle any legacy lowercase values from older Stripe webhook handler
+        const tier = (user.tier || '').toUpperCase();
+        if (user.role === 'admin' || tier === 'COMPETITOR' || tier === 'PRO') {
             // Attach full user for downstream use
             (req as any).user = user;
             next();

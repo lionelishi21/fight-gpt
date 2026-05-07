@@ -62,7 +62,7 @@ class PaymentService extends BaseService_1.BaseService {
                     const userId = session.client_reference_id || session.metadata?.userId;
                     if (userId) {
                         await User_1.default.findByIdAndUpdate(userId, {
-                            tier: 'pro',
+                            tier: 'PRO',
                             stripeCustomerId: session.customer,
                             stripeSubscriptionId: session.subscription,
                         });
@@ -72,7 +72,7 @@ class PaymentService extends BaseService_1.BaseService {
                 }
                 case 'customer.subscription.deleted': {
                     const subscription = event.data.object;
-                    await User_1.default.findOneAndUpdate({ stripeSubscriptionId: subscription.id }, { tier: 'free' });
+                    await User_1.default.findOneAndUpdate({ stripeSubscriptionId: subscription.id }, { tier: 'FREE' });
                     logger_1.Logger.info(`Subscription ${subscription.id} cancelled. User downgraded to free.`);
                     break;
                 }

@@ -48,7 +48,7 @@ class AnalysisService extends BaseService_1.BaseService {
             if (userId) {
                 const user = await User_1.default.findById(userId);
                 if (user && user.role !== 'admin') { // Admins have infinite scans
-                    const tier = user.tier || 'FREE';
+                    const tier = (user.tier || 'FREE').toUpperCase();
                     const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId, 24);
                     const maxFree = 1;
                     const maxCompetitor = 10;
