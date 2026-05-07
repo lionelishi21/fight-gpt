@@ -87,6 +87,8 @@ import { notFoundMiddleware } from './middleware/notFoundMiddleware';
  */
 export class App {
   private app: Express;
+  private server: any;
+  private io: any;
   private routes: Routes;
   private ingestionService: InstanceType<typeof IngestionService> | null = null;
   private rosterSyncService: RosterSyncService | null = null;
@@ -97,6 +99,20 @@ export class App {
 
     // Initialize Express app
     this.app = express();
+
+    // Setup HTTP server and Socket.io
+    const { createServer } = require('http');
+    const { Server } = require('socket.io');
+    this.server = createServer(this.app);
+    this.io = new Server(this.server, {
+      cors: {
+        origin: AppConfig.CORS_ORIGINS,
+        credentials: true
+      }
+    });
+
+    // Initialize Socket.io events
+    this.setupSocketEvents();
 
     // Setup middleware
     this.setupMiddleware();
@@ -208,6 +224,10 @@ export class App {
       paymentController,
       engagementController
     );
+    
+    // Inject Socket.io into chat controller
+    chatController.setIo(this.io);
+
     this.setupRoutes();
 
     // Setup error handling
@@ -330,6 +350,27 @@ export class App {
   }
 
   /**
+   * Setup Socket.io events
+   */
+  private setupSocketEvents(): void {
+    this.io.on('connection', (socket: any) => {
+      Logger.info(`SOCKET_LINK: Client connected [${socket.id}]`);
+
+      // Handle user join room (specific to userId for cross-device sync)
+      socket.on('join_user_room', (userId: string) => {
+        if (userId) {
+          socket.join(`user_${userId}`);
+          Logger.info(`SOCKET_LINK: User ${userId} joined their neural room`);
+        }
+      });
+
+      socket.on('disconnect', () => {
+        Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
+      });
+    });
+  }
+
+  /**
    * Start the application
    */
   public async start(): Promise<void> {
@@ -357,7 +398,7 @@ export class App {
       }
 
       // Start server
-      this.app.listen(AppConfig.PORT, () => {
+      this.server.listen(AppConfig.PORT, () => {
         Logger.info(`Server running on port ${AppConfig.PORT} in ${AppConfig.NODE_ENV} mode`);
         Logger.info(`API Gateway: http://localhost:${AppConfig.PORT}`);
         Logger.info(`Health check: http://localhost:${AppConfig.PORT}/api/health`);

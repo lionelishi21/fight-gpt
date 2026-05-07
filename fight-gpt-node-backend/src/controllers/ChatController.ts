@@ -8,6 +8,8 @@ import { IAnalysisRepository } from '../repositories/AnalysisRepository';
 import User from '../models/User';
 
 export class ChatController extends BaseController {
+  private io: any;
+
   constructor(
     private readonly chatService: ChatService,
     private readonly auditLogRepository: AuditLogRepository | null,
@@ -17,6 +19,30 @@ export class ChatController extends BaseController {
   ) {
     super();
   }
+
+  setIo(io: any) {
+    this.io = io;
+  }
+
+  getHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        this.sendResponse(res, { success: false, error: 'Unauthorized' }, 401);
+        return;
+      }
+
+      const ChatMessage = require('../models/ChatMessage').default;
+      const history = await ChatMessage.find({ userId })
+        .sort({ createdAt: 1 })
+        .limit(50)
+        .lean();
+
+      this.sendResponse(res, { success: true, data: history }, 200);
+    } catch (error) {
+      next(error);
+    }
+  };
 
   sendMessage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -91,6 +117,40 @@ export class ChatController extends BaseController {
       }
 
       if (response.success) {
+        // Save to database if authenticated
+        if (userId) {
+          const ChatMessage = require('../models/ChatMessage').default;
+          
+          // Save user message
+          const userMsg = await ChatMessage.create({
+            userId,
+            role: 'user',
+            content: message.trim(),
+            metadata: {
+              gameId: (ctx as any)?.slots?.[0]?.gameId,
+              characterId: (ctx as any)?.slots?.[0]?.characterId,
+            }
+          });
+
+          // Save assistant message
+          const assistantMsg = await ChatMessage.create({
+            userId,
+            role: 'assistant',
+            content: response.message,
+            metadata: {
+              detectedEntities: (response as any).detectedEntities,
+            }
+          });
+
+          // Broadcast to all user's devices via Socket.io
+          if (this.io) {
+            this.io.to(`user_${userId}`).emit('new_message', {
+              userMessage: userMsg,
+              assistantMessage: assistantMsg
+            });
+          }
+        }
+
         this.sendResponse(res, {
           success: true,
           data: {
@@ -111,6 +171,12 @@ export class ChatController extends BaseController {
 
   clearChat = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userId = (req as any).user?.id;
+      if (userId) {
+        const ChatMessage = require('../models/ChatMessage').default;
+        await ChatMessage.deleteMany({ userId });
+      }
+
       if (this.auditLogRepository) {
         const requestId = this.getRequestId(req);
         await this.auditLogRepository.createAuditLog({

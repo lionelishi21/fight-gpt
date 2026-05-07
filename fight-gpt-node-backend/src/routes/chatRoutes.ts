@@ -32,9 +32,17 @@ export class ChatRoutes {
       (req, res, next) => this.controller.sendMessage(req, res, next)
     );
 
+    // GET /api/chat/history - Get chat history
+    this.router.get(
+      '/history',
+      optionalAuthMiddleware,
+      (req, res, next) => this.controller.getHistory(req, res, next)
+    );
+
     // POST /api/chat/clear - Clear chat history
     this.router.post(
       '/clear',
+      optionalAuthMiddleware,
       (req, res, next) => this.controller.clearChat(req, res, next)
     );
   }
