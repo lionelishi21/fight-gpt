@@ -1,0 +1,1 @@
+{"version":3,"file":"artistOnboardingRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/artistOnboardingRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAEjC,OAAO,EAAE,0BAA0B,EAAE,MAAM,2CAA2C,CAAC;AAKvF,qBAAa,sBAAsB;IAGnB,OAAO,CAAC,QAAQ,CAAC,UAAU;IAFvC,OAAO,CAAC,MAAM,CAAS;gBAEM,UAAU,EAAE,0BAA0B;IAKnE,OAAO,CAAC,WAAW;IAoBnB,SAAS,IAAI,MAAM;CAGtB"}

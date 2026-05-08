@@ -60,6 +60,15 @@ const AdminService_1 = require("./services/AdminService");
 const PaymentService_1 = require("./services/PaymentService");
 const RosterSyncService_1 = require("./services/RosterSyncService");
 const ScraperService_1 = require("./services/ScraperService");
+const ArtistOnboardingService_1 = require("./services/ArtistOnboardingService");
+const AdminArtistService_1 = require("./services/AdminArtistService");
+const ArtistOnboardingController_1 = require("./controllers/ArtistOnboardingController");
+const AdminArtistController_1 = require("./controllers/AdminArtistController");
+const ArtistProfileRepository_1 = require("./repositories/ArtistProfileRepository");
+const OnboardingDocumentRepository_1 = require("./repositories/OnboardingDocumentRepository");
+const SplitSheetRepository_1 = require("./repositories/SplitSheetRepository");
+const TrackSubmissionRepository_1 = require("./repositories/TrackSubmissionRepository");
+const AdminArtistReviewRepository_1 = require("./repositories/AdminArtistReviewRepository");
 // Import repositories
 const AnalysisRepository_1 = require("./repositories/AnalysisRepository");
 const AuditLogRepository_1 = require("./repositories/AuditLogRepository");
@@ -170,11 +179,29 @@ class App {
             paymentService = null;
             paymentController = new PaymentController_1.PaymentController(null);
         }
+        // Artist onboarding
+        const artistProfileRepo = app_1.AppConfig.MONGODB_URI ? new ArtistProfileRepository_1.ArtistProfileRepository() : null;
+        const onboardingDocRepo = app_1.AppConfig.MONGODB_URI ? new OnboardingDocumentRepository_1.OnboardingDocumentRepository() : null;
+        const splitSheetRepo = app_1.AppConfig.MONGODB_URI ? new SplitSheetRepository_1.SplitSheetRepository() : null;
+        const trackSubmissionRepo = app_1.AppConfig.MONGODB_URI ? new TrackSubmissionRepository_1.TrackSubmissionRepository() : null;
+        const adminArtistReviewRepo = app_1.AppConfig.MONGODB_URI ? new AdminArtistReviewRepository_1.AdminArtistReviewRepository() : null;
+        const artistOnboardingService = app_1.AppConfig.MONGODB_URI
+            ? new ArtistOnboardingService_1.ArtistOnboardingService(artistProfileRepo, onboardingDocRepo, splitSheetRepo, trackSubmissionRepo, adminArtistReviewRepo)
+            : null;
+        const adminArtistService = app_1.AppConfig.MONGODB_URI
+            ? new AdminArtistService_1.AdminArtistService(artistProfileRepo, adminArtistReviewRepo, trackSubmissionRepo, onboardingDocRepo)
+            : null;
+        const artistOnboardingController = app_1.AppConfig.MONGODB_URI ? new ArtistOnboardingController_1.ArtistOnboardingController(artistOnboardingService) : null;
+        const adminArtistController = app_1.AppConfig.MONGODB_URI ? new AdminArtistController_1.AdminArtistController(adminArtistService) : null;
         // Setup routes
         const engagementService = new EngagementService_1.EngagementService(theoryService);
         const engagementController = new EngagementController_1.EngagementController(engagementService);
         const engagementRoutes = new engagementRoutes_1.EngagementRoutes(engagementController);
         this.routes = new routes_1.Routes(analysisController, healthController, characterController, gameController, gameMetadataController, characterEncyclopediaController, chatController, metaController, theoryController, notificationController, rivalController, userController, adminController, paymentController, engagementController);
+        // Mount artist onboarding routes
+        if (app_1.AppConfig.MONGODB_URI && artistOnboardingController && adminArtistController) {
+            this.routes.mountArtistRoutes(artistOnboardingController, adminArtistController);
+        }
         // Inject Socket.io into chat controller
         chatController.setIo(this.io);
         this.setupRoutes();

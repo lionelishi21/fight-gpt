@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { ArtistOnboardingController } from '../controllers/ArtistOnboardingController';
+import { AdminArtistController } from '../controllers/AdminArtistController';
 import { MetaRoutes } from './metaRoutes';
 import { AdminController } from '../controllers/AdminController';
 import { AnalysisController } from '../controllers/AnalysisController';
@@ -41,6 +43,8 @@ export declare class Routes {
     private adminRoutes;
     private paymentRoutes;
     private engagementRoutes;
+    private artistOnboardingRoutes;
+    private adminArtistRoutes;
     constructor(analysisController: AnalysisController | null, healthController: HealthController | null, characterController: CharacterController | null, gameController: GameController | null, gameMetadataController: GameMetadataController | null, characterEncyclopediaController: CharacterEncyclopediaController | null, chatController: ChatController, metaController?: MetaController | null, theoryController?: TheoryController | null, notificationController?: NotificationController | null, rivalController?: RivalController | null, userController?: UserController | null, adminController?: AdminController | null, paymentController?: PaymentController | null, engagementController?: EngagementController | null);
     /**
      * Setup all routes
@@ -50,6 +54,7 @@ export declare class Routes {
      * Get main router instance
      */
     getRouter(): Router;
+    mountArtistRoutes(artistController: ArtistOnboardingController, adminArtistController: AdminArtistController): void;
     getMetaRoutes(): MetaRoutes | null;
 }
 //# sourceMappingURL=index.d.ts.map

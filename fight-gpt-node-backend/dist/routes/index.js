@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Routes = void 0;
 const express_1 = require("express");
+const artistOnboardingRoutes_1 = require("./artistOnboardingRoutes");
+const adminArtistRoutes_1 = require("./adminArtistRoutes");
 const analysisRoutes_1 = require("./analysisRoutes");
 const healthRoutes_1 = require("./healthRoutes");
 const characterRoutes_1 = require("./characterRoutes");
@@ -56,6 +58,8 @@ class Routes {
     adminRoutes;
     paymentRoutes;
     engagementRoutes;
+    artistOnboardingRoutes = null;
+    adminArtistRoutes = null;
     constructor(analysisController, healthController, characterController, gameController, gameMetadataController, characterEncyclopediaController, chatController, metaController, theoryController, notificationController, rivalController, userController, adminController, paymentController, engagementController) {
         this.router = (0, express_1.Router)();
         this.analysisRoutes = analysisController ? new analysisRoutes_1.AnalysisRoutes(analysisController) : null;
@@ -179,6 +183,12 @@ class Routes {
      */
     getRouter() {
         return this.router;
+    }
+    mountArtistRoutes(artistController, adminArtistController) {
+        this.artistOnboardingRoutes = new artistOnboardingRoutes_1.ArtistOnboardingRoutes(artistController);
+        this.adminArtistRoutes = new adminArtistRoutes_1.AdminArtistRoutes(adminArtistController);
+        this.router.use('/artist', this.artistOnboardingRoutes.getRouter());
+        this.router.use('/admin/artists', this.adminArtistRoutes.getRouter());
     }
     getMetaRoutes() {
         return this.metaRoutes;

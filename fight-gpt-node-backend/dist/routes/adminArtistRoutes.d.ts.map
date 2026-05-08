@@ -1,0 +1,1 @@
+{"version":3,"file":"adminArtistRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/adminArtistRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AACjC,OAAO,EAAE,qBAAqB,EAAE,MAAM,sCAAsC,CAAC;AAI7E,qBAAa,iBAAiB;IAGd,OAAO,CAAC,QAAQ,CAAC,UAAU;IAFvC,OAAO,CAAC,MAAM,CAAS;gBAEM,UAAU,EAAE,qBAAqB;IAK9D,OAAO,CAAC,WAAW;IAwBnB,SAAS,IAAI,MAAM;CAGtB"}

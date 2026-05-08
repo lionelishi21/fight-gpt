@@ -60,6 +60,15 @@ import { AdminService } from './services/AdminService';
 import { PaymentService } from './services/PaymentService';
 import { RosterSyncService } from './services/RosterSyncService';
 import { ScraperService } from './services/ScraperService';
+import { ArtistOnboardingService } from './services/ArtistOnboardingService';
+import { AdminArtistService } from './services/AdminArtistService';
+import { ArtistOnboardingController } from './controllers/ArtistOnboardingController';
+import { AdminArtistController } from './controllers/AdminArtistController';
+import { ArtistProfileRepository } from './repositories/ArtistProfileRepository';
+import { OnboardingDocumentRepository } from './repositories/OnboardingDocumentRepository';
+import { SplitSheetRepository } from './repositories/SplitSheetRepository';
+import { TrackSubmissionRepository } from './repositories/TrackSubmissionRepository';
+import { AdminArtistReviewRepository } from './repositories/AdminArtistReviewRepository';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -202,6 +211,21 @@ export class App {
       paymentController = new PaymentController(null as any);
     }
 
+    // Artist onboarding
+    const artistProfileRepo = AppConfig.MONGODB_URI ? new ArtistProfileRepository() : null as any;
+    const onboardingDocRepo = AppConfig.MONGODB_URI ? new OnboardingDocumentRepository() : null as any;
+    const splitSheetRepo = AppConfig.MONGODB_URI ? new SplitSheetRepository() : null as any;
+    const trackSubmissionRepo = AppConfig.MONGODB_URI ? new TrackSubmissionRepository() : null as any;
+    const adminArtistReviewRepo = AppConfig.MONGODB_URI ? new AdminArtistReviewRepository() : null as any;
+    const artistOnboardingService = AppConfig.MONGODB_URI
+      ? new ArtistOnboardingService(artistProfileRepo, onboardingDocRepo, splitSheetRepo, trackSubmissionRepo, adminArtistReviewRepo)
+      : null as any;
+    const adminArtistService = AppConfig.MONGODB_URI
+      ? new AdminArtistService(artistProfileRepo, adminArtistReviewRepo, trackSubmissionRepo, onboardingDocRepo)
+      : null as any;
+    const artistOnboardingController = AppConfig.MONGODB_URI ? new ArtistOnboardingController(artistOnboardingService) : null as any;
+    const adminArtistController = AppConfig.MONGODB_URI ? new AdminArtistController(adminArtistService) : null as any;
+
     // Setup routes
     const engagementService = new EngagementService(theoryService);
     const engagementController = new EngagementController(engagementService);
@@ -225,6 +249,11 @@ export class App {
       engagementController
     );
     
+    // Mount artist onboarding routes
+    if (AppConfig.MONGODB_URI && artistOnboardingController && adminArtistController) {
+      this.routes.mountArtistRoutes(artistOnboardingController, adminArtistController);
+    }
+
     // Inject Socket.io into chat controller
     chatController.setIo(this.io);
 
