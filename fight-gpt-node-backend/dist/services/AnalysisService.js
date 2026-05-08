@@ -150,7 +150,20 @@ class AnalysisService extends BaseService_1.BaseService {
             const analysis = await this.analysisRepository.findByAnalysisId(analysisId);
             if (!analysis)
                 return { success: false, error: 'Analysis not found' };
-            return { success: true, data: analysis.analysis };
+            // Return document-level fields alongside the AI analysis so the frontend
+            // has youtube_url, game_id, analysis_id etc. for video playback and linking.
+            return {
+                success: true,
+                data: {
+                    _id: analysis._id,
+                    analysis_id: analysis.analysis_id,
+                    youtube_url: analysis.youtube_url,
+                    video_path: analysis.video_path,
+                    game_id: analysis.game_id,
+                    created_at: analysis.created_at,
+                    ...(analysis.analysis || {}),
+                },
+            };
         }
         catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

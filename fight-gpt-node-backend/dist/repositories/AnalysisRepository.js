@@ -28,7 +28,16 @@ class AnalysisRepository extends BaseRepository_1.BaseRepository {
      * Find analysis by analysis ID
      */
     async findByAnalysisId(analysisId) {
-        return this.findOne({ analysis_id: analysisId });
+        // Primary lookup by UUID analysis_id; fall back to MongoDB _id for older links
+        const byUuid = await this.findOne({ analysis_id: analysisId });
+        if (byUuid)
+            return byUuid;
+        try {
+            return await this.findOne({ _id: analysisId });
+        }
+        catch {
+            return null;
+        }
     }
     /**
      * Get recent analyses

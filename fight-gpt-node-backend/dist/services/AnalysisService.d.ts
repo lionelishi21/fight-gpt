@@ -29,7 +29,7 @@ export declare class AnalysisService extends BaseService implements IAnalysisSer
     constructor(analysisRepository: IAnalysisRepository, aiService: IAiService, gameMetadataService: IGameMetadataService, characterEncyclopediaService: ICharacterEncyclopediaService, characterService?: ICharacterService, vectorRepository?: IVectorRepository, notificationService?: NotificationService, rivalRepository?: IRivalRepository);
     private sanitizeAiString;
     analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
-    getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
+    getAnalysis(analysisId: string): Promise<ApiResponse<any>>;
     getRecentAnalyses(limit?: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
     getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
     private getCachedAnalysis;

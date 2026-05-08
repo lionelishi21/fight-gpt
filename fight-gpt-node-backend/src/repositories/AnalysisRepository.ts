@@ -43,7 +43,14 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
    * Find analysis by analysis ID
    */
   async findByAnalysisId(analysisId: string): Promise<IAnalysis | null> {
-    return this.findOne({ analysis_id: analysisId });
+    // Primary lookup by UUID analysis_id; fall back to MongoDB _id for older links
+    const byUuid = await this.findOne({ analysis_id: analysisId });
+    if (byUuid) return byUuid;
+    try {
+      return await this.findOne({ _id: analysisId });
+    } catch {
+      return null;
+    }
   }
 
   /**

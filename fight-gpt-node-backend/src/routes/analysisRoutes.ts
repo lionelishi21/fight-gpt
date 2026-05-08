@@ -104,8 +104,8 @@ export class AnalysisRoutes {
       param('id')
         .notEmpty()
         .withMessage('Analysis ID is required')
-        .isUUID()
-        .withMessage('Analysis ID must be a valid UUID'),
+        .custom(v => /^[0-9a-f-]{8,}$/i.test(v))
+        .withMessage('Analysis ID must be a valid UUID or MongoDB ObjectId'),
     ];
   }
 }
