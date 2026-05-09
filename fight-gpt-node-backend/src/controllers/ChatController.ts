@@ -61,6 +61,7 @@ export class ChatController extends BaseController {
       const userId = (req as any).user?.id;
 
       let response;
+      let ctx: UserChatContext | undefined;
 
       // If authenticated and repos available, use contextual chat
       if (userId && this.rivalRepository && this.gameRepository) {
@@ -86,7 +87,7 @@ export class ChatController extends BaseController {
               .filter((e: any) => rivals.some(r => r.targetName.toLowerCase() === e.playerName?.toLowerCase()));
           }
 
-          const ctx: UserChatContext = {
+          ctx = {
             planType: (user as any)?.planType === 'premium' ? 'premium' : 'free',
             slots: (user as any)?.slots || [],
             rivals: rivals.map((r: any) => ({ name: r.targetName, gameId: r.gameId, characterId: r.characterId })),
@@ -127,8 +128,8 @@ export class ChatController extends BaseController {
             role: 'user',
             content: message.trim(),
             metadata: {
-              gameId: (ctx as any)?.slots?.[0]?.gameId,
-              characterId: (ctx as any)?.slots?.[0]?.characterId,
+              gameId: ctx?.slots?.[0]?.gameId,
+              characterId: ctx?.slots?.[0]?.characterId,
             }
           });
 
