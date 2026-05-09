@@ -248,7 +248,7 @@ export class IngestionService extends BaseService implements IIngestionService {
      * Start background scheduler that triggers ingestion + processing on an interval
      * Default: every 1 hour
      */
-    startScheduler(intervalMs: number = 1 * 60 * 60 * 1000): void {
+    startScheduler(intervalMs: number = 6 * 60 * 60 * 1000): void {
         if (this.schedulerTimer) {
             Logger.warn('[IngestionService] Scheduler already running');
             return;
@@ -263,7 +263,7 @@ export class IngestionService extends BaseService implements IIngestionService {
 
             for (const gameId of gameIds) {
                 try {
-                    const maxVideosToFetch = gameId === 'sf6' ? 50 : 20;
+                    const maxVideosToFetch = gameId === 'sf6' ? 10 : 5;
                     await this.triggerIngestion(gameId, maxVideosToFetch);
                 } catch (e) {
                     Logger.error(`[IngestionService] Scheduler failed for ${gameId}`, e);
@@ -309,8 +309,9 @@ export class IngestionService extends BaseService implements IIngestionService {
                     // Uploads Playlist ID is the Channel ID with 'UU' instead of 'UC'
                     const uploadsPlaylistId = 'UU' + channelId.slice(2);
                     const urls = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
+                    const limitedUrls = urls.slice(0, 1); // Only take 1 latest video per pro to save quota
                     
-                    for (const url of urls) {
+                    for (const url of limitedUrls) {
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) continue;
 
@@ -433,7 +434,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                 for (const channel of pro.channels) {
                     // Search for recent matches by this specific pro
                     const query = `${pro.name} ${pro.gameId} high level ranked match pro player`;
-                    const urls = await this.searchYouTube(query, 3);
+                    const urls = await this.searchYouTube(query, 1); // Only 1 result for pro scout search
                     
                     for (const url of urls) {
                         const existing = await this.ingestionRepository.findByUrl(url);
