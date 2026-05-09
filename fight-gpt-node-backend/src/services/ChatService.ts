@@ -1,4 +1,4 @@
-import { VertexAI, GenerativeModel } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { BaseService } from './BaseService';
 import { AppConfig } from '../config/app';
 
@@ -52,25 +52,22 @@ export interface SmartChatResponse extends ChatResponse {
  * Specialized for fighting games only
  */
 export class ChatService extends BaseService implements IChatService {
-  private vertexAI: VertexAI;
+  private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
   private readonly systemPrompt: string;
 
   constructor() {
     super();
 
-    if (!AppConfig.GOOGLE_CLOUD_PROJECT) {
-      throw new Error('GOOGLE_CLOUD_PROJECT environment variable is required for Vertex AI');
+    if (!AppConfig.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is required for ChatService');
     }
 
-    this.vertexAI = new VertexAI({
-      project: AppConfig.GOOGLE_CLOUD_PROJECT,
-      location: AppConfig.GOOGLE_CLOUD_LOCATION || 'us-central1',
-    });
+    this.genAI = new GoogleGenerativeAI(AppConfig.GEMINI_API_KEY);
 
     // Primary model from env — falls back through the list on 503/overload
     const modelName = AppConfig.GEMINI_MODEL || 'gemini-2.5-flash';
-    this.model = this.vertexAI.getGenerativeModel({ model: modelName });
+    this.model = this.genAI.getGenerativeModel({ model: modelName });
 
     // Custom system prompt specialized for fighting games
     this.systemPrompt = `You are Fight GPT, an expert AI assistant specialized exclusively in fighting games. Your knowledge includes:
@@ -174,13 +171,13 @@ Help players improve their skills, understand game mechanics, learn characters, 
       const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
       let lastError: Error | null = null;
 
-      const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.vertexAI.getGenerativeModel({ model: m }))];
+      const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
 
       for (const modelInstance of modelsToTry) {
         try {
           const chat = modelInstance.startChat({ history: historyItems as any, generationConfig });
           const result = await chat.sendMessage(message);
-          const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const text = result.response.text();
           return { success: true, message: text };
         } catch (e: any) {
           lastError = e;

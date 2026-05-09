@@ -62,7 +62,7 @@ export interface SmartChatResponse extends ChatResponse {
  * Specialized for fighting games only
  */
 export declare class ChatService extends BaseService implements IChatService {
-    private vertexAI;
+    private genAI;
     private model;
     private readonly systemPrompt;
     constructor();

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatService = void 0;
-const vertexai_1 = require("@google-cloud/vertexai");
+const generative_ai_1 = require("@google/generative-ai");
 const BaseService_1 = require("./BaseService");
 const app_1 = require("../config/app");
 /**
@@ -9,21 +9,18 @@ const app_1 = require("../config/app");
  * Specialized for fighting games only
  */
 class ChatService extends BaseService_1.BaseService {
-    vertexAI;
+    genAI;
     model;
     systemPrompt;
     constructor() {
         super();
-        if (!app_1.AppConfig.GOOGLE_CLOUD_PROJECT) {
-            throw new Error('GOOGLE_CLOUD_PROJECT environment variable is required for Vertex AI');
+        if (!app_1.AppConfig.GEMINI_API_KEY) {
+            throw new Error('GEMINI_API_KEY is required for ChatService');
         }
-        this.vertexAI = new vertexai_1.VertexAI({
-            project: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
-            location: app_1.AppConfig.GOOGLE_CLOUD_LOCATION || 'us-central1',
-        });
+        this.genAI = new generative_ai_1.GoogleGenerativeAI(app_1.AppConfig.GEMINI_API_KEY);
         // Primary model from env — falls back through the list on 503/overload
         const modelName = app_1.AppConfig.GEMINI_MODEL || 'gemini-2.5-flash';
-        this.model = this.vertexAI.getGenerativeModel({ model: modelName });
+        this.model = this.genAI.getGenerativeModel({ model: modelName });
         // Custom system prompt specialized for fighting games
         this.systemPrompt = `You are Fight GPT, an expert AI assistant specialized exclusively in fighting games. Your knowledge includes:
 
@@ -120,12 +117,12 @@ Help players improve their skills, understand game mechanics, learn characters, 
             // Try primary model, fall back on 503/overload
             const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
             let lastError = null;
-            const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.vertexAI.getGenerativeModel({ model: m }))];
+            const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
             for (const modelInstance of modelsToTry) {
                 try {
                     const chat = modelInstance.startChat({ history: historyItems, generationConfig });
                     const result = await chat.sendMessage(message);
-                    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const text = result.response.text();
                     return { success: true, message: text };
                 }
                 catch (e) {
