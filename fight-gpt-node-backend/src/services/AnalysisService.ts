@@ -52,26 +52,28 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     try {
       this.validateAnalysisRequest(request);
 
-      // --- TIER CHECK ---
-      if (userId) {
-        const user = await User.findById(userId);
-        if (user && user.role !== 'admin') { // Admins have infinite scans
-          const tier = (user.tier || 'FREE').toUpperCase();
-          const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId, 24);
-          
-          const maxFree = 1;
-          const maxCompetitor = 10;
-          
-          if (tier === 'FREE' && recentCount >= maxFree) {
-            return { success: false, error: 'FREE_TIER_LIMIT: You have used your 1 daily AI scan. Upgrade to Pro for unlimited analysis.' };
-          }
-          if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
-            return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };
-          }
+      // --- USER & AUTH CHECK ---
+      const user = userId ? await User.findById(userId) : null;
+      const isAdmin = user?.role === 'admin';
+
+      if (user && !isAdmin) {
+        const tier = (user.tier || 'FREE').toUpperCase();
+        const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId as string, 24);
+        
+        const maxFree = 1;
+        const maxCompetitor = 10;
+        
+        if (tier === 'FREE' && recentCount >= maxFree) {
+          return { success: false, error: 'FREE_TIER_LIMIT: You have used your 1 daily AI scan. Upgrade to Pro for unlimited analysis.' };
+        }
+        if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
+          return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };
         }
       }
 
-      const cachedAnalysis = await this.getCachedAnalysis(request);
+      // Bypass cache only if forced re-analysis is requested AND user is admin
+      const shouldForce = request.force && isAdmin;
+      const cachedAnalysis = shouldForce ? null : await this.getCachedAnalysis(request);
       if (cachedAnalysis) {
         // If this authenticated user doesn't have their own record for this analysis,
         // save one so it appears on their dashboard. Silently ignores errors.
