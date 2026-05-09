@@ -42,12 +42,11 @@ class VectorRepository extends BaseRepository_1.BaseRepository {
             ]).exec();
         }
         catch (error) {
-            // Fallback for local MongoDB (non-Atlas) environments
-            if (error.message?.includes('$vectorSearch') || error.code === 6047401) {
-                console.warn('[VectorRepository] Atlas Vector Search is not available (likely local DB). Skipping similarity check.');
-                return [];
-            }
-            throw error;
+            // Always fall back gracefully — a failed similarity check should never
+            // block scenario creation. Common causes: index not yet created in Atlas,
+            // local MongoDB without Atlas Search, quota exceeded, filter field not indexed.
+            console.warn('[VectorRepository] findSimilarScenarios failed (treating as novel):', error instanceof Error ? error.message : error);
+            return [];
         }
     }
     async addMatchReference(scenarioId, analysisId) {
