@@ -27,6 +27,7 @@ export interface ICharacterController {
   searchCharacters(req: Request, res: Response, next: NextFunction): Promise<void>;
   findCharacters(req: Request, res: Response, next: NextFunction): Promise<void>;
   setCharacterAsCurrent(req: Request, res: Response, next: NextFunction): Promise<void>;
+  getProsByGame(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 /**
@@ -401,6 +402,24 @@ export class CharacterController extends BaseController implements ICharacterCon
       const result = await this.characterService.setCharacterAsCurrent(id, isCurrent);
       const statusCode = result.success ? 200 : 404;
       this.sendResponse(res, result, statusCode);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
+  }
+  /**
+   * Get verified pros by game
+   * GET /api/characters/game/:gameId/pros
+   */
+  async getProsByGame(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { gameId } = req.params;
+      if (!gameId) {
+        this.sendResponse(res, { success: false, error: 'Game ID is required' }, 400);
+        return;
+      }
+
+      const result = await this.characterService.getProsByGame(gameId);
+      this.sendResponse(res, result, result.success ? 200 : 400);
     } catch (error) {
       this.handleError(error, req, res, next);
     }

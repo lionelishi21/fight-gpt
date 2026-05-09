@@ -9,6 +9,7 @@ import { ICharacterDocument } from '../models/Character';
 import { ApiResponse, PaginatedResponse } from '../types';
 import { BaseService } from './BaseService';
 import { IGameRepository } from '../repositories/GameRepository';
+import { ProPlayer, IProPlayer } from '../models/ProPlayer';
 
 /**
  * Character service interface
@@ -27,6 +28,7 @@ export interface ICharacterService {
   searchCharacters(query: string, gameId?: string): Promise<ApiResponse<ICharacter[]>>;
   findCharacters(filters: CharacterFilters, limit?: number): Promise<ApiResponse<ICharacter[]>>;
   setCharacterAsCurrent(id: string, isCurrent: boolean): Promise<ApiResponse<ICharacter>>;
+  getProsByGame(gameId: string): Promise<ApiResponse<IProPlayer[]>>;
 }
 
 /**
@@ -432,6 +434,25 @@ export class CharacterService extends BaseService implements ICharacterService {
         success: true,
         data: this.mapToCharacter(updated),
         message: `Character ${isCurrent ? 'set as' : 'unset from'} current successfully`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Get verified pro players for a specific game
+   */
+  async getProsByGame(gameId: string): Promise<ApiResponse<IProPlayer[]>> {
+    try {
+      const pros = await ProPlayer.find({ gameId, isVerified: true });
+      return {
+        success: true,
+        data: pros,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

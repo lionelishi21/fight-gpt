@@ -123,6 +123,13 @@ export class CharacterRoutes {
       validateRequest,
       (req, res, next) => this.controller.deleteCharacter(req, res, next)
     );
+    // GET /api/characters/game/:gameId/pros - Get verified pro players by game
+    this.router.get(
+      '/game/:gameId/pros',
+      this.validateGameId(),
+      validateRequest,
+      (req, res, next) => this.controller.getProsByGame(req, res, next)
+    );
   }
 
   /**
