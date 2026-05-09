@@ -74,9 +74,5 @@ export declare class ChatService extends BaseService implements IChatService {
      * Context-aware message — resolves game/character/player entities before calling Gemini
      */
     sendContextualMessage(message: string, history: ChatMessage[], ctx: UserChatContext): Promise<SmartChatResponse>;
-    /**
-     * Validate if question is about gaming
-     */
-    private isGamingQuestion;
 }
 //# sourceMappingURL=ChatService.d.ts.map

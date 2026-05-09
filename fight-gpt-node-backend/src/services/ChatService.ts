@@ -132,14 +132,6 @@ Help players improve their skills, understand game mechanics, learn characters, 
   async sendMessage(message: string, conversationHistory: ChatMessage[] = []): Promise<ChatResponse> {
     try {
       // Validate that message is about gaming
-      if (!this.isGamingQuestion(message)) {
-        return {
-          success: false,
-          message: '',
-          error: 'Please ask a question about fighting games only. I can help with characters, combos, frame data, strategies, matchups, and more!',
-        };
-      }
-
       // Build conversation history for context
       const historyItems = [
         {
@@ -164,7 +156,7 @@ Help players improve their skills, understand game mechanics, learn characters, 
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
       };
 
       // Try primary model, fall back on 503/overload
@@ -278,27 +270,4 @@ Help players improve their skills, understand game mechanics, learn characters, 
     return { ...response, detectedEntities };
   }
 
-  /**
-   * Validate if question is about gaming
-   */
-  private isGamingQuestion(text: string): boolean {
-    const lowerText = text.toLowerCase();
-    const gamingKeywords = [
-      'game', 'gaming', 'character', 'combo', 'move', 'frame', 'fighting',
-      'street fighter', 'tekken', 'mortal kombat', 'guilty gear', 'blazblue',
-      'strategy', 'tactics', 'matchup', 'neutral', 'oki', 'meaty', 'link',
-      'cancel', 'special', 'super', 'ex', 'drive', 'meter', 'block', 'hit',
-      'counter', 'punish', 'whiff', 'tech', 'throw', 'grab', 'cross', 'mix',
-      'overhead', 'low', 'mid', 'anti-air', 'reversal', 'dp', 'fireball',
-      'dragon punch', 'shoryuken', 'hadoken', 'quarter circle', 'motion',
-      'input', 'execution', 'reset', 'corner', 'pressure', 'footsies',
-      'zoning', 'rushdown', 'grappler', 'turtle', 'tier', 'patch', 'balance',
-      'nerf', 'buff', 'tournament', 'competitive', 'esports', 'ranked', 'casual',
-      'ryu', 'ken', 'chun-li', 'zangief', 'cammy', 'guile', 'dhalsim', 'blanka',
-      'juri', 'luke', 'jamie', 'kimberly', 'manon', 'marisa', 'lily', 'jp',
-      'dee jay', 'rashid', 'aki', 'ed', 'akuma'
-    ];
-
-    return gamingKeywords.some(keyword => lowerText.includes(keyword));
-  }
 }
