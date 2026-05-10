@@ -57,6 +57,7 @@ import { AutoResearchService } from './services/AutoResearchService';
 import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
 import { AdminService } from './services/AdminService';
+import { TrendAnalysisService } from './services/TrendAnalysisService';
 import { PaymentService } from './services/PaymentService';
 import { RosterSyncService } from './services/RosterSyncService';
 import { ScraperService } from './services/ScraperService';
@@ -175,6 +176,11 @@ export class App {
         ? new AutoResearchService(theoryService, notificationService)
         : null;
     autoResearchService?.start();
+    
+    const trendAnalysisService = AppConfig.MONGODB_URI
+        ? new TrendAnalysisService(analysisRepository, notificationService, gameMetadataService)
+        : null;
+
     const chatService = new ChatService();
 
     // Initialize controllers (ChatController works without MongoDB)
@@ -199,7 +205,14 @@ export class App {
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
     const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
-    const adminController = AppConfig.MONGODB_URI ? new AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, this.rosterSyncService ?? undefined) : null;
+    const adminController = AppConfig.MONGODB_URI ? new AdminController(
+      adminService, 
+      this.ingestionService ?? undefined, 
+      metaService ?? undefined, 
+      autoResearchService ?? undefined, 
+      this.rosterSyncService ?? undefined,
+      trendAnalysisService ?? undefined
+    ) : null;
     let paymentService: PaymentService;
     let paymentController: PaymentController;
     try {

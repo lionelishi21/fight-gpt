@@ -21,8 +21,8 @@ export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
   getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
-  getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
-  trackDiscoveryView(analysisIds: string[], userId?: string): Promise<ApiResponse<void>>;
+  getDiscoveryAnalyses(limit?: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<ApiResponse<any[]>>;
+  trackDiscoveryView(analysisIds: string[]): Promise<ApiResponse<void>>;
   trackDiscoveryClick(analysisId: string): Promise<ApiResponse<void>>;
   getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>>;
 }
@@ -213,9 +213,14 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async getDiscoveryAnalyses(limit: number = 20, gameId?: string): Promise<ApiResponse<any[]>> {
+  async getDiscoveryAnalyses(
+    limit: number = 20, 
+    gameId?: string,
+    p1Char?: string,
+    p2Char?: string
+  ): Promise<ApiResponse<any[]>> {
     try {
-      const analyses = await this.analysisRepository.getRecentAnalyses(limit, undefined, gameId);
+      const analyses = await this.analysisRepository.getDiscoveryAnalyses(limit, gameId, p1Char, p2Char);
       return {
         success: true,
         data: analyses.map(a => ({
@@ -223,12 +228,34 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           analysis_id: a.analysis_id,
           youtube_url: a.youtube_url,
           game_id: a.game_id,
+          view_count: a.view_count || 0,
+          click_count: a.click_count || 0,
           created_at: a.created_at,
           ...(a.analysis || {} as object),
         })),
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async trackDiscoveryView(analysisIds: string[]): Promise<ApiResponse<void>> {
+    try {
+      for (const id of analysisIds) {
+        await this.analysisRepository.incrementViewCount(id);
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to track views' };
+    }
+  }
+
+  async trackDiscoveryClick(analysisId: string): Promise<ApiResponse<void>> {
+    try {
+      await this.analysisRepository.incrementClickCount(analysisId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to track click' };
     }
   }
 

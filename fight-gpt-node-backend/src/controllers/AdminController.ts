@@ -4,6 +4,7 @@ import { IAdminService } from '../services/AdminService';
 import { IIngestionService } from '../services/IngestionService';
 import { IMetaService } from '../services/MetaService';
 import { AutoResearchService } from '../services/AutoResearchService';
+import { ITrendAnalysisService } from '../services/TrendAnalysisService';
 import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
@@ -23,6 +24,7 @@ export class AdminController extends BaseController {
         private readonly ingestionService?: IIngestionService,
         private readonly metaService?: IMetaService,
         private readonly autoResearchService?: AutoResearchService,
+        private readonly trendAnalysisService?: ITrendAnalysisService,
         rosterSyncService?: RosterSyncService,
     ) {
         super();
@@ -39,6 +41,23 @@ export class AdminController extends BaseController {
         try {
             const result = await this.adminService.getSystemStats();
             this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * POST /api/admin/trends/analyze
+     * Trigger a manual Meta-Shift analysis check
+     */
+    triggerTrendAnalysis = async (req: Request, res: Response): Promise<void> => {
+        try {
+            if (!this.trendAnalysisService) {
+                this.sendError(res, 'TrendAnalysisService not configured');
+                return;
+            }
+            await this.trendAnalysisService.analyzeMetaShifts();
+            this.sendResponse(res, { success: true, message: 'Meta-Shift analysis triggered' });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
         }

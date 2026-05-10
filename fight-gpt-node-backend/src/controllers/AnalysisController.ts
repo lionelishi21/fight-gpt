@@ -209,7 +209,10 @@ export class AnalysisController extends BaseController implements IAnalysisContr
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
       const gameId = req.query.gameId as string;
-      const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId);
+      const p1Char = req.query.p1_character as string;
+      const p2Char = req.query.p2_character as string;
+      
+      const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId, p1Char, p2Char);
 
       const responseTime = Date.now() - startTime;
       await this.auditLogRepository.createAuditLog({
@@ -285,7 +288,7 @@ export class AnalysisController extends BaseController implements IAnalysisContr
         return;
       }
 
-      const result = await this.analysisService.trackDiscoveryView(analysisIds, userId);
+      const result = await this.analysisService.trackDiscoveryView(analysisIds);
       this.sendResponse(res, result);
     } catch (error) {
       this.handleError(error, req, res, next);
