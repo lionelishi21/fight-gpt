@@ -1,6 +1,6 @@
 {
   "name": "fight-gpt-node-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fight GPT API Gateway - Express.js backend with TypeScript",
   "main": "dist/index.js",
   "scripts": {
