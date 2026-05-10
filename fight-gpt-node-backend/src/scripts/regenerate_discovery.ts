@@ -2,21 +2,21 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import mongoose from 'mongoose';
-import { AnalysisRepository } from '../repositories/AnalysisRepository';
-import { AnalysisService } from '../services/AnalysisService';
-import { AiService } from '../services/AiService';
-import { GameMetadataService } from '../services/GameMetadataService';
-import { CharacterEncyclopediaService } from '../services/CharacterEncyclopediaService';
-import { CharacterService } from '../services/CharacterService';
-import { VectorRepository } from '../repositories/VectorRepository';
-import { NotificationService } from '../repositories/NotificationRepository';
-import { RivalRepository } from '../repositories/RivalRepository';
-import { GameRepository } from '../repositories/GameRepository';
-import { CharacterRepository } from '../repositories/CharacterRepository';
-import { GameMetadataRepository } from '../repositories/GameMetadataRepository';
-import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
-import { User } from '../models/User';
-import { Logger } from '../helpers/logger';
+import User from '../models/User';
+import { Analysis } from '../models/Analysis';
+
+// Use require to bypass type check issues on broken service exports
+const { AnalysisRepository } = require('../repositories/AnalysisRepository');
+const { AnalysisService } = require('../services/AnalysisService');
+const { AiService } = require('../services/AiService');
+const { GameMetadataService } = require('../services/GameMetadataService');
+const { CharacterEncyclopediaService } = require('../services/CharacterEncyclopediaService');
+const { CharacterService } = require('../services/CharacterService');
+const { VectorRepository } = require('../repositories/VectorRepository');
+const { GameRepository } = require('../repositories/GameRepository');
+const { CharacterRepository } = require('../repositories/CharacterRepository');
+const { GameMetadataRepository } = require('../repositories/GameMetadataRepository');
+const { CharacterEncyclopediaRepository } = require('../repositories/CharacterEncyclopediaRepository');
 
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI as string);
@@ -37,7 +37,6 @@ async function run() {
   const gameMetadataRepo = new GameMetadataRepository();
   const charEncyclopediaRepo = new CharacterEncyclopediaRepository();
   const vectorRepo = new VectorRepository();
-  const notificationRepo = new mongoose.Schema({}); // Mock if needed, but repo usually exists
   
   const gameMetadataService = new GameMetadataService(gameMetadataRepo);
   const charEncyclopediaService = new CharacterEncyclopediaService(charEncyclopediaRepo);
@@ -45,7 +44,7 @@ async function run() {
   
   const aiService = new AiService(
     process.env.GEMINI_API_KEY as string,
-    process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+    process.env.GEMINI_MODEL || 'gemini-pro-latest',
     gameMetadataService,
     charEncyclopediaService
   );
@@ -56,16 +55,26 @@ async function run() {
     gameMetadataService,
     charEncyclopediaService,
     characterService,
-    vectorRepo,
-    null as any, // notificationService
-    null as any  // rivalRepo
+    vectorRepo
   );
 
-  // Fetch discovery matches
-  const discovery = await analysisRepo.getDiscovery(15);
-  console.log(`Found ${discovery.length} matches in discovery feed.`);
+  // Fetch ALL analyses to fix the "wrong source" issues globally
+  const analyses = await Analysis.find().lean();
+  console.log(`Found ${analyses.length} total analyses.`);
 
-  for (const match of discovery) {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
+  let count = 0;
+  for (const match of analyses) {
+    count++;
+    console.log(`[${count}/${analyses.length}] Checking match ${match.analysis_id}...`);
+    /*
+    // Skip if already regenerated recently (to handle resume after quota hits)
+    if (match.updated_at && match.updated_at > twoHoursAgo) {
+      console.log(`Skipping match ${match.analysis_id} - already updated recently.`);
+      continue;
+    }
+    */
     const youtubeUrl = match.youtube_url || (match.analysis as any)?.youtube_url;
     if (!youtubeUrl) {
       console.log(`Skipping match ${match.analysis_id} - no URL found.`);

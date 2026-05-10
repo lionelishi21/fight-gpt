@@ -114,6 +114,24 @@ export class AdminController extends BaseController {
     };
 
     /**
+     * POST /api/admin/analyses/:id/reanalyze
+     * Force re-analysis of a specific record
+     */
+    reanalyzeAnalysis = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            if (!id) {
+                res.status(400).json({ success: false, error: 'id is required' });
+                return;
+            }
+            const result = await this.adminService.reanalyzeAnalysis(id);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
      * POST /api/admin/ingestion/trigger
      * Manually trigger analysis for a specific URL
      */

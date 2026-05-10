@@ -7,7 +7,13 @@ dotenv.config();
 async function checkSpecificAnalysis(id: string) {
     try {
         await Database.connect();
-        const analysis = await Analysis.findOne({ analysis_id: id }).lean();
+        let analysis = await Analysis.findOne({ analysis_id: id }).lean();
+        if (!analysis) {
+            try {
+                analysis = await Analysis.findById(id).lean();
+            } catch (e) {}
+        }
+        
         if (!analysis) {
             console.log('Analysis not found');
             return;
@@ -31,5 +37,5 @@ async function checkSpecificAnalysis(id: string) {
     process.exit(0);
 }
 
-const id = '37cb8144-2d9d-46cf-adb9-156f2cacbbe6';
+const id = process.argv[2] || '37cb8144-2d9d-46cf-adb9-156f2cacbbe6';
 checkSpecificAnalysis(id);

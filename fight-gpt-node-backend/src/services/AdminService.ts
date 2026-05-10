@@ -8,6 +8,7 @@ import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncycl
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 import { queueService } from './QueueService';
+import { IAnalysisService } from './AnalysisService';
 
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
@@ -21,9 +22,46 @@ export interface IAdminService {
     createCharacter(data: any): Promise<ApiResponse<any>>;
     updateCharacter(id: string, data: any): Promise<ApiResponse<any>>;
     deleteCharacter(id: string): Promise<ApiResponse<boolean>>;
+    reanalyzeAnalysis(analysisId: string): Promise<ApiResponse<any>>;
 }
 
 export class AdminService extends BaseService implements IAdminService {
+    constructor(
+        private readonly analysisService?: IAnalysisService
+    ) {
+        super();
+    }
+
+    async reanalyzeAnalysis(analysisId: string): Promise<ApiResponse<any>> {
+        try {
+            const analysis = await Analysis.findOne({ analysis_id: analysisId });
+            if (!analysis) return { success: false, error: 'Analysis record not found' };
+
+            const youtubeUrl = analysis.youtube_url;
+            if (!youtubeUrl) return { success: false, error: 'Analysis lacks a YouTube URL for re-analysis' };
+
+            if (!this.analysisService) return { success: false, error: 'Analysis service unavailable' };
+
+            // Trigger re-analysis with force=true to bypass cache
+            // We run it in background to avoid timeout
+            this.analysisService.analyzeVideo({
+                youtube_url: youtubeUrl,
+                game_id: analysis.game_id,
+                force: true
+            }).catch(err => {
+                console.error(`[AdminService] Re-analysis failed for ${analysisId}:`, err);
+            });
+            
+            return { 
+                success: true, 
+                message: 'Re-analysis task triggered in background. The record will be updated shortly.',
+                data: { analysis_id: analysisId, url: youtubeUrl }
+            };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger re-analysis' };
+        }
+    }
+
     async getSystemStats(): Promise<ApiResponse<any>> {
         try {
             const startOfToday = new Date();

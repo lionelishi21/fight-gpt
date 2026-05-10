@@ -3,6 +3,7 @@ import { ICharacterRepository } from '../repositories/CharacterRepository';
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 import { IGameRepository } from '../repositories/GameRepository';
+import { IProPlayer } from '../models/ProPlayer';
 /**
  * Character service interface
  * Follows Interface Segregation Principle
@@ -20,6 +21,7 @@ export interface ICharacterService {
     searchCharacters(query: string, gameId?: string): Promise<ApiResponse<ICharacter[]>>;
     findCharacters(filters: CharacterFilters, limit?: number): Promise<ApiResponse<ICharacter[]>>;
     setCharacterAsCurrent(id: string, isCurrent: boolean): Promise<ApiResponse<ICharacter>>;
+    getProsByGame(gameId: string): Promise<ApiResponse<IProPlayer[]>>;
 }
 /**
  * Character service implementation
@@ -78,6 +80,10 @@ export declare class CharacterService extends BaseService implements ICharacterS
      * Set character as current/not current
      */
     setCharacterAsCurrent(id: string, isCurrent: boolean): Promise<ApiResponse<ICharacter>>;
+    /**
+     * Get verified pro players for a specific game
+     */
+    getProsByGame(gameId: string): Promise<ApiResponse<IProPlayer[]>>;
     /**
      * Unset current flag for all characters except the specified one
      */

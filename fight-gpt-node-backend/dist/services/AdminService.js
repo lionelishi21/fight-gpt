@@ -14,6 +14,40 @@ const CharacterEncyclopediaRepository_1 = require("../repositories/CharacterEncy
 const BaseService_1 = require("./BaseService");
 const QueueService_1 = require("./QueueService");
 class AdminService extends BaseService_1.BaseService {
+    analysisService;
+    constructor(analysisService) {
+        super();
+        this.analysisService = analysisService;
+    }
+    async reanalyzeAnalysis(analysisId) {
+        try {
+            const analysis = await Analysis_1.Analysis.findOne({ analysis_id: analysisId });
+            if (!analysis)
+                return { success: false, error: 'Analysis record not found' };
+            const youtubeUrl = analysis.youtube_url;
+            if (!youtubeUrl)
+                return { success: false, error: 'Analysis lacks a YouTube URL for re-analysis' };
+            if (!this.analysisService)
+                return { success: false, error: 'Analysis service unavailable' };
+            // Trigger re-analysis with force=true to bypass cache
+            // We run it in background to avoid timeout
+            this.analysisService.analyzeVideo({
+                youtube_url: youtubeUrl,
+                game_id: analysis.game_id,
+                force: true
+            }).catch(err => {
+                console.error(`[AdminService] Re-analysis failed for ${analysisId}:`, err);
+            });
+            return {
+                success: true,
+                message: 'Re-analysis task triggered in background. The record will be updated shortly.',
+                data: { analysis_id: analysisId, url: youtubeUrl }
+            };
+        }
+        catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger re-analysis' };
+        }
+    }
     async getSystemStats() {
         try {
             const startOfToday = new Date();

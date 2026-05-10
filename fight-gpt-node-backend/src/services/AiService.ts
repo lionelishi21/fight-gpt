@@ -34,6 +34,7 @@ export class AiService extends BaseService implements IAiService {
   private modelName: string;
   private readonly gameMetadataService: IGameMetadataService;
   private readonly characterEncyclopediaService: ICharacterEncyclopediaService;
+  private storage: Storage;
 
   constructor(
     apiKey: string,

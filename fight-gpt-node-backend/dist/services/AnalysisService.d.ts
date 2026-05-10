@@ -12,7 +12,7 @@ export interface IAnalysisService {
     analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
     getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
     getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
-    getDiscoveryAnalyses(limit?: number): Promise<ApiResponse<any[]>>;
+    getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
 }
 /**
  * Analysis Service implementation

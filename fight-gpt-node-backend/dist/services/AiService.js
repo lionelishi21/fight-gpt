@@ -50,6 +50,7 @@ class AiService extends BaseService_1.BaseService {
     modelName;
     gameMetadataService;
     characterEncyclopediaService;
+    storage;
     constructor(apiKey, modelName, gameMetadataService, characterEncyclopediaService) {
         super();
         if (!apiKey) {

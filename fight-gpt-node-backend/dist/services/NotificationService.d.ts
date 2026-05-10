@@ -1,102 +1,79 @@
 import { INotificationRepository } from '../repositories/NotificationRepository';
-import { NotificationType } from '../models/Notification';
+import { NotificationType, NotificationSeverity } from '../models/Notification';
+import { BaseService } from './BaseService';
 import mongoose from 'mongoose';
-export declare class NotificationService {
-    private readonly repo;
-    constructor(repo: INotificationRepository);
+export declare class NotificationService extends BaseService {
+    private readonly notificationRepository;
+    private readonly emailService?;
+    constructor(notificationRepository: INotificationRepository, emailService?: any);
+    /**
+     * Generic notification method
+     */
     notify(userId: string | mongoose.Types.ObjectId, type: NotificationType, payload: {
         gameId: string;
+        characterId?: string;
         title: string;
         description: string;
-        characterId?: string;
         link?: string;
         data?: any;
-    }, severity?: 'low' | 'medium' | 'high'): Promise<void>;
-    sendPushToUser(userId: string, title: string, body: string, data?: any): Promise<void>;
-    broadcast(type: NotificationType, payload: {
-        gameId: string;
-        title: string;
-        description: string;
-        characterId?: string;
-        link?: string;
-        data?: any;
-    }, severity?: 'low' | 'medium' | 'high'): Promise<void>;
-    private sendPushToAll;
-    techDiscovery(opts: {
-        gameId: string;
-        scenarioId: string;
-        eventType: string;
-        description: string;
-        context: string;
-        characters: string[];
-        youtubeUrl?: string;
-    }): Promise<void>;
-    newCombo(opts: {
-        gameId: string;
-        characterName: string;
-        combo: string;
-        damage: number;
-        link?: string;
-    }): Promise<void>;
-    patchBrief(opts: {
-        gameId: string;
-        gameName: string;
-        patchVersion: string;
-        summary: string;
-        link?: string;
-    }): Promise<void>;
-    metaShift(opts: {
-        gameId: string;
-        characterName: string;
-        direction: 'up' | 'down';
-        winRateDelta: number;
-    }): Promise<void>;
-    characterTheory(opts: {
-        gameId: string;
-        characterName: string;
-        theoryId: string;
-        headline: string;
-    }): Promise<void>;
-    matchupTheory(opts: {
-        gameId: string;
-        charA: string;
-        charB: string;
-        theoryId: string;
-        headline: string;
-    }): Promise<void>;
-    vectorInsight(opts: {
-        gameId: string;
-        characterName: string;
-        insight: string;
-        scenarioCount: number;
-    }): Promise<void>;
-    tierListUpdate(opts: {
-        gameId: string;
-        gameName: string;
-        changes: string;
-    }): Promise<void>;
-    analysisComplete(userId: string, opts: {
-        gameId: string;
-        analysisId: string;
-        summary: string;
-    }): Promise<void>;
-    rankUp(userId: string, opts: {
-        gameId: string;
-        newRank: string;
-        xp: number;
-    }): Promise<void>;
-    rivalWatch(userId: string, opts: {
+    }, severity?: NotificationSeverity): Promise<void>;
+    /**
+     * Special helper for RIVAL_WATCH alerts
+     */
+    rivalWatch(userId: string, data: {
         gameId: string;
         gameName: string;
         rivalName: string;
         analysisId: string;
-        youtubeUrl?: string;
     }): Promise<void>;
-    proScout(userId: string, opts: {
+    /**
+     * Special helper for PRO_SCOUT alerts
+     */
+    proScout(userId: string, data: {
         gameId: string;
         proName: string;
         analysisId: string;
         characterId?: string;
     }): Promise<void>;
+    /**
+     * Analysis complete notification
+     */
+    analysisComplete(userId: string, analysisId: string, youtubeUrl: string): Promise<void>;
+    /**
+     * Broadcase notification to all users
+     */
+    broadcast(type: NotificationType, payload: {
+        gameId: string;
+        characterId?: string;
+        title: string;
+        description: string;
+        link?: string;
+        data?: any;
+    }, severity?: NotificationSeverity): Promise<void>;
+    /**
+     * Character theory notification
+     */
+    characterTheory(data: {
+        userId?: string;
+        gameId: string;
+        characterId: string;
+        title: string;
+        description: string;
+    }): Promise<void>;
+    /**
+     * Matchup theory notification
+     */
+    matchupTheory(data: {
+        userId?: string;
+        gameId: string;
+        characterId: string;
+        opponentId: string;
+        title: string;
+        description: string;
+    }): Promise<void>;
+    /**
+     * Legacy/Generic push method used by worker
+     */
+    sendPushToUser(userId: string, title: string, body: string, data?: any): Promise<void>;
 }
 //# sourceMappingURL=NotificationService.d.ts.map

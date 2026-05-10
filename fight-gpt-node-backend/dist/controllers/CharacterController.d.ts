@@ -19,6 +19,7 @@ export interface ICharacterController {
     searchCharacters(req: Request, res: Response, next: NextFunction): Promise<void>;
     findCharacters(req: Request, res: Response, next: NextFunction): Promise<void>;
     setCharacterAsCurrent(req: Request, res: Response, next: NextFunction): Promise<void>;
+    getProsByGame(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 /**
  * Character controller implementation
@@ -89,5 +90,10 @@ export declare class CharacterController extends BaseController implements IChar
      * PATCH /api/characters/:id/current
      */
     setCharacterAsCurrent(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /**
+     * Get verified pros by game
+     * GET /api/characters/game/:gameId/pros
+     */
+    getProsByGame(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 //# sourceMappingURL=CharacterController.d.ts.map

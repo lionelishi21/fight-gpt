@@ -305,6 +305,24 @@ class CharacterController extends BaseController_1.BaseController {
             this.handleError(error, req, res, next);
         }
     }
+    /**
+     * Get verified pros by game
+     * GET /api/characters/game/:gameId/pros
+     */
+    async getProsByGame(req, res, next) {
+        try {
+            const { gameId } = req.params;
+            if (!gameId) {
+                this.sendResponse(res, { success: false, error: 'Game ID is required' }, 400);
+                return;
+            }
+            const result = await this.characterService.getProsByGame(gameId);
+            this.sendResponse(res, result, result.success ? 200 : 400);
+        }
+        catch (error) {
+            this.handleError(error, req, res, next);
+        }
+    }
 }
 exports.CharacterController = CharacterController;
 //# sourceMappingURL=CharacterController.js.map

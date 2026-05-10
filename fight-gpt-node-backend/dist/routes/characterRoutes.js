@@ -44,6 +44,8 @@ class CharacterRoutes {
         this.router.patch('/:id/current', this.validateId(), this.validateSetCurrent(), validationMiddleware_1.validateRequest, (req, res, next) => this.controller.setCharacterAsCurrent(req, res, next));
         // DELETE /api/characters/:id - Delete character
         this.router.delete('/:id', this.validateId(), validationMiddleware_1.validateRequest, (req, res, next) => this.controller.deleteCharacter(req, res, next));
+        // GET /api/characters/game/:gameId/pros - Get verified pro players by game
+        this.router.get('/game/:gameId/pros', this.validateGameId(), validationMiddleware_1.validateRequest, (req, res, next) => this.controller.getProsByGame(req, res, next));
     }
     /**
      * Get router instance

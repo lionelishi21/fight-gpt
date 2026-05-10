@@ -40,6 +40,11 @@ export declare class AdminController extends BaseController {
      */
     retryJob: (req: Request, res: Response) => Promise<void>;
     /**
+     * POST /api/admin/analyses/:id/reanalyze
+     * Force re-analysis of a specific record
+     */
+    reanalyzeAnalysis: (req: Request, res: Response) => Promise<void>;
+    /**
      * POST /api/admin/ingestion/trigger
      * Manually trigger analysis for a specific URL
      */

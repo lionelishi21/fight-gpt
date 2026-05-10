@@ -49,6 +49,7 @@ export interface AnalysisRequest {
     game_context_text?: string;
     ai_context?: string;
     pro_player_id?: string;
+    force?: boolean;
 }
 /**
  * Analysis response from AI service

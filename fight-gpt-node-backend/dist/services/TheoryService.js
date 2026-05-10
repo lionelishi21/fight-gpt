@@ -60,9 +60,9 @@ class TheoryService extends BaseService_1.BaseService {
             // Fire notification to all users who might care
             this.notificationService?.characterTheory({
                 gameId,
-                characterName: charId,
-                theoryId: saved.theory_id ?? saved._id?.toString() ?? '',
-                headline: `[${targetSkillLevel}] ${summary}`,
+                characterId: charId,
+                title: `New character theory for ${charId}`,
+                description: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => { });
             return { success: true, data: saved };
         }
@@ -106,10 +106,10 @@ class TheoryService extends BaseService_1.BaseService {
             });
             this.notificationService?.matchupTheory({
                 gameId,
-                charA: a,
-                charB: b,
-                theoryId: saved.theory_id ?? saved._id?.toString() ?? '',
-                headline: `[${targetSkillLevel}] ${summary}`,
+                characterId: a,
+                opponentId: b,
+                title: `New matchup theory: ${a} vs ${b}`,
+                description: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => { });
             return { success: true, data: saved };
         }

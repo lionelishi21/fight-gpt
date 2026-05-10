@@ -29,6 +29,7 @@ export declare class AiService extends BaseService implements IAiService {
     private modelName;
     private readonly gameMetadataService;
     private readonly characterEncyclopediaService;
+    private storage;
     constructor(apiKey: string, modelName: string, gameMetadataService: IGameMetadataService, characterEncyclopediaService: ICharacterEncyclopediaService);
     /**
      * Analyze video using Vertex AI Gemini

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CharacterService = void 0;
 const BaseService_1 = require("./BaseService");
+const ProPlayer_1 = require("../models/ProPlayer");
 /**
  * Character service implementation
  * Follows Single Responsibility Principle - orchestrates character business logic
@@ -349,6 +350,25 @@ class CharacterService extends BaseService_1.BaseService {
                 success: true,
                 data: this.mapToCharacter(updated),
                 message: `Character ${isCurrent ? 'set as' : 'unset from'} current successfully`,
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    }
+    /**
+     * Get verified pro players for a specific game
+     */
+    async getProsByGame(gameId) {
+        try {
+            const pros = await ProPlayer_1.ProPlayer.find({ gameId, isVerified: true });
+            return {
+                success: true,
+                data: pros,
             };
         }
         catch (error) {
