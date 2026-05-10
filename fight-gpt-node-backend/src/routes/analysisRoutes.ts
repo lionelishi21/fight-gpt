@@ -61,6 +61,24 @@ export class AnalysisRoutes {
       validateRequest,
       (req: Request, res: Response, next: NextFunction) => this.controller.verifyMission(req, res, next)
     );
+
+    // Engagement Tracking
+    this.router.post(
+      '/discovery/track-view',
+      optionalAuthMiddleware,
+      (req: Request, res: Response, next: NextFunction) => this.controller.trackDiscoveryView(req, res, next)
+    );
+
+    this.router.post(
+      '/discovery/:id/track-click',
+      (req: Request, res: Response, next: NextFunction) => this.controller.trackDiscoveryClick(req, res, next)
+    );
+
+    this.router.get(
+      '/discovery/views',
+      optionalAuthMiddleware,
+      (req: Request, res: Response, next: NextFunction) => this.controller.getUserDiscoveryViews(req, res, next)
+    );
   }
 
   /**

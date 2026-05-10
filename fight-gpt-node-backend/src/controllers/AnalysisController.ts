@@ -271,6 +271,57 @@ export class AnalysisController extends BaseController implements IAnalysisContr
     } catch (error) {
       this.handleError(error, req, res, next);
     }
+  /**
+   * Track discovery feed views
+   * POST /api/analyses/discovery/track-view
+   */
+  async trackDiscoveryView(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { analysisIds } = req.body;
+      const userId = (req as any).user?.id;
+      
+      if (!analysisIds || !Array.isArray(analysisIds)) {
+        this.sendResponse(res, { success: false, error: 'analysisIds array required' }, 400);
+        return;
+      }
+
+      const result = await this.analysisService.trackDiscoveryView(analysisIds, userId);
+      this.sendResponse(res, result);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
+  }
+
+  /**
+   * Track discovery feed clicks
+   * POST /api/analyses/discovery/:id/track-click
+   */
+  async trackDiscoveryClick(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const result = await this.analysisService.trackDiscoveryClick(id);
+      this.sendResponse(res, result);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
+  }
+
+  /**
+   * Get IDs of discovery items already viewed by user
+   * GET /api/analyses/discovery/views
+   */
+  async getUserDiscoveryViews(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        this.sendResponse(res, { success: false, error: 'Unauthorized' }, 401);
+        return;
+      }
+      const result = await this.analysisService.getUserDiscoveryViews(userId);
+      this.sendResponse(res, result);
+    } catch (error) {
+      this.handleError(error, req, res, next);
+    }
   }
 }
 

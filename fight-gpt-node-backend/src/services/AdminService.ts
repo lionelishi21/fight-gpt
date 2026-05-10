@@ -76,7 +76,8 @@ export class AdminService extends BaseService implements IAdminService {
                 dailyAnalyses,
                 dailyScenarios,
                 latestAnalysesToday,
-                isWorkerOnline
+                isWorkerOnline,
+                discoveryStats
             ] = await Promise.all([
                 User.countDocuments(),
                 Analysis.countDocuments(),
@@ -90,7 +91,10 @@ export class AdminService extends BaseService implements IAdminService {
                     .limit(10)
                     .select('analysis_id game_id youtube_url created_at')
                     .lean(),
-                queueService.getWorkerStatus()
+                queueService.getWorkerStatus(),
+                Analysis.aggregate([
+                    { $group: { _id: null, views: { $sum: '$view_count' }, clicks: { $sum: '$click_count' } } }
+                ])
             ]);
 
             return {
@@ -111,6 +115,10 @@ export class AdminService extends BaseService implements IAdminService {
                     worker: {
                         status: isWorkerOnline ? 'online' : 'offline',
                         timestamp: new Date().toISOString()
+                    },
+                    discovery: {
+                        views: (discoveryStats as any)[0]?.views || 0,
+                        clicks: (discoveryStats as any)[0]?.clicks || 0
                     }
                 }
             };

@@ -22,6 +22,9 @@ export interface IAnalysisService {
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
   getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
   getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
+  trackDiscoveryView(analysisIds: string[], userId?: string): Promise<ApiResponse<void>>;
+  trackDiscoveryClick(analysisId: string): Promise<ApiResponse<void>>;
+  getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>>;
 }
 
 /**
