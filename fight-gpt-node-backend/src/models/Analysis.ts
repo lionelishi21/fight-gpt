@@ -29,6 +29,7 @@ const AnalysisSchema: Schema = new Schema(
       type: String,
       index: true,
       sparse: true,
+      unique: true, // Prevent duplicate analyses for the same video
     },
     video_path: {
       type: String,

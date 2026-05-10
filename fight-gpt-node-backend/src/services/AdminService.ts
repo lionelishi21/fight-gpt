@@ -9,6 +9,7 @@ import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 import { queueService } from './QueueService';
 import { IAnalysisService } from './AnalysisService';
+import { normalizeYoutubeUrl } from '../helpers/youtubeHelper';
 
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
@@ -160,9 +161,16 @@ export class AdminService extends BaseService implements IAdminService {
                 .sort({ created_at: -1 })
                 .skip(offset)
                 .limit(limit)
+                .lean()
                 .exec();
             
-            return { success: true, data: analyses };
+            // Map to ensure top-level analysis_id and consistency with user feed
+            const mappedAnalyses = analyses.map(a => ({
+                ...a,
+                analysis_id: a.analysis_id, // Ensure it's explicitly here
+            }));
+
+            return { success: true, data: mappedAnalyses };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch analyses' };
         }
@@ -195,15 +203,21 @@ export class AdminService extends BaseService implements IAdminService {
 
     async triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>> {
         try {
-            // Check if already exists
-            const existing = await IngestionJob.findOne({ youtube_url: youtubeUrl });
-            if (existing) return { success: false, error: 'Video already in system' };
+            const normalizedUrl = normalizeYoutubeUrl(youtubeUrl);
+
+            // Check if already in ingestion pipeline
+            const existingJob = await IngestionJob.findOne({ youtube_url: normalizedUrl });
+            if (existingJob) return { success: false, error: 'Video is already being processed or in system' };
+
+            // Check if already analyzed
+            const existingAnalysis = await Analysis.findOne({ youtube_url: normalizedUrl });
+            if (existingAnalysis) return { success: false, error: 'Video has already been analyzed and is in the discovery feed' };
 
             const jobId = `manual_${Date.now()}`;
             const newJob = new IngestionJob({
                 job_id: jobId,
                 game_id: gameId,
-                youtube_url: youtubeUrl,
+                youtube_url: normalizedUrl,
                 search_query: 'MANUAL_TRIGGER',
                 source: 'manual',
                 status: 'pending'

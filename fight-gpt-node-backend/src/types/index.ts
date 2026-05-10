@@ -53,6 +53,8 @@ export interface AnalysisRequest {
   game_context_text?: string; // Formatted human-readable game context for AI prompts (legacy)
   ai_context?: string; // Enhanced "Cheat Sheet" format with movesets (new Sensei Logic format)
   pro_player_id?: string; // Link to professional player for regional/pro scouting
+  video_title?: string; // Original YouTube/Video title for better AI context
+  metadata?: Record<string, any>; // Flexible metadata storage
   force?: boolean; // Force re-analysis and bypass cache
 }
 

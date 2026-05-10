@@ -10,6 +10,8 @@ import { UuidHelper } from '../helpers/uuidHelper';
 import { Logger } from '../helpers/logger';
 import { queueService } from './QueueService';
 
+import { normalizeYoutubeUrl, isBadVideoTitle } from '../helpers/youtubeHelper';
+
 const execAsync = promisify(exec);
 
 // Search queries per game — these surface tournament sets, pro player footage, high-level ranked
@@ -106,10 +108,19 @@ export class IngestionService extends BaseService implements IIngestionService {
 
         for (const query of queries) {
             try {
-                const videoUrls = await this.searchYouTube(query, Math.ceil(maxVideos / queries.length));
+                const searchResults = await this.searchYouTube(query, Math.ceil(maxVideos / queries.length));
 
-                for (const url of videoUrls) {
+                for (const res of searchResults) {
                     try {
+                        const url = normalizeYoutubeUrl(res.url);
+                        
+                        // Skip if title indicates non-match content
+                        if (isBadVideoTitle(res.title)) {
+                            Logger.info(`[IngestionService] Skipping non-match content: ${res.title}`);
+                            result.skipped_count++;
+                            continue;
+                        }
+
                         // Skip if already ingested
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) {
@@ -125,13 +136,15 @@ export class IngestionService extends BaseService implements IIngestionService {
                             source: 'scheduled',
                             status: 'pending',
                             retry_count: 0,
+                            metadata: { title: res.title }
                         });
 
                         // Enqueue for background processing
                         await queueService.addAnalysisJob({
                             job_id: job.job_id,
                             game_id: gameId,
-                            youtube_url: url
+                            youtube_url: url,
+                            metadata: { title: res.title }
                         });
 
                         result.queued_count++;
@@ -183,10 +196,13 @@ export class IngestionService extends BaseService implements IIngestionService {
 
                     // Run the analysis pipeline
                     const proPlayerId = (job as any).metadata?.pro_player_id;
+                    const videoTitle = (job as any).metadata?.title;
                     const analysisResult = await this.analysisService.analyzeVideo({
                         youtube_url: job.youtube_url,
                         game_id: job.game_id,
                         pro_player_id: proPlayerId,
+                        video_title: videoTitle,
+                        metadata: (job as any).metadata
                     });
 
                     if (analysisResult.success && analysisResult.data) {
@@ -308,10 +324,14 @@ export class IngestionService extends BaseService implements IIngestionService {
 
                     // Uploads Playlist ID is the Channel ID with 'UU' instead of 'UC'
                     const uploadsPlaylistId = 'UU' + channelId.slice(2);
-                    const urls = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
-                    const limitedUrls = urls.slice(0, 1); // Only take 1 latest video per pro to save quota
+                    const videos = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
+                    const limitedVideos = videos.slice(0, 3); // Check top 3 to find a good one
                     
-                    for (const url of limitedUrls) {
+                    for (const v of limitedVideos) {
+                        const url = normalizeYoutubeUrl(v.url);
+
+                        if (isBadVideoTitle(v.title)) continue;
+
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) continue;
 
@@ -368,8 +388,11 @@ export class IngestionService extends BaseService implements IIngestionService {
 
             const data = await response.json();
             return (data.items || [])
-                .map((item: any) => `https://www.youtube.com/watch?v=${item.snippet?.resourceId?.videoId}`)
-                .filter((url: string) => url.includes('watch?v='));
+                .map((item: any) => ({
+                    url: `https://www.youtube.com/watch?v=${item.snippet?.resourceId?.videoId}`,
+                    title: item.snippet?.title || ''
+                }))
+                .filter((v: any) => v.url.includes('watch?v='));
         } catch (e) {
             Logger.error(`[IngestionService] Playlist fetch error for ${playlistId}:`, e);
             return [];
@@ -480,7 +503,7 @@ export class IngestionService extends BaseService implements IIngestionService {
      * Use YouTube Data API v3 to search for videos.
      * This is the primary and only search method (yt-dlp is deprecated).
      */
-    private async searchYouTube(query: string, maxResults: number = 3): Promise<string[]> {
+    private async searchYouTube(query: string, maxResults: number = 3): Promise<{url: string, title: string}[]> {
         const apiKey = process.env.YOUTUBE_API_KEY;
         if (apiKey) {
             return this.searchViaYouTubeApi(query, maxResults, apiKey);
@@ -494,16 +517,16 @@ export class IngestionService extends BaseService implements IIngestionService {
      * YouTube Data API v3 search — reliable, requires YOUTUBE_API_KEY env var
      * Free tier: 10,000 units/day (search costs 100 units each = ~100 searches/day)
      */
-    private async searchViaYouTubeApi(query: string, maxResults: number, apiKey: string): Promise<string[]> {
+    private async searchViaYouTubeApi(query: string, maxResults: number, apiKey: string): Promise<{url: string, title: string}[]> {
         try {
             const params = new URLSearchParams({
-                part: 'id',
+                part: 'snippet',
                 q: query,
                 type: 'video',
                 maxResults: String(maxResults),
                 videoDuration: 'medium', // 4-20 min — typical match length
                 relevanceLanguage: 'en',
-                order: 'date',
+                order: 'relevance',
                 key: apiKey,
             });
 
@@ -516,12 +539,15 @@ export class IngestionService extends BaseService implements IIngestionService {
             }
 
             const data = await response.json();
-            const urls = (data.items || [])
+            const results = (data.items || [])
                 .filter((item: any) => item.id?.videoId)
-                .map((item: any) => `https://www.youtube.com/watch?v=${item.id.videoId}`);
+                .map((item: any) => ({
+                    url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+                    title: item.snippet?.title || ''
+                }));
 
-            Logger.info(`[IngestionService] YouTube API found ${urls.length} URLs for: ${query}`);
-            return urls;
+            Logger.info(`[IngestionService] YouTube API found ${results.length} results for: ${query}`);
+            return results;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             Logger.error(`[IngestionService] YouTube API search failed: ${msg}`);

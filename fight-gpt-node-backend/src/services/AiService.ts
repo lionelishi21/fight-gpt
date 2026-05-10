@@ -130,6 +130,10 @@ export class AiService extends BaseService implements IAiService {
       fullPrompt += `\n\nContext:\n${request.ai_context}`;
     }
 
+    if (request.video_title) {
+      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
+    }
+
     const contentParts: any[] = [];
     
     // If we have a video (YouTube), add it to the parts
