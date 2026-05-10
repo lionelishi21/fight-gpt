@@ -100,6 +100,10 @@ jobs:
             npx tsx src/scripts/seedGames.ts || true
             npx tsx src/scripts/seedProPlayers.ts || true
 
+            # 9. Purge bad analyses (data integrity cleanup)
+            echo "→ Cleaning up hallucinated and duplicate analyses..."
+            npx tsx scripts/purge_bad_analyses.ts || true
+
             # 8. Diagnostics and health check
             echo "→ PORT in .env: $(grep '^PORT=' .env 2>/dev/null || echo 'not set')"
             sleep 10
