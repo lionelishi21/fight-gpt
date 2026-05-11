@@ -3,6 +3,12 @@
  */
 export function normalizeYoutubeUrl(url: string): string {
   if (!url) return '';
+  
+  // If it's a Twitch URL, don't try to parse it as YouTube
+  if (url.includes('twitch.tv')) {
+    return url;
+  }
+
   try {
     let videoId = '';
     if (url.includes('youtu.be/')) {
