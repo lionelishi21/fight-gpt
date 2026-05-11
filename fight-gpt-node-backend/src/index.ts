@@ -116,7 +116,14 @@ export class App {
     this.server = createServer(this.app);
     this.io = new Server(this.server, {
       cors: {
-        origin: AppConfig.CORS_ORIGINS,
+        origin: (origin: string, callback: any) => {
+          const allowedOrigins = AppConfig.CORS_ORIGINS;
+          if (!origin || allowedOrigins === true || (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin))) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
         credentials: true
       }
     });
