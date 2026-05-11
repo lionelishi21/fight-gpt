@@ -18,7 +18,8 @@
     "migrate:character-encyclopedia": "tsx src/seeders/migrateCharacterEncyclopedia.ts migrate",
     "validate:character-encyclopedia": "tsx src/seeders/validateCharacterEncyclopedia.ts",
     "scrape:sf6": "tsx src/scripts/scrapeSF6.ts",
-    "seed:missions": "tsx src/seeders/seedMissions.ts"
+    "seed:missions": "tsx src/seeders/seedMissions.ts",
+    "reset:data": "tsx src/scripts/resetData.ts"
   },
   "keywords": [
     "express",
@@ -29,6 +30,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@google-cloud/storage": "^7.19.0",
     "@google-cloud/vertexai": "^1.12.0",
     "@google/generative-ai": "^0.24.1",
