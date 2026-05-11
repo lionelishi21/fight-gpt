@@ -14,6 +14,7 @@ export interface IGameMetadataRepository {
     updateGameMetadata(id: string, data: UpdateGameMetadataRequest): Promise<IGameMetadataDocument | null>;
     updateGameMetadataByGameId(gameId: string, data: UpdateGameMetadataRequest): Promise<IGameMetadataDocument | null>;
     delete(id: string): Promise<boolean>;
+    findActiveGames(): Promise<IGameMetadataDocument[]>;
 }
 /**
  * Game Metadata repository implementation
@@ -47,5 +48,9 @@ export declare class GameMetadataRepository extends BaseRepository<IGameMetadata
      * Update game metadata by game_id
      */
     updateGameMetadataByGameId(gameId: string, data: UpdateGameMetadataRequest): Promise<IGameMetadataDocument | null>;
+    /**
+     * Find all active games (where is_current is true)
+     */
+    findActiveGames(): Promise<IGameMetadataDocument[]>;
 }
 //# sourceMappingURL=GameMetadataRepository.d.ts.map

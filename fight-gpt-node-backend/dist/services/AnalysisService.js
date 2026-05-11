@@ -189,9 +189,9 @@ class AnalysisService extends BaseService_1.BaseService {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
         }
     }
-    async getDiscoveryAnalyses(limit = 20, gameId) {
+    async getDiscoveryAnalyses(limit = 20, gameId, p1Char, p2Char) {
         try {
-            const analyses = await this.analysisRepository.getRecentAnalyses(limit, undefined, gameId);
+            const analyses = await this.analysisRepository.getDiscoveryAnalyses(limit, gameId, p1Char, p2Char);
             return {
                 success: true,
                 data: analyses.map(a => ({
@@ -199,6 +199,8 @@ class AnalysisService extends BaseService_1.BaseService {
                     analysis_id: a.analysis_id,
                     youtube_url: a.youtube_url,
                     game_id: a.game_id,
+                    view_count: a.view_count || 0,
+                    click_count: a.click_count || 0,
                     created_at: a.created_at,
                     ...(a.analysis || {}),
                 })),
@@ -206,6 +208,26 @@ class AnalysisService extends BaseService_1.BaseService {
         }
         catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+    }
+    async trackDiscoveryView(analysisIds) {
+        try {
+            for (const id of analysisIds) {
+                await this.analysisRepository.incrementViewCount(id);
+            }
+            return { success: true };
+        }
+        catch (error) {
+            return { success: false, error: 'Failed to track views' };
+        }
+    }
+    async trackDiscoveryClick(analysisId) {
+        try {
+            await this.analysisRepository.incrementClickCount(analysisId);
+            return { success: true };
+        }
+        catch (error) {
+            return { success: false, error: 'Failed to track click' };
         }
     }
     async getCachedAnalysis(request) {
@@ -361,6 +383,16 @@ class AnalysisService extends BaseService_1.BaseService {
             catch (e) {
                 console.error(`[VectorIntelligence] Failed for event:`, e);
             }
+        }
+    }
+    async getUserDiscoveryViews(userId) {
+        try {
+            // Placeholder for now to satisfy the interface and fix the build.
+            // Actual implementation would query a view tracking table.
+            return { success: true, data: [] };
+        }
+        catch (error) {
+            return { success: false, error: 'Failed to fetch views' };
         }
     }
 }

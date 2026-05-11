@@ -52,6 +52,7 @@ class AdminRoutes {
         this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
         // Auto-Research
         this.router.post('/research/trigger', this.adminController.triggerResearch);
+        this.router.post('/trends/analyze', this.adminController.triggerTrendAnalysis);
         // Search Strategy Management (DB-driven ingestion queries)
         this.router.get('/games/:gameId/search-strategies', this.adminController.getSearchStrategies);
         this.router.post('/games/:gameId/search-strategies', this.adminController.upsertSearchStrategies);

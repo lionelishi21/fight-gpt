@@ -79,6 +79,41 @@ class AnalysisRepository extends BaseRepository_1.BaseRepository {
             created_at: { $gte: dateLimit }
         });
     }
+    /**
+     * Get analyses for the discovery feed with optional matchup filtering
+     */
+    async getDiscoveryAnalyses(limit, gameId, p1Char, p2Char) {
+        const filter = { video_source: 'youtube' };
+        if (gameId)
+            filter.game_id = gameId;
+        if (p1Char && p2Char) {
+            // Specific matchup (bidirectional)
+            filter.$or = [
+                { 'analysis.p1_character': p1Char, 'analysis.p2_character': p2Char },
+                { 'analysis.p1_character': p2Char, 'analysis.p2_character': p1Char },
+            ];
+        }
+        else if (p1Char) {
+            // Any vs p1Char
+            filter.$or = [
+                { 'analysis.p1_character': p1Char },
+                { 'analysis.p2_character': p1Char },
+            ];
+        }
+        return this.findMany(filter, { sort: { created_at: -1 }, limit });
+    }
+    /**
+     * Increment view count for a discovery record
+     */
+    async incrementViewCount(analysisId) {
+        await this.model.updateOne({ $or: [{ analysis_id: analysisId }, { _id: analysisId }] }, { $inc: { view_count: 1 } });
+    }
+    /**
+     * Increment click count for a discovery record
+     */
+    async incrementClickCount(analysisId) {
+        await this.model.updateOne({ $or: [{ analysis_id: analysisId }, { _id: analysisId }] }, { $inc: { click_count: 1 } });
+    }
 }
 exports.AnalysisRepository = AnalysisRepository;
 //# sourceMappingURL=AnalysisRepository.js.map

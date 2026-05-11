@@ -33,74 +33,27 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Analysis = void 0;
+exports.DiscoveryView = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-/**
- * Analysis schema definition
- */
-const AnalysisSchema = new mongoose_1.Schema({
-    youtube_url: {
+const DiscoveryViewSchema = new mongoose_1.Schema({
+    user_id: {
         type: String,
-        index: true,
-        sparse: true,
-        unique: true, // Prevent duplicate analyses for the same video
-    },
-    video_path: {
-        type: String,
-        index: true,
-        sparse: true,
-    },
-    video_source: {
-        type: String,
-        enum: ['youtube', 'local_file'],
         required: true,
-    },
-    game_id: {
-        type: String,
         index: true,
-    },
-    analysis: {
-        type: mongoose_1.Schema.Types.Mixed,
-        required: true,
     },
     analysis_id: {
         type: String,
         required: true,
-        unique: true,
         index: true,
     },
-    user_id: {
-        type: String,
-        index: true,
-        sparse: true,
-    },
-    p1_name: {
-        type: String,
-        index: true,
-    },
-    p2_name: {
-        type: String,
-        index: true,
-    },
-    view_count: {
-        type: Number,
-        default: 0,
-    },
-    click_count: {
-        type: Number,
-        default: 0,
+    last_viewed_at: {
+        type: Date,
+        default: Date.now,
     },
 }, {
-    timestamps: {
-        createdAt: 'created_at',
-        updatedAt: 'updated_at',
-    },
+    timestamps: false,
 });
-// Compound index for cache lookup
-AnalysisSchema.index({ youtube_url: 1, video_source: 1 }, { sparse: true });
-AnalysisSchema.index({ video_path: 1, video_source: 1 }, { sparse: true });
-/**
- * Analysis model
- */
-exports.Analysis = mongoose_1.default.model('Analysis', AnalysisSchema);
-//# sourceMappingURL=Analysis.js.map
+// Unique index to prevent duplicate view records for the same user/analysis
+DiscoveryViewSchema.index({ user_id: 1, analysis_id: 1 }, { unique: true });
+exports.DiscoveryView = mongoose_1.default.model('DiscoveryView', DiscoveryViewSchema);
+//# sourceMappingURL=DiscoveryView.js.map

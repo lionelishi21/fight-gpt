@@ -40,6 +40,7 @@ const BaseService_1 = require("./BaseService");
 const uuidHelper_1 = require("../helpers/uuidHelper");
 const logger_1 = require("../helpers/logger");
 const QueueService_1 = require("./QueueService");
+const youtubeHelper_1 = require("../helpers/youtubeHelper");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 // Search queries per game — these surface tournament sets, pro player footage, high-level ranked
 const GAME_SEARCH_QUERIES = {
@@ -115,9 +116,16 @@ class IngestionService extends BaseService_1.BaseService {
         };
         for (const query of queries) {
             try {
-                const videoUrls = await this.searchYouTube(query, Math.ceil(maxVideos / queries.length));
-                for (const url of videoUrls) {
+                const searchResults = await this.searchYouTube(query, Math.ceil(maxVideos / queries.length));
+                for (const res of searchResults) {
                     try {
+                        const url = (0, youtubeHelper_1.normalizeYoutubeUrl)(res.url);
+                        // Skip if title indicates non-match content
+                        if ((0, youtubeHelper_1.isBadVideoTitle)(res.title)) {
+                            logger_1.Logger.info(`[IngestionService] Skipping non-match content: ${res.title}`);
+                            result.skipped_count++;
+                            continue;
+                        }
                         // Skip if already ingested
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) {
@@ -132,12 +140,14 @@ class IngestionService extends BaseService_1.BaseService {
                             source: 'scheduled',
                             status: 'pending',
                             retry_count: 0,
+                            video_title: res.title
                         });
                         // Enqueue for background processing
                         await QueueService_1.queueService.addAnalysisJob({
                             job_id: job.job_id,
                             game_id: gameId,
-                            youtube_url: url
+                            youtube_url: url,
+                            video_title: res.title
                         });
                         result.queued_count++;
                     }
@@ -179,11 +189,13 @@ class IngestionService extends BaseService_1.BaseService {
                     // Mark as processing
                     await this.ingestionRepository.updateJobStatus(job.job_id, 'processing');
                     // Run the analysis pipeline
-                    const proPlayerId = job.metadata?.pro_player_id;
+                    const proPlayerId = job.pro_player_id;
+                    const videoTitle = job.video_title;
                     const analysisResult = await this.analysisService.analyzeVideo({
                         youtube_url: job.youtube_url,
                         game_id: job.game_id,
                         pro_player_id: proPlayerId,
+                        video_title: videoTitle,
                     });
                     if (analysisResult.success && analysisResult.data) {
                         const scenarioCount = analysisResult.data.timeline?.length || 0;
@@ -287,9 +299,12 @@ class IngestionService extends BaseService_1.BaseService {
                         continue;
                     // Uploads Playlist ID is the Channel ID with 'UU' instead of 'UC'
                     const uploadsPlaylistId = 'UU' + channelId.slice(2);
-                    const urls = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
-                    const limitedUrls = urls.slice(0, 1); // Only take 1 latest video per pro to save quota
-                    for (const url of limitedUrls) {
+                    const videos = await this.fetchRecentVideosViaPlaylist(uploadsPlaylistId, apiKey);
+                    const limitedVideos = videos.slice(0, 3); // Check top 3 to find a good one
+                    for (const v of limitedVideos) {
+                        const url = (0, youtubeHelper_1.normalizeYoutubeUrl)(v.url);
+                        if ((0, youtubeHelper_1.isBadVideoTitle)(v.title))
+                            continue;
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing)
                             continue;
@@ -301,14 +316,16 @@ class IngestionService extends BaseService_1.BaseService {
                             source: 'pro_scout',
                             status: 'pending',
                             retry_count: 0,
-                            pro_player_id: pro._id.toString()
+                            pro_player_id: pro._id.toString(),
+                            video_title: v.title
                         });
                         // Enqueue for background processing
                         await QueueService_1.queueService.addAnalysisJob({
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,
-                            pro_player_id: pro._id.toString()
+                            pro_player_id: pro._id.toString(),
+                            video_title: v.title
                         });
                         logger_1.Logger.info(`[IngestionService] Queued new pro match via Playlist Tracking: ${url} (${pro.name})`);
                     }
@@ -341,8 +358,11 @@ class IngestionService extends BaseService_1.BaseService {
             }
             const data = await response.json();
             return (data.items || [])
-                .map((item) => `https://www.youtube.com/watch?v=${item.snippet?.resourceId?.videoId}`)
-                .filter((url) => url.includes('watch?v='));
+                .map((item) => ({
+                url: `https://www.youtube.com/watch?v=${item.snippet?.resourceId?.videoId}`,
+                title: item.snippet?.title || ''
+            }))
+                .filter((v) => v.url.includes('watch?v='));
         }
         catch (e) {
             logger_1.Logger.error(`[IngestionService] Playlist fetch error for ${playlistId}:`, e);
@@ -399,10 +419,10 @@ class IngestionService extends BaseService_1.BaseService {
             const pros = await ProPlayer.find({ isVerified: true }).lean().exec();
             for (const pro of pros) {
                 for (const channel of pro.channels) {
-                    // Search for recent matches by this specific pro
                     const query = `${pro.name} ${pro.gameId} high level ranked match pro player`;
-                    const urls = await this.searchYouTube(query, 1); // Only 1 result for pro scout search
-                    for (const url of urls) {
+                    const searchResults = await this.searchYouTube(query, 1); // Only 1 result for pro scout search
+                    for (const res of searchResults) {
+                        const url = res.url;
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing)
                             continue;
@@ -410,6 +430,7 @@ class IngestionService extends BaseService_1.BaseService {
                             job_id: uuidHelper_1.UuidHelper.generate(),
                             game_id: pro.gameId,
                             youtube_url: url,
+                            video_title: res.title,
                             search_query: `PRO_SCOUT: ${pro.name} (${pro.region})`,
                             source: 'pro_scout',
                             status: 'pending',
@@ -421,6 +442,7 @@ class IngestionService extends BaseService_1.BaseService {
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,
+                            video_title: res.title,
                             pro_player_id: pro._id.toString()
                         });
                     }
@@ -459,13 +481,13 @@ class IngestionService extends BaseService_1.BaseService {
     async searchViaYouTubeApi(query, maxResults, apiKey) {
         try {
             const params = new URLSearchParams({
-                part: 'id',
+                part: 'snippet',
                 q: query,
                 type: 'video',
                 maxResults: String(maxResults),
                 videoDuration: 'medium', // 4-20 min — typical match length
                 relevanceLanguage: 'en',
-                order: 'date',
+                order: 'relevance',
                 key: apiKey,
             });
             const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
@@ -475,11 +497,14 @@ class IngestionService extends BaseService_1.BaseService {
                 return [];
             }
             const data = await response.json();
-            const urls = (data.items || [])
+            const results = (data.items || [])
                 .filter((item) => item.id?.videoId)
-                .map((item) => `https://www.youtube.com/watch?v=${item.id.videoId}`);
-            logger_1.Logger.info(`[IngestionService] YouTube API found ${urls.length} URLs for: ${query}`);
-            return urls;
+                .map((item) => ({
+                url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+                title: item.snippet?.title || ''
+            }));
+            logger_1.Logger.info(`[IngestionService] YouTube API found ${results.length} results for: ${query}`);
+            return results;
         }
         catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

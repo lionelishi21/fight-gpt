@@ -171,7 +171,9 @@ class AnalysisController extends BaseController_1.BaseController {
         try {
             const limit = req.query.limit ? parseInt(req.query.limit) : 20;
             const gameId = req.query.gameId;
-            const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId);
+            const p1Char = req.query.p1_character;
+            const p2Char = req.query.p2_character;
+            const result = await this.analysisService.getDiscoveryAnalyses(limit, gameId, p1Char, p2Char);
             const responseTime = Date.now() - startTime;
             await this.auditLogRepository.createAuditLog({
                 request_id: requestId,
@@ -222,6 +224,57 @@ class AnalysisController extends BaseController_1.BaseController {
                 response_time_ms: responseTime,
             });
             this.sendResponse(res, { success: true, data: verifyResult }, 200);
+        }
+        catch (error) {
+            this.handleError(error, req, res, next);
+        }
+    }
+    /**
+     * Track discovery feed views
+     * POST /api/analyses/discovery/track-view
+     */
+    async trackDiscoveryView(req, res, next) {
+        try {
+            const { analysisIds } = req.body;
+            const userId = req.user?.id;
+            if (!analysisIds || !Array.isArray(analysisIds)) {
+                this.sendResponse(res, { success: false, error: 'analysisIds array required' }, 400);
+                return;
+            }
+            const result = await this.analysisService.trackDiscoveryView(analysisIds);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.handleError(error, req, res, next);
+        }
+    }
+    /**
+     * Track discovery feed clicks
+     * POST /api/analyses/discovery/:id/track-click
+     */
+    async trackDiscoveryClick(req, res, next) {
+        try {
+            const { id } = req.params;
+            const result = await this.analysisService.trackDiscoveryClick(id);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.handleError(error, req, res, next);
+        }
+    }
+    /**
+     * Get IDs of discovery items already viewed by user
+     * GET /api/analyses/discovery/views
+     */
+    async getUserDiscoveryViews(req, res, next) {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                this.sendResponse(res, { success: false, error: 'Unauthorized' }, 401);
+                return;
+            }
+            const result = await this.analysisService.getUserDiscoveryViews(userId);
+            this.sendResponse(res, result);
         }
         catch (error) {
             this.handleError(error, req, res, next);

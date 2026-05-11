@@ -12,6 +12,9 @@ export interface IAnalysisRepository {
     getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<IAnalysis[]>;
     createAnalysis(request: AnalysisRequest, response: AnalysisResponse, analysisId: string, userId?: string): Promise<IAnalysis>;
     countRecentAnalysesByUser(userId: string, hours: number): Promise<number>;
+    getDiscoveryAnalyses(limit: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<IAnalysis[]>;
+    incrementViewCount(analysisId: string): Promise<void>;
+    incrementClickCount(analysisId: string): Promise<void>;
 }
 /**
  * Analysis repository implementation
@@ -44,5 +47,17 @@ export declare class AnalysisRepository extends BaseRepository<IAnalysis> implem
      * Count analyses created by a user within a certain time window
      */
     countRecentAnalysesByUser(userId: string, hours: number): Promise<number>;
+    /**
+     * Get analyses for the discovery feed with optional matchup filtering
+     */
+    getDiscoveryAnalyses(limit: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<IAnalysis[]>;
+    /**
+     * Increment view count for a discovery record
+     */
+    incrementViewCount(analysisId: string): Promise<void>;
+    /**
+     * Increment click count for a discovery record
+     */
+    incrementClickCount(analysisId: string): Promise<void>;
 }
 //# sourceMappingURL=AnalysisRepository.d.ts.map

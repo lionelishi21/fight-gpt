@@ -31,6 +31,10 @@ class AnalysisRoutes {
         this.router.get('/:id', this.validateGetAnalysisRequest(), validationMiddleware_1.validateRequest, (req, res, next) => this.controller.getAnalysis(req, res, next));
         // POST /api/analysis/:id/verify - Verify mission success
         this.router.post('/:id/verify', auth_1.optionalAuthMiddleware, validationMiddleware_1.validateRequest, (req, res, next) => this.controller.verifyMission(req, res, next));
+        // Engagement Tracking
+        this.router.post('/discovery/track-view', auth_1.optionalAuthMiddleware, (req, res, next) => this.controller.trackDiscoveryView(req, res, next));
+        this.router.post('/discovery/:id/track-click', (req, res, next) => this.controller.trackDiscoveryClick(req, res, next));
+        this.router.get('/discovery/views', auth_1.optionalAuthMiddleware, (req, res, next) => this.controller.getUserDiscoveryViews(req, res, next));
     }
     /**
      * Get router instance

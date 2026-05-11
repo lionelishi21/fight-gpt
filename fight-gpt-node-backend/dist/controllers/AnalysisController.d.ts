@@ -46,5 +46,20 @@ export declare class AnalysisController extends BaseController implements IAnaly
      * POST /api/analysis/:id/verify
      */
     verifyMission(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /**
+     * Track discovery feed views
+     * POST /api/analyses/discovery/track-view
+     */
+    trackDiscoveryView(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /**
+     * Track discovery feed clicks
+     * POST /api/analyses/discovery/:id/track-click
+     */
+    trackDiscoveryClick(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /**
+     * Get IDs of discovery items already viewed by user
+     * GET /api/analyses/discovery/views
+     */
+    getUserDiscoveryViews(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 //# sourceMappingURL=AnalysisController.d.ts.map

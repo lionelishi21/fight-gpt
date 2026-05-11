@@ -12,7 +12,10 @@ export interface IAnalysisService {
     analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
     getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
     getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
-    getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
+    getDiscoveryAnalyses(limit?: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<ApiResponse<any[]>>;
+    trackDiscoveryView(analysisIds: string[]): Promise<ApiResponse<void>>;
+    trackDiscoveryClick(analysisId: string): Promise<ApiResponse<void>>;
+    getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>>;
 }
 /**
  * Analysis Service implementation
@@ -31,7 +34,9 @@ export declare class AnalysisService extends BaseService implements IAnalysisSer
     analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
     getAnalysis(analysisId: string): Promise<ApiResponse<any>>;
     getRecentAnalyses(limit?: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
-    getDiscoveryAnalyses(limit?: number, gameId?: string): Promise<ApiResponse<any[]>>;
+    getDiscoveryAnalyses(limit?: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<ApiResponse<any[]>>;
+    trackDiscoveryView(analysisIds: string[]): Promise<ApiResponse<void>>;
+    trackDiscoveryClick(analysisId: string): Promise<ApiResponse<void>>;
     private getCachedAnalysis;
     private validateAnalysisRequest;
     private enrichRequestWithGameContext;
@@ -40,5 +45,6 @@ export declare class AnalysisService extends BaseService implements IAnalysisSer
      * if they are novel, or links them to existing scenarios if they are similar.
      */
     processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse): Promise<void>;
+    getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>>;
 }
 //# sourceMappingURL=AnalysisService.d.ts.map

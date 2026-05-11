@@ -257,6 +257,19 @@ class GameMetadataService extends BaseService_1.BaseService {
             updated_at: document.updated_at,
         };
     }
+    /**
+     * Get all active games (where is_current is true)
+     */
+    async getActiveGames() {
+        try {
+            const activeGames = await this.gameMetadataRepository.findActiveGames();
+            return activeGames.map((game) => this.mapToGameMetadata(game));
+        }
+        catch (error) {
+            console.error('[GameMetadataService] Failed to get active games:', error);
+            return [];
+        }
+    }
 }
 exports.GameMetadataService = GameMetadataService;
 //# sourceMappingURL=GameMetadataService.js.map

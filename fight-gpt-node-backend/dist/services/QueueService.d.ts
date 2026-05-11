@@ -4,6 +4,7 @@ export interface AnalysisJobData {
     game_id: string;
     job_id: string;
     pro_player_id?: string;
+    video_title?: string;
 }
 export interface ProofValidationJobData {
     userId: string;

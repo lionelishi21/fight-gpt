@@ -13,6 +13,7 @@ const Game_1 = require("../models/Game");
 const CharacterEncyclopediaRepository_1 = require("../repositories/CharacterEncyclopediaRepository");
 const BaseService_1 = require("./BaseService");
 const QueueService_1 = require("./QueueService");
+const youtubeHelper_1 = require("../helpers/youtubeHelper");
 class AdminService extends BaseService_1.BaseService {
     analysisService;
     constructor(analysisService) {
@@ -52,7 +53,7 @@ class AdminService extends BaseService_1.BaseService {
         try {
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
-            const [totalUsers, totalAnalyses, totalScenarios, pendingJobs, failedJobs, dailyAnalyses, dailyScenarios, latestAnalysesToday, isWorkerOnline] = await Promise.all([
+            const [totalUsers, totalAnalyses, totalScenarios, pendingJobs, failedJobs, dailyAnalyses, dailyScenarios, latestAnalysesToday, isWorkerOnline, discoveryStats] = await Promise.all([
                 User_1.default.countDocuments(),
                 Analysis_1.Analysis.countDocuments(),
                 Scenario_1.Scenario.countDocuments(),
@@ -65,7 +66,10 @@ class AdminService extends BaseService_1.BaseService {
                     .limit(10)
                     .select('analysis_id game_id youtube_url created_at')
                     .lean(),
-                QueueService_1.queueService.getWorkerStatus()
+                QueueService_1.queueService.getWorkerStatus(),
+                Analysis_1.Analysis.aggregate([
+                    { $group: { _id: null, views: { $sum: '$view_count' }, clicks: { $sum: '$click_count' } } }
+                ])
             ]);
             return {
                 success: true,
@@ -85,6 +89,10 @@ class AdminService extends BaseService_1.BaseService {
                     worker: {
                         status: isWorkerOnline ? 'online' : 'offline',
                         timestamp: new Date().toISOString()
+                    },
+                    discovery: {
+                        views: discoveryStats[0]?.views || 0,
+                        clicks: discoveryStats[0]?.clicks || 0
                     }
                 }
             };
@@ -126,8 +134,14 @@ class AdminService extends BaseService_1.BaseService {
                 .sort({ created_at: -1 })
                 .skip(offset)
                 .limit(limit)
+                .lean()
                 .exec();
-            return { success: true, data: analyses };
+            // Map to ensure top-level analysis_id and consistency with user feed
+            const mappedAnalyses = analyses.map(a => ({
+                ...a,
+                analysis_id: a.analysis_id, // Ensure it's explicitly here
+            }));
+            return { success: true, data: mappedAnalyses };
         }
         catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch analyses' };
@@ -159,15 +173,20 @@ class AdminService extends BaseService_1.BaseService {
     }
     async triggerManualUrl(gameId, youtubeUrl) {
         try {
-            // Check if already exists
-            const existing = await IngestionJob_1.IngestionJob.findOne({ youtube_url: youtubeUrl });
-            if (existing)
-                return { success: false, error: 'Video already in system' };
+            const normalizedUrl = (0, youtubeHelper_1.normalizeYoutubeUrl)(youtubeUrl);
+            // Check if already in ingestion pipeline
+            const existingJob = await IngestionJob_1.IngestionJob.findOne({ youtube_url: normalizedUrl });
+            if (existingJob)
+                return { success: false, error: 'Video is already being processed or in system' };
+            // Check if already analyzed
+            const existingAnalysis = await Analysis_1.Analysis.findOne({ youtube_url: normalizedUrl });
+            if (existingAnalysis)
+                return { success: false, error: 'Video has already been analyzed and is in the discovery feed' };
             const jobId = `manual_${Date.now()}`;
             const newJob = new IngestionJob_1.IngestionJob({
                 job_id: jobId,
                 game_id: gameId,
-                youtube_url: youtubeUrl,
+                youtube_url: normalizedUrl,
                 search_query: 'MANUAL_TRIGGER',
                 source: 'manual',
                 status: 'pending'

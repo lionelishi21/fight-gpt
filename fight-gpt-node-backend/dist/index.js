@@ -57,6 +57,7 @@ const AutoResearchService_1 = require("./services/AutoResearchService");
 const RivalService_1 = require("./services/RivalService");
 const UserService_1 = require("./services/UserService");
 const AdminService_1 = require("./services/AdminService");
+const TrendAnalysisService_1 = require("./services/TrendAnalysisService");
 const PaymentService_1 = require("./services/PaymentService");
 const RosterSyncService_1 = require("./services/RosterSyncService");
 const ScraperService_1 = require("./services/ScraperService");
@@ -153,6 +154,9 @@ class App {
             ? new AutoResearchService_1.AutoResearchService(theoryService, notificationService)
             : null;
         autoResearchService?.start();
+        const trendAnalysisService = app_1.AppConfig.MONGODB_URI
+            ? new TrendAnalysisService_1.TrendAnalysisService(analysisRepository, notificationService, gameMetadataService)
+            : null;
         const chatService = new ChatService_1.ChatService();
         // Initialize controllers (ChatController works without MongoDB)
         const analysisController = app_1.AppConfig.MONGODB_URI ? new AnalysisController_1.AnalysisController(analysisService, auditLogRepository) : null;
@@ -167,7 +171,7 @@ class App {
         const notificationController = app_1.AppConfig.MONGODB_URI ? new NotificationController_1.NotificationController(notificationRepository) : null;
         const rivalController = app_1.AppConfig.MONGODB_URI ? new RivalController_1.RivalController(rivalService, auditLogRepository) : null;
         const userController = app_1.AppConfig.MONGODB_URI ? new UserController_1.UserController(userService, auditLogRepository) : null;
-        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, this.rosterSyncService ?? undefined) : null;
+        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, trendAnalysisService ?? undefined, this.rosterSyncService ?? undefined) : null;
         let paymentService;
         let paymentController;
         try {

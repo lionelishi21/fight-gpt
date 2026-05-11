@@ -14,6 +14,7 @@ export interface IGameMetadataService {
     updateGameMetadata(id: string, request: UpdateGameMetadataRequest): Promise<ApiResponse<IGameMetadata>>;
     updateGameMetadataByGameId(gameId: string, request: UpdateGameMetadataRequest): Promise<ApiResponse<IGameMetadata>>;
     deleteGameMetadata(id: string): Promise<ApiResponse<boolean>>;
+    getActiveGames(): Promise<IGameMetadata[]>;
 }
 /**
  * Game Metadata service implementation
@@ -59,5 +60,9 @@ export declare class GameMetadataService extends BaseService implements IGameMet
      * Map document to game metadata interface
      */
     private mapToGameMetadata;
+    /**
+     * Get all active games (where is_current is true)
+     */
+    getActiveGames(): Promise<IGameMetadata[]>;
 }
 //# sourceMappingURL=GameMetadataService.d.ts.map

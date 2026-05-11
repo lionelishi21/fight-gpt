@@ -34,31 +34,34 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiService = void 0;
-const generative_ai_1 = require("@google/generative-ai");
+const vertexai_1 = require("@google-cloud/vertexai");
 const storage_1 = require("@google-cloud/storage");
 const BaseService_1 = require("./BaseService");
 const VersionResolver_1 = require("../helpers/VersionResolver");
 const app_1 = require("../config/app");
+const youtubeDownloader_1 = require("../helpers/youtubeDownloader");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 /**
  * AI Service implementation (Google Cloud Vertex AI)
  */
 class AiService extends BaseService_1.BaseService {
-    genAI;
+    vertexAI;
     model;
     modelName;
     gameMetadataService;
     characterEncyclopediaService;
     storage;
-    constructor(apiKey, modelName, gameMetadataService, characterEncyclopediaService) {
+    constructor(apiKey, // Kept for interface compatibility, but we rely on Vertex AI ADC
+    modelName, gameMetadataService, characterEncyclopediaService) {
         super();
-        if (!apiKey) {
-            throw new Error('GEMINI_API_KEY is required for AiService');
-        }
-        this.genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
         this.modelName = modelName;
-        this.model = this.genAI.getGenerativeModel({
+        // Initialize Vertex AI using Google Cloud ADC
+        this.vertexAI = new vertexai_1.VertexAI({
+            project: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
+            location: app_1.AppConfig.GOOGLE_CLOUD_LOCATION
+        });
+        this.model = this.vertexAI.getGenerativeModel({
             model: this.modelName,
             generationConfig: { responseMimeType: 'application/json' }
         });
@@ -83,7 +86,15 @@ class AiService extends BaseService_1.BaseService {
                 fileName = `analysis/${Date.now()}-${path.basename(request.video_path)}`;
                 gcsUri = await this.uploadToGcs(request.video_path, fileName);
             }
-            // Generate analysis using the GCS URI or YouTube URL
+            else if (request.youtube_url) {
+                // Stream YouTube video directly to GCS
+                fileName = `analysis/${Date.now()}-youtube.mp4`;
+                if (!app_1.AppConfig.GOOGLE_STORAGE_BUCKET) {
+                    throw new Error('GOOGLE_STORAGE_BUCKET is required for video analysis');
+                }
+                gcsUri = await (0, youtubeDownloader_1.streamYoutubeToGcs)(request.youtube_url, this.storage, app_1.AppConfig.GOOGLE_STORAGE_BUCKET, fileName);
+            }
+            // Generate analysis using the GCS URI
             const result = await this.generateAnalysis(gcsUri, request);
             // Cleanup GCS file after analysis
             if (fileName) {
@@ -131,19 +142,31 @@ class AiService extends BaseService_1.BaseService {
         if (request.ai_context) {
             fullPrompt += `\n\nContext:\n${request.ai_context}`;
         }
+        if (request.video_title) {
+            fullPrompt += `\n\nVideo Title: ${request.video_title}`;
+        }
         const contentParts = [];
-        // If we have a video (YouTube), add it to the parts
-        // Note: Google AI Studio Gemini models in 2026 support direct YouTube URLs in prompts
-        const finalUri = videoUri || request.youtube_url;
-        if (finalUri) {
+        // Pass the GCS URI as a fileData Part to Vertex AI so it actually watches the video
+        if (videoUri && videoUri.startsWith('gs://')) {
             contentParts.push({
-                text: `Video source: ${finalUri}`
+                fileData: {
+                    mimeType: 'video/mp4',
+                    fileUri: videoUri
+                }
+            });
+        }
+        else if (request.youtube_url) {
+            // Fallback (should not be reached if downloader succeeded)
+            contentParts.push({
+                text: `Video source: ${request.youtube_url}`
             });
         }
         contentParts.push({ text: fullPrompt });
         try {
-            const result = await this.model.generateContent(contentParts);
-            const responseText = result.response.text() || '';
+            const result = await this.model.generateContent({
+                contents: [{ role: 'user', parts: contentParts }]
+            });
+            const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             try {
                 return JSON.parse(sanitizedJson);
@@ -171,8 +194,10 @@ class AiService extends BaseService_1.BaseService {
                 { text: `Proof Video: ${videoUrl}` },
                 { text: prompt }
             ];
-            const result = await this.model.generateContent(contentParts);
-            const responseText = result.response.text() || '';
+            const result = await this.model.generateContent({
+                contents: [{ role: 'user', parts: contentParts }]
+            });
+            const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             return JSON.parse(sanitizedJson);
         }
@@ -218,9 +243,21 @@ class AiService extends BaseService_1.BaseService {
     }
     async generateEmbedding(text) {
         try {
-            const embeddingModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
-            const result = await embeddingModel.embedContent(text);
-            return result.embedding.values;
+            const embeddingModel = this.vertexAI.getGenerativeModel({ model: 'text-embedding-004' });
+            const result = await embeddingModel.generateContent(text); // Vertex AI text embedding
+            // Need to map Vertex AI embedding structure.
+            // Vertex AI typically returns embeddings under result.response.candidates[0].content.parts[0].text or similar for some endpoints, 
+            // but if we are just using getGenerativeModel, we should verify the API. 
+            // Note: For embeddings in Vertex AI Node SDK it's slightly different. Let's fallback to fetch API or GoogleGenerativeAI just for embeddings if needed.
+            // However, sticking to the standard VertexAI wrapper:
+            // Actually, Vertex AI getGenerativeModel doesn't directly support embedContent in the same way. 
+            // Let's import GoogleGenerativeAI locally just for embeddings to preserve existing behavior without breaking it, 
+            // since the main goal was changing the video generation.
+            const { GoogleGenerativeAI } = require('@google/generative-ai');
+            const genAI = new GoogleGenerativeAI(app_1.AppConfig.GEMINI_API_KEY);
+            const embedModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+            const embedResult = await embedModel.embedContent(text);
+            return embedResult.embedding.values;
         }
         catch (error) {
             throw this.handleError(error, 'generateEmbedding');

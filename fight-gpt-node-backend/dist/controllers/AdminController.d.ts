@@ -4,21 +4,28 @@ import { IAdminService } from '../services/AdminService';
 import { IIngestionService } from '../services/IngestionService';
 import { IMetaService } from '../services/MetaService';
 import { AutoResearchService } from '../services/AutoResearchService';
+import { ITrendAnalysisService } from '../services/TrendAnalysisService';
 import { RosterSyncService } from '../services/RosterSyncService';
 export declare class AdminController extends BaseController {
     private readonly adminService;
     private readonly ingestionService?;
     private readonly metaService?;
     private readonly autoResearchService?;
+    private readonly trendAnalysisService?;
     private readonly onboardingService;
     private readonly patchService;
     private readonly rosterSyncService?;
-    constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService, rosterSyncService?: RosterSyncService);
+    constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService, trendAnalysisService?: ITrendAnalysisService, rosterSyncService?: RosterSyncService);
     /**
      * GET /api/admin/stats
      * Get system health and queue status
      */
     getSystemStats: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/trends/analyze
+     * Trigger a manual Meta-Shift analysis check
+     */
+    triggerTrendAnalysis: (req: Request, res: Response) => Promise<void>;
     /**
      * GET /api/admin/jobs
      * List recent ingestion jobs

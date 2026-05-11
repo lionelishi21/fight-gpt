@@ -98,6 +98,17 @@ class GameMetadataRepository extends BaseRepository_1.BaseRepository {
             throw this.handleError(error, 'updateGameMetadataByGameId');
         }
     }
+    /**
+     * Find all active games (where is_current is true)
+     */
+    async findActiveGames() {
+        try {
+            return await this.findMany({ is_current: true });
+        }
+        catch (error) {
+            throw this.handleError(error, 'findActiveGames');
+        }
+    }
 }
 exports.GameMetadataRepository = GameMetadataRepository;
 //# sourceMappingURL=GameMetadataRepository.js.map

@@ -49,6 +49,8 @@ export interface AnalysisRequest {
     game_context_text?: string;
     ai_context?: string;
     pro_player_id?: string;
+    video_title?: string;
+    metadata?: Record<string, any>;
     force?: boolean;
 }
 /**

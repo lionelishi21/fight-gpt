@@ -17,15 +17,17 @@ class AdminController extends BaseController_1.BaseController {
     ingestionService;
     metaService;
     autoResearchService;
+    trendAnalysisService;
     onboardingService;
     patchService;
     rosterSyncService;
-    constructor(adminService, ingestionService, metaService, autoResearchService, rosterSyncService) {
+    constructor(adminService, ingestionService, metaService, autoResearchService, trendAnalysisService, rosterSyncService) {
         super();
         this.adminService = adminService;
         this.ingestionService = ingestionService;
         this.metaService = metaService;
         this.autoResearchService = autoResearchService;
+        this.trendAnalysisService = trendAnalysisService;
         this.onboardingService = new GameOnboardingService_1.GameOnboardingService(ingestionService);
         this.patchService = new PatchService_1.PatchService(ingestionService);
         this.rosterSyncService = rosterSyncService;
@@ -38,6 +40,23 @@ class AdminController extends BaseController_1.BaseController {
         try {
             const result = await this.adminService.getSystemStats();
             this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+    /**
+     * POST /api/admin/trends/analyze
+     * Trigger a manual Meta-Shift analysis check
+     */
+    triggerTrendAnalysis = async (req, res) => {
+        try {
+            if (!this.trendAnalysisService) {
+                this.sendError(res, 'TrendAnalysisService not configured');
+                return;
+            }
+            await this.trendAnalysisService.analyzeMetaShifts();
+            this.sendResponse(res, { success: true, message: 'Meta-Shift analysis triggered' });
         }
         catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');

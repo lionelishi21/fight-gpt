@@ -13,6 +13,8 @@ export interface IAnalysis extends Document {
     analysis_id: string;
     p1_name?: string;
     p2_name?: string;
+    view_count: number;
+    click_count: number;
     created_at: Date;
     updated_at: Date;
 }
