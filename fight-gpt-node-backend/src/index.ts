@@ -287,7 +287,10 @@ export class App {
     this.app.set('trust proxy', 1);
 
     // Security middleware
-    this.app.use(helmet());
+    this.app.use(helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: false,
+    }));
 
     // CORS middleware
     this.app.use(

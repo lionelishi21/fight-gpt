@@ -16,12 +16,17 @@ export class AppConfig {
     if (origins) return origins.split(',').map(o => o.trim());
     return [
       'http://localhost:3000',
+      'http://127.0.0.1:3000',
       'http://localhost:5173',
       'http://localhost:5174',
+      'http://localhost:8081',
+      'http://localhost:19000',
+      'http://localhost:19006',
       'https://metapunish.com',
       'https://www.metapunish.com',
       'https://fightingames.online',
-      'https://api.fightingames.online'
+      'https://api.fightingames.online',
+      'https://fightgpt.app'
     ]; 
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
