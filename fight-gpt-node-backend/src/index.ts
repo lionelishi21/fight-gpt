@@ -116,14 +116,7 @@ export class App {
     this.server = createServer(this.app);
     this.io = new Server(this.server, {
       cors: {
-        origin: (origin: string, callback: any) => {
-          const allowedOrigins = AppConfig.CORS_ORIGINS;
-          if (!origin || allowedOrigins === true || (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin))) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: AppConfig.CORS_ORIGINS,
         credentials: true
       }
     });
@@ -296,22 +289,8 @@ export class App {
     // CORS middleware
     this.app.use(
       cors({
-        origin: (origin, callback) => {
-          const allowedOrigins = AppConfig.CORS_ORIGINS;
-          // allow requests with no origin (like mobile apps or curl)
-          if (!origin) return callback(null, true);
-          
-          if (allowedOrigins === true) {
-            callback(null, true);
-          } else if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: AppConfig.CORS_ORIGINS,
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-key'],
       })
     );
 
