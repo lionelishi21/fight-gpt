@@ -1,8 +1,21 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.YoutubeBotBlockError = void 0;
 exports.streamYoutubeToGcs = streamYoutubeToGcs;
 const child_process_1 = require("child_process");
 const logger_1 = require("./logger");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+class YoutubeBotBlockError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'YoutubeBotBlockError';
+    }
+}
+exports.YoutubeBotBlockError = YoutubeBotBlockError;
 /**
  * Streams a YouTube video directly to Google Cloud Storage using yt-dlp.
  * This avoids downloading the video to the local disk, saving memory and disk space.
@@ -26,21 +39,25 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
                 '-f', 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
                 '-o', '-',
             ];
-            // Use cookies if provided in environment to bypass bot protections
-            if (process.env.YTDL_COOKIES_FILE) {
-                ytDlpArgs.push('--cookies', process.env.YTDL_COOKIES_FILE);
+            // Use cookies if provided in environment or fallback to uploads/cookies.txt
+            const defaultCookiePath = path_1.default.resolve(process.cwd(), 'uploads/cookies.txt');
+            const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
+            if (fs_1.default.existsSync(cookiePath)) {
+                ytDlpArgs.push('--cookies', cookiePath);
             }
             else {
                 // Fallback: try to use the android client which sometimes bypasses basic bot checks
                 ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
             }
             ytDlpArgs.push(youtubeUrl);
+            let stderrOutput = '';
             const ytDlp = (0, child_process_1.spawn)('yt-dlp', ytDlpArgs);
             ytDlp.stdout.pipe(writeStream);
-            // Log stderr for debugging purposes
+            // Log stderr for debugging purposes and collect for error checking
             ytDlp.stderr.on('data', (data) => {
                 const message = data.toString().trim();
                 if (message) {
+                    stderrOutput += message + '\n';
                     logger_1.Logger.debug(`[yt-dlp stderr] ${message}`);
                 }
             });
@@ -60,7 +77,12 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             ytDlp.on('close', (code) => {
                 if (code !== 0 && code !== null) {
                     logger_1.Logger.error(`[YoutubeDownloader] yt-dlp exited with code ${code}`);
-                    reject(new Error(`yt-dlp exited with code ${code}`));
+                    if (stderrOutput.includes('Sign in to confirm you’re not a bot')) {
+                        reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing or expired.'));
+                    }
+                    else {
+                        reject(new Error(`yt-dlp exited with code ${code}`));
+                    }
                 }
             });
         }

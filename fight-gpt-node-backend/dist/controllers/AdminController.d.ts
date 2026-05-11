@@ -181,5 +181,10 @@ export declare class AdminController extends BaseController {
      * Update theory status and optional content
      */
     updateTheoryStatus: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/settings/cookie
+     * Upload a new cookies.txt file for YouTube ingestion
+     */
+    uploadCookies: (req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=AdminController.d.ts.map

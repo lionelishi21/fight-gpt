@@ -1,10 +1,15 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminRoutes = void 0;
 const express_1 = require("express");
 const InviteController_1 = require("../controllers/InviteController");
 const auth_1 = require("../middleware/auth");
 const adminKeyAuth_1 = require("../middleware/adminKeyAuth");
+const multer_1 = __importDefault(require("multer"));
+const upload = (0, multer_1.default)({ dest: 'uploads/temp/' });
 class AdminRoutes {
     adminController;
     router;
@@ -64,6 +69,8 @@ class AdminRoutes {
         this.router.post('/invites', InviteController_1.inviteController.createAdminInvite);
         this.router.get('/invites', InviteController_1.inviteController.listAdminInvites);
         this.router.delete('/invites/:token', InviteController_1.inviteController.revokeInvite);
+        // System Settings
+        this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
     }
     getRouter() {
         return this.router;

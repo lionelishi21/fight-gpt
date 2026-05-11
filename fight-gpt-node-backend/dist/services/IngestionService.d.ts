@@ -4,6 +4,7 @@ import { IAnalysisService } from './AnalysisService';
 import { IMetaService } from './MetaService';
 import { IGameSearchStrategyRepository } from '../repositories/GameSearchStrategyRepository';
 import { ApiResponse } from '../types';
+import { NotificationService } from './NotificationService';
 export interface IngestionTriggerResult {
     game_id: string;
     queued_count: number;
@@ -24,9 +25,10 @@ export declare class IngestionService extends BaseService implements IIngestionS
     private readonly analysisService;
     private readonly metaService?;
     private readonly searchStrategyRepository?;
+    private readonly notificationService?;
     private schedulerTimer;
     private isProcessing;
-    constructor(ingestionRepository: IIngestionRepository, analysisService: IAnalysisService, metaService?: IMetaService, searchStrategyRepository?: IGameSearchStrategyRepository);
+    constructor(ingestionRepository: IIngestionRepository, analysisService: IAnalysisService, metaService?: IMetaService, searchStrategyRepository?: IGameSearchStrategyRepository, notificationService?: NotificationService);
     /**
      * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
      * This makes queries updatable from the admin panel without a redeploy.

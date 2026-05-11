@@ -51,6 +51,10 @@ export declare class NotificationService extends BaseService {
         data?: any;
     }, severity?: NotificationSeverity): Promise<void>;
     /**
+     * System Alert notification (targets admins)
+     */
+    systemAlert(title: string, description: string, data?: any): Promise<void>;
+    /**
      * Character theory notification
      */
     characterTheory(data: {

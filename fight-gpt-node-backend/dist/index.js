@@ -145,7 +145,7 @@ class App {
         const gameService = app_1.AppConfig.MONGODB_URI ? new GameService_1.GameService(gameRepository, characterRepository) : null;
         const metaService = app_1.AppConfig.MONGODB_URI ? new MetaService_1.MetaService(metaRepository, vectorRepository, app_1.AppConfig.GEMINI_API_KEY, characterRepository) : null;
         const searchStrategyRepository = app_1.AppConfig.MONGODB_URI ? new GameSearchStrategyRepository_1.GameSearchStrategyRepository() : null;
-        this.ingestionService = app_1.AppConfig.MONGODB_URI ? new IngestionService_1.IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository) : null;
+        this.ingestionService = app_1.AppConfig.MONGODB_URI ? new IngestionService_1.IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository, notificationService) : null;
         const theoryService = app_1.AppConfig.MONGODB_URI ? new TheoryService_1.TheoryService(theoryRepository, vectorRepository, app_1.AppConfig.GEMINI_API_KEY, notificationService) : null;
         const rivalService = app_1.AppConfig.MONGODB_URI ? new RivalService_1.RivalService(rivalRepository) : null;
         const userService = app_1.AppConfig.MONGODB_URI ? new UserService_1.UserService() : null;
@@ -222,7 +222,10 @@ class App {
         // Trust nginx/load balancer proxy (fixes X-Forwarded-For rate limiter error)
         this.app.set('trust proxy', 1);
         // Security middleware
-        this.app.use((0, helmet_1.default)());
+        this.app.use((0, helmet_1.default)({
+            crossOriginResourcePolicy: { policy: "cross-origin" },
+            contentSecurityPolicy: false,
+        }));
         // CORS middleware
         this.app.use((0, cors_1.default)({
             origin: app_1.AppConfig.CORS_ORIGINS,

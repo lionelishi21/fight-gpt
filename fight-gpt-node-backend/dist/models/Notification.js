@@ -42,6 +42,7 @@ const NotificationSchema = new mongoose_1.Schema({
             'TECH_DISCOVERY', 'META_SHIFT', 'RIVAL_WATCH', 'PRO_SCOUT',
             'NEW_COMBO', 'PATCH_BRIEF', 'CHARACTER_THEORY', 'MATCHUP_THEORY',
             'ANALYSIS_COMPLETE', 'RANK_UP', 'VECTOR_INSIGHT', 'TIER_LIST_UPDATE',
+            'SYSTEM_ALERT'
         ],
         required: true,
         index: true,

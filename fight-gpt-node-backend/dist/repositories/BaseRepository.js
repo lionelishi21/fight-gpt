@@ -57,7 +57,8 @@ class BaseRepository {
     async create(data) {
         try {
             const document = new this.model(data);
-            return await document.save();
+            const saved = await document.save();
+            return saved;
         }
         catch (error) {
             throw this.handleError(error, 'create');

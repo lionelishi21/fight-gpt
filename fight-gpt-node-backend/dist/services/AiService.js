@@ -109,6 +109,9 @@ class AiService extends BaseService_1.BaseService {
                 }
                 catch { }
             }
+            if (error && error.name === 'YoutubeBotBlockError') {
+                throw error;
+            }
             throw this.handleError(error, 'analyzeVideo');
         }
         finally {

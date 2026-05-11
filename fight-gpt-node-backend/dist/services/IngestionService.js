@@ -81,14 +81,16 @@ class IngestionService extends BaseService_1.BaseService {
     analysisService;
     metaService;
     searchStrategyRepository;
+    notificationService;
     schedulerTimer = null;
     isProcessing = false;
-    constructor(ingestionRepository, analysisService, metaService, searchStrategyRepository) {
+    constructor(ingestionRepository, analysisService, metaService, searchStrategyRepository, notificationService) {
         super();
         this.ingestionRepository = ingestionRepository;
         this.analysisService = analysisService;
         this.metaService = metaService;
         this.searchStrategyRepository = searchStrategyRepository;
+        this.notificationService = notificationService;
     }
     /**
      * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
@@ -214,6 +216,12 @@ class IngestionService extends BaseService_1.BaseService {
                 catch (e) {
                     const msg = e instanceof Error ? e.message : 'Unknown error';
                     const shouldRetry = job.retry_count < 2;
+                    if (e && e.name === 'YoutubeBotBlockError') {
+                        logger_1.Logger.error(`[IngestionService] YouTube bot block detected for job ${job.job_id}`);
+                        if (this.notificationService) {
+                            await this.notificationService.systemAlert('YouTube Bot Block Detected', 'yt-dlp was blocked by YouTube. Video ingestion has failed. Please update the cookies.txt file via the admin dashboard.');
+                        }
+                    }
                     await this.ingestionRepository.updateJobStatus(job.job_id, shouldRetry ? 'pending' : 'failed', {
                         error_message: msg,
                         retry_count: job.retry_count + 1,
