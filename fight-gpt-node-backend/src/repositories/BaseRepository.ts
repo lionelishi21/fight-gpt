@@ -79,7 +79,8 @@ export abstract class BaseRepository<T extends Document> implements IBaseReposit
   async create(data: Partial<T>): Promise<T> {
     try {
       const document = new this.model(data);
-      return await document.save();
+      const saved = await document.save();
+      return saved as unknown as T;
     } catch (error) {
       throw this.handleError(error, 'create');
     }
