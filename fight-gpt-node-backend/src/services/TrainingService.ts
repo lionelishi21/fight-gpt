@@ -1,132 +1,145 @@
-import Mission, { IMission } from '../models/Mission';
-import UserMission, { IUserMission } from '../models/UserMission';
-import { GamificationService } from './GamificationService';
+import { IAnalysis, Analysis } from '../models/Analysis';
+import Mission from '../models/Mission';
+import UserMission from '../models/UserMission';
+import { TimelineEvent } from '../types';
+import mongoose from 'mongoose';
 
 export class TrainingService {
-    private gamificationService: GamificationService;
-
-    constructor() {
-        this.gamificationService = new GamificationService();
-    }
-
     /**
-     * Get missions for a user (Daily rotation + their status)
-     * For this MVP, we return all active missions or a random subset.
+     * Parse an analysis and generate personalized training drills (Missions)
      */
-    public async getMissionsForUser(userId: string) {
-        // 1. Fetch available active missions
-        // In a real daily system, we'd pick 3 based on date/seed
-        const availableMissions = await Mission.find({ isActive: true }).limit(5);
+    public async generateDrillsFromAnalysis(analysis: IAnalysis): Promise<void> {
+        if (!analysis.user_id || !analysis.analysis) return;
 
-        // 2. Fetch user's progress for these missions
-        const userMissions = await UserMission.find({
-            user: userId,
-            mission: { $in: availableMissions.map((m) => m._id) },
-        });
+        const { timeline, daily_mission, p2_character } = analysis.analysis;
+        const userId = new mongoose.Types.ObjectId(analysis.user_id);
 
-        // 3. Merge data
-        return availableMissions.map((mission) => {
-            const userEntry = userMissions.find(
-                // @ts-ignore
-                (um) => um.mission.toString() === mission._id.toString()
+        // 1. Process Daily Mission if present
+        if (daily_mission) {
+            await this.createMissionFromAI(userId, daily_mission, analysis.analysis_id);
+        }
+
+        // 2. Process Timeline for missed punishes or bad habits
+        if (timeline && timeline.length > 0) {
+            const mistakes = timeline.filter(e => 
+                e.event_type === 'punish_missed' || e.event_type === 'bad_habit'
             );
 
-            return {
-                id: mission._id,
-                title: mission.title,
-                description: mission.description,
-                type: mission.type,
-                difficulty: mission.difficulty,
-                reward: `${mission.reward.xp} XP`, // Formatting for UI
-                rewardValue: mission.reward.xp,
-                targetLink: mission.targetLink,
-                status: userEntry ? userEntry.status : 'AVAILABLE',
-                completed: userEntry?.status === 'COMPLETED',
-                feedback: userEntry?.metadata?.ai_feedback,
-                score: userEntry?.metadata?.technique_score
-            };
-        });
+            // Take top 2 mistakes to avoid overwhelming the user
+            for (const mistake of mistakes.slice(0, 2)) {
+                await this.createMissionFromMistake(userId, mistake, p2_character || 'Opponent', analysis.analysis_id);
+            }
+        }
+    }
+
+    private async createMissionFromAI(userId: mongoose.Types.ObjectId, aiMission: any, analysisId: string) {
+        try {
+            const mission = await Mission.create({
+                title: aiMission.title.toUpperCase(),
+                description: aiMission.goal,
+                type: 'DRILL',
+                difficulty: 'MEDIUM',
+                reward: { xp: 150 },
+                criteria: { steps: aiMission.drill_steps, analysisId }
+            });
+
+            await UserMission.create({
+                user: userId,
+                mission: mission._id,
+                status: 'PENDING'
+            });
+        } catch (e) {
+            console.error('TRAINING_SERVICE: Failed to create AI mission', e);
+        }
+    }
+
+    private async createMissionFromMistake(userId: mongoose.Types.ObjectId, mistake: TimelineEvent, opponent: string, analysisId: string) {
+        try {
+            const title = `COUNTER_${opponent.toUpperCase()}_TACTIC`;
+            
+            // Check if user already has a pending mission with this title
+            const existing = await UserMission.findOne({ 
+                user: userId, 
+                status: 'PENDING' 
+            }).populate({
+                path: 'mission',
+                match: { title }
+            });
+
+            if (existing && existing.mission) return;
+
+            const mission = await Mission.create({
+                title,
+                description: mistake.coach_advice,
+                type: 'DRILL',
+                difficulty: 'EASY',
+                reward: { xp: 100 },
+                criteria: { eventType: mistake.event_type, description: mistake.description, analysisId }
+            });
+
+            await UserMission.create({
+                user: userId,
+                mission: mission._id,
+                status: 'PENDING'
+            });
+        } catch (e) {
+            console.error('TRAINING_SERVICE: Failed to create mistake mission', e);
+        }
     }
 
     /**
-     * Complete a mission manually (e.g. user clicks "Claim" or "I did this")
+     * Get all active and completed missions for a user
      */
-    public async completeMission(userId: string, missionId: string) {
-        // 1. Validate mission
-        const mission = await Mission.findById(missionId);
-        if (!mission) throw new Error('Mission not found');
-
-        // 2. Check if already completed
-        let userMission = await UserMission.findOne({ user: userId, mission: missionId });
-
-        if (userMission && userMission.status === 'COMPLETED') {
-            throw new Error('Mission already completed');
-        }
-
-        // 3. Create or Update UserMission
-        if (!userMission) {
-            userMission = new UserMission({
-                user: userId,
-                mission: missionId,
-                status: 'COMPLETED',
-                completedAt: new Date(),
-            });
-        } else {
-            userMission.status = 'COMPLETED';
-            userMission.completedAt = new Date();
-        }
-        await userMission.save();
-
-        // 4. Award XP using GamificationService
-        const rewardXp = mission.reward.xp;
-        await this.gamificationService.addXp(userId, rewardXp);
-
-        return {
-            success: true,
-            missionId,
-            status: 'COMPLETED',
-            rewardedXp: rewardXp,
-        };
+    public async getMissionsForUser(userId: string) {
+        return await UserMission.find({ user: userId })
+            .populate('mission')
+            .sort({ createdAt: -1 });
     }
 
     /**
-     * Submit video proof for a mission (Tactical Loop)
+     * Manually complete a mission and award XP
      */
-    public async submitProof(userId: string, missionId: string, proofUrl: string) {
-        const mission = await Mission.findById(missionId);
-        if (!mission) throw new Error('Mission not found');
+    public async completeMission(userId: string, userMissionId: string) {
+        const userMission = await UserMission.findOne({ _id: userMissionId, user: userId }).populate('mission');
+        if (!userMission) throw new Error('Mission not found');
+        if (userMission.status === 'COMPLETED') return userMission;
 
-        // 1. Create/Update UserMission as PENDING
-        let userMission = await UserMission.findOne({ user: userId, mission: missionId });
-        if (userMission && userMission.status === 'COMPLETED') {
-            throw new Error('Mission already completed');
-        }
-
-        if (!userMission) {
-            userMission = new UserMission({
-                user: userId,
-                mission: missionId,
-                status: 'PENDING',
-                metadata: { proofUrl, submittedAt: new Date() }
-            });
-        } else {
-            userMission.status = 'PENDING';
-            userMission.metadata = { ...userMission.metadata, proofUrl, submittedAt: new Date() };
-        }
+        userMission.status = 'COMPLETED';
+        userMission.completedAt = new Date();
         await userMission.save();
 
-        // 2. Enqueue for AI validation
-        const { queueService } = await import('./QueueService');
-        await queueService.addProofValidationJob({
-            userId,
-            missionId,
-            proofUrl
-        });
+        // Award XP
+        const mission = userMission.mission as any;
+        const xpToAdd = mission.reward?.xp || 100;
 
-        return {
-            success: true,
-            message: 'Proof submitted for AI verification. You will be notified once validated.',
-            status: 'PENDING'
-        };
+        const User = mongoose.model('User');
+        const user = await User.findById(userId);
+        if (user) {
+            const currentXp = (user as any).gamification.xp || 0;
+            const newXp = currentXp + xpToAdd;
+            (user as any).gamification.xp = newXp;
+            
+            // Level up every 1000 XP
+            (user as any).gamification.level = Math.floor(newXp / 1000) + 1;
+            
+            await user.save();
+        }
+
+        return userMission;
+    }
+
+    /**
+     * Submit video proof (links to a new analysis)
+     */
+    public async submitProof(userId: string, userMissionId: string, proofUrl: string) {
+        const userMission = await UserMission.findOne({ _id: userMissionId, user: userId });
+        if (!userMission) throw new Error('Mission not found');
+
+        userMission.metadata = { ...userMission.metadata, proofUrl };
+        await userMission.save();
+
+        return { success: true, message: 'Proof submitted for tactical review' };
     }
 }
+
+export default new TrainingService();

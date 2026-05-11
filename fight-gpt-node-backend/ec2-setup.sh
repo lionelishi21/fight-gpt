@@ -9,6 +9,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # 1. System updates
 sudo apt-get update -y && sudo apt-get upgrade -y
+sudo apt-get install -y ffmpeg
+
+# 1b. Install yt-dlp
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
 
 # 2. Node.js 20 LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -

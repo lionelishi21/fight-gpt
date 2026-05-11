@@ -45,6 +45,18 @@ class MatchService extends BaseService_1.BaseService {
     async deleteMatch(id) {
         return this.repository.delete(id);
     }
+    async scoutMatches(gameId, characterId, limit = 10) {
+        const query = { is_pro: true };
+        if (gameId)
+            query.game_id = gameId;
+        if (characterId) {
+            query.$or = [
+                { 'player1.team': characterId },
+                { 'player2.team': characterId }
+            ];
+        }
+        return this.repository.find(query, limit);
+    }
     validateMatchRequest(request) {
         if (!request.game_id)
             throw new Error('game_id is required');

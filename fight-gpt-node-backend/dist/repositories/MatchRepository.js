@@ -45,6 +45,12 @@ class MatchRepository extends BaseRepository_1.BaseRepository {
             .limit(limit)
             .exec();
     }
+    async find(query, limit = 10) {
+        return this.model.find(query)
+            .sort({ created_at: -1 })
+            .limit(limit)
+            .exec();
+    }
 }
 exports.MatchRepository = MatchRepository;
 exports.default = MatchRepository;

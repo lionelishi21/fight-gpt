@@ -145,6 +145,30 @@ export class NotificationService extends BaseService {
     }
 
     /**
+     * System Alert notification (targets admins)
+     */
+    async systemAlert(title: string, description: string, data?: any): Promise<void> {
+        try {
+            const User = (await import('../models/User')).default;
+            const admins = await User.find({ role: 'admin' }).select('_id').lean();
+            
+            const payload = {
+                gameId: 'system',
+                title,
+                description,
+                data
+            };
+
+            for (const admin of admins) {
+                await this.notify(admin._id.toString(), 'SYSTEM_ALERT', payload, 'high');
+            }
+            console.log(`[NotificationService] Dispatched SYSTEM_ALERT to ${admins.length} admins.`);
+        } catch (error) {
+            console.error('[NotificationService] Failed to dispatch SYSTEM_ALERT:', error);
+        }
+    }
+
+    /**
      * Character theory notification
      */
     async characterTheory(data: {

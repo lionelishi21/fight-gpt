@@ -34,6 +34,12 @@ router.get('/game/:gameId', [
     (0, express_validator_1.query)('page').optional().isInt({ min: 1 }),
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 })
 ], validationMiddleware_1.validateRequest, controller.getMatchesByGameId);
+// GET /api/matches/scout
+router.get('/scout', [
+    (0, express_validator_1.query)('gameId').optional().isString(),
+    (0, express_validator_1.query)('characterId').optional().isString(),
+    (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 })
+], validationMiddleware_1.validateRequest, controller.scoutMatches);
 // GET /api/matches/player/:playerName
 router.get('/player/:playerName', [
     (0, express_validator_1.param)('playerName').isString().notEmpty(),

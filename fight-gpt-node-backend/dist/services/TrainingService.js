@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -39,121 +6,127 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrainingService = void 0;
 const Mission_1 = __importDefault(require("../models/Mission"));
 const UserMission_1 = __importDefault(require("../models/UserMission"));
-const GamificationService_1 = require("./GamificationService");
+const mongoose_1 = __importDefault(require("mongoose"));
 class TrainingService {
-    gamificationService;
-    constructor() {
-        this.gamificationService = new GamificationService_1.GamificationService();
+    /**
+     * Parse an analysis and generate personalized training drills (Missions)
+     */
+    async generateDrillsFromAnalysis(analysis) {
+        if (!analysis.user_id || !analysis.analysis)
+            return;
+        const { timeline, daily_mission, p2_character } = analysis.analysis;
+        const userId = new mongoose_1.default.Types.ObjectId(analysis.user_id);
+        // 1. Process Daily Mission if present
+        if (daily_mission) {
+            await this.createMissionFromAI(userId, daily_mission, analysis.analysis_id);
+        }
+        // 2. Process Timeline for missed punishes or bad habits
+        if (timeline && timeline.length > 0) {
+            const mistakes = timeline.filter(e => e.event_type === 'punish_missed' || e.event_type === 'bad_habit');
+            // Take top 2 mistakes to avoid overwhelming the user
+            for (const mistake of mistakes.slice(0, 2)) {
+                await this.createMissionFromMistake(userId, mistake, p2_character || 'Opponent', analysis.analysis_id);
+            }
+        }
+    }
+    async createMissionFromAI(userId, aiMission, analysisId) {
+        try {
+            const mission = await Mission_1.default.create({
+                title: aiMission.title.toUpperCase(),
+                description: aiMission.goal,
+                type: 'DRILL',
+                difficulty: 'MEDIUM',
+                reward: { xp: 150 },
+                criteria: { steps: aiMission.drill_steps, analysisId }
+            });
+            await UserMission_1.default.create({
+                user: userId,
+                mission: mission._id,
+                status: 'PENDING'
+            });
+        }
+        catch (e) {
+            console.error('TRAINING_SERVICE: Failed to create AI mission', e);
+        }
+    }
+    async createMissionFromMistake(userId, mistake, opponent, analysisId) {
+        try {
+            const title = `COUNTER_${opponent.toUpperCase()}_TACTIC`;
+            // Check if user already has a pending mission with this title
+            const existing = await UserMission_1.default.findOne({
+                user: userId,
+                status: 'PENDING'
+            }).populate({
+                path: 'mission',
+                match: { title }
+            });
+            if (existing && existing.mission)
+                return;
+            const mission = await Mission_1.default.create({
+                title,
+                description: mistake.coach_advice,
+                type: 'DRILL',
+                difficulty: 'EASY',
+                reward: { xp: 100 },
+                criteria: { eventType: mistake.event_type, description: mistake.description, analysisId }
+            });
+            await UserMission_1.default.create({
+                user: userId,
+                mission: mission._id,
+                status: 'PENDING'
+            });
+        }
+        catch (e) {
+            console.error('TRAINING_SERVICE: Failed to create mistake mission', e);
+        }
     }
     /**
-     * Get missions for a user (Daily rotation + their status)
-     * For this MVP, we return all active missions or a random subset.
+     * Get all active and completed missions for a user
      */
     async getMissionsForUser(userId) {
-        // 1. Fetch available active missions
-        // In a real daily system, we'd pick 3 based on date/seed
-        const availableMissions = await Mission_1.default.find({ isActive: true }).limit(5);
-        // 2. Fetch user's progress for these missions
-        const userMissions = await UserMission_1.default.find({
-            user: userId,
-            mission: { $in: availableMissions.map((m) => m._id) },
-        });
-        // 3. Merge data
-        return availableMissions.map((mission) => {
-            const userEntry = userMissions.find(
-            // @ts-ignore
-            (um) => um.mission.toString() === mission._id.toString());
-            return {
-                id: mission._id,
-                title: mission.title,
-                description: mission.description,
-                type: mission.type,
-                difficulty: mission.difficulty,
-                reward: `${mission.reward.xp} XP`, // Formatting for UI
-                rewardValue: mission.reward.xp,
-                targetLink: mission.targetLink,
-                status: userEntry ? userEntry.status : 'AVAILABLE',
-                completed: userEntry?.status === 'COMPLETED',
-                feedback: userEntry?.metadata?.ai_feedback,
-                score: userEntry?.metadata?.technique_score
-            };
-        });
+        return await UserMission_1.default.find({ user: userId })
+            .populate('mission')
+            .sort({ createdAt: -1 });
     }
     /**
-     * Complete a mission manually (e.g. user clicks "Claim" or "I did this")
+     * Manually complete a mission and award XP
      */
-    async completeMission(userId, missionId) {
-        // 1. Validate mission
-        const mission = await Mission_1.default.findById(missionId);
-        if (!mission)
+    async completeMission(userId, userMissionId) {
+        const userMission = await UserMission_1.default.findOne({ _id: userMissionId, user: userId }).populate('mission');
+        if (!userMission)
             throw new Error('Mission not found');
-        // 2. Check if already completed
-        let userMission = await UserMission_1.default.findOne({ user: userId, mission: missionId });
-        if (userMission && userMission.status === 'COMPLETED') {
-            throw new Error('Mission already completed');
-        }
-        // 3. Create or Update UserMission
-        if (!userMission) {
-            userMission = new UserMission_1.default({
-                user: userId,
-                mission: missionId,
-                status: 'COMPLETED',
-                completedAt: new Date(),
-            });
-        }
-        else {
-            userMission.status = 'COMPLETED';
-            userMission.completedAt = new Date();
-        }
+        if (userMission.status === 'COMPLETED')
+            return userMission;
+        userMission.status = 'COMPLETED';
+        userMission.completedAt = new Date();
         await userMission.save();
-        // 4. Award XP using GamificationService
-        const rewardXp = mission.reward.xp;
-        await this.gamificationService.addXp(userId, rewardXp);
-        return {
-            success: true,
-            missionId,
-            status: 'COMPLETED',
-            rewardedXp: rewardXp,
-        };
+        // Award XP
+        const mission = userMission.mission;
+        const xpToAdd = mission.reward?.xp || 100;
+        const User = mongoose_1.default.model('User');
+        const user = await User.findById(userId);
+        if (user) {
+            const currentXp = user.gamification.xp || 0;
+            const newXp = currentXp + xpToAdd;
+            user.gamification.xp = newXp;
+            // Level up every 1000 XP
+            user.gamification.level = Math.floor(newXp / 1000) + 1;
+            await user.save();
+        }
+        return userMission;
     }
     /**
-     * Submit video proof for a mission (Tactical Loop)
+     * Submit video proof (links to a new analysis)
      */
-    async submitProof(userId, missionId, proofUrl) {
-        const mission = await Mission_1.default.findById(missionId);
-        if (!mission)
+    async submitProof(userId, userMissionId, proofUrl) {
+        const userMission = await UserMission_1.default.findOne({ _id: userMissionId, user: userId });
+        if (!userMission)
             throw new Error('Mission not found');
-        // 1. Create/Update UserMission as PENDING
-        let userMission = await UserMission_1.default.findOne({ user: userId, mission: missionId });
-        if (userMission && userMission.status === 'COMPLETED') {
-            throw new Error('Mission already completed');
-        }
-        if (!userMission) {
-            userMission = new UserMission_1.default({
-                user: userId,
-                mission: missionId,
-                status: 'PENDING',
-                metadata: { proofUrl, submittedAt: new Date() }
-            });
-        }
-        else {
-            userMission.status = 'PENDING';
-            userMission.metadata = { ...userMission.metadata, proofUrl, submittedAt: new Date() };
-        }
+        userMission.metadata = { ...userMission.metadata, proofUrl };
         await userMission.save();
-        // 2. Enqueue for AI validation
-        const { queueService } = await Promise.resolve().then(() => __importStar(require('./QueueService')));
-        await queueService.addProofValidationJob({
-            userId,
-            missionId,
-            proofUrl
-        });
-        return {
-            success: true,
-            message: 'Proof submitted for AI verification. You will be notified once validated.',
-            status: 'PENDING'
-        };
+        return { success: true, message: 'Proof submitted for tactical review' };
     }
 }
 exports.TrainingService = TrainingService;
+exports.default = new TrainingService();
 //# sourceMappingURL=TrainingService.js.map

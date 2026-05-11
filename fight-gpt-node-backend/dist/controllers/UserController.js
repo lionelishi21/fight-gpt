@@ -86,6 +86,20 @@ class UserController extends BaseController_1.BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to register push token', 500);
         }
     };
+    /**
+     * GET /api/users/leaderboard
+     * Get the global operator leaderboard
+     */
+    getLeaderboard = async (req, res) => {
+        try {
+            const limit = req.query.limit ? parseInt(req.query.limit) : 20;
+            const result = await this.userService.getLeaderboard(limit);
+            this.sendResponse(res, result);
+        }
+        catch (error) {
+            this.sendError(res, 'Failed to fetch leaderboard', 500);
+        }
+    };
 }
 exports.UserController = UserController;
 exports.default = UserController;

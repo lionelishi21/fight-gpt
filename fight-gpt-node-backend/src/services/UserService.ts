@@ -7,6 +7,7 @@ export interface IUserService {
     switchActiveSlot(userId: string, index: number): Promise<ApiResponse<IUser>>;
     getUserProfile(userId: string): Promise<ApiResponse<IUser>>;
     registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>>;
+    getLeaderboard(limit?: number): Promise<ApiResponse<any[]>>;
 }
 
 export class UserService extends BaseService implements IUserService {
@@ -105,6 +106,19 @@ export class UserService extends BaseService implements IUserService {
             return { success: true, data: user };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to register push token' };
+        }
+    }
+
+    public async getLeaderboard(limit: number = 20): Promise<ApiResponse<any[]>> {
+        try {
+            const topUsers = await User.find({})
+                .sort({ 'gamification.xp': -1 })
+                .limit(limit)
+                .select('name avatar tier gamification.xp gamification.level gamification.rank');
+
+            return { success: true, data: topUsers };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch leaderboard' };
         }
     }
 }

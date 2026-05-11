@@ -23,6 +23,7 @@ const theoryRoutes_1 = require("./theoryRoutes");
 const notificationRoutes_1 = require("./notificationRoutes");
 const rivalRoutes_1 = require("./rivalRoutes");
 const userRoutes_1 = require("./userRoutes");
+const lobbyRoutes_1 = require("./lobbyRoutes");
 const adminRoutes_1 = require("./adminRoutes");
 const paymentRoutes_1 = require("./paymentRoutes");
 const engagementRoutes_1 = require("./engagementRoutes");
@@ -55,6 +56,7 @@ class Routes {
     notificationRoutes;
     rivalRoutes;
     userRoutes;
+    lobbyRoutes;
     adminRoutes;
     paymentRoutes;
     engagementRoutes;
@@ -79,6 +81,7 @@ class Routes {
         this.notificationRoutes = notificationController ? new notificationRoutes_1.NotificationRoutes(notificationController) : null;
         this.rivalRoutes = rivalController ? new rivalRoutes_1.RivalRoutes(rivalController) : null;
         this.userRoutes = userController ? new userRoutes_1.UserRoutes(userController) : null;
+        this.lobbyRoutes = new lobbyRoutes_1.LobbyRoutes();
         this.adminRoutes = adminController ? new adminRoutes_1.AdminRoutes(adminController) : null;
         this.paymentRoutes = new paymentRoutes_1.PaymentRoutes(paymentController);
         this.engagementRoutes = new engagementRoutes_1.EngagementRoutes(engagementController);
@@ -168,6 +171,13 @@ class Routes {
         this.router.use('/scenarios', scenarioRoutes_1.default);
         // Analytics routes (Priority 7.3)
         this.router.use('/analytics', analyticsRoutes_1.default);
+        // Dojo Lobby & Theory
+        if (this.lobbyRoutes) {
+            this.router.use('/lobby', this.lobbyRoutes.getRouter());
+        }
+        if (this.theoryRoutes) {
+            this.router.use('/theory', this.theoryRoutes.getRouter());
+        }
         // Basic health check that works without MongoDB
         this.router.get('/health', (_req, res) => {
             res.json({

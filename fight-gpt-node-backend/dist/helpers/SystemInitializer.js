@@ -10,6 +10,7 @@ const TheoryDocument_1 = require("../models/TheoryDocument");
 const Scenario_1 = require("../models/Scenario");
 const User_1 = __importDefault(require("../models/User"));
 const Character_1 = require("../models/Character");
+const LobbySeeder_1 = require("../seeders/LobbySeeder");
 const node_cron_1 = __importDefault(require("node-cron"));
 /**
  * SystemInitializer handles automatic database setup on startup.
@@ -49,6 +50,8 @@ class SystemInitializer {
                     await rosterSyncService.syncRoster('sf6', true);
                 });
             }
+            // 4. Seed Default Lobbies
+            await LobbySeeder_1.LobbySeeder.seedDefaultLobbies();
             logger_1.Logger.info('SYSTEM_INITIALIZATION: Complete.');
         }
         catch (error) {

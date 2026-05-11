@@ -92,6 +92,17 @@ class MatchController {
             next(error);
         }
     };
+    scoutMatches = async (req, res, next) => {
+        try {
+            const { gameId, characterId } = req.query;
+            const limit = parseInt(req.query.limit) || 10;
+            const matches = await this.service.scoutMatches(gameId, characterId, limit);
+            res.json({ success: true, data: matches });
+        }
+        catch (error) {
+            next(error);
+        }
+    };
 }
 exports.MatchController = MatchController;
 //# sourceMappingURL=MatchController.js.map

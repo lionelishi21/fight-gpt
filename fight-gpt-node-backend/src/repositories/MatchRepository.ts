@@ -9,6 +9,7 @@ export interface IMatchRepository {
     findByPlayer(playerName: string, limit?: number, skip?: number): Promise<IMatchDocument[]>;
     update(id: string, data: Partial<IMatchDocument>): Promise<IMatchDocument | null>;
     delete(id: string): Promise<boolean>;
+    find(query: any, limit: number): Promise<IMatchDocument[]>;
 }
 
 export class MatchRepository extends BaseRepository<IMatchDocument> implements IMatchRepository {
@@ -56,6 +57,13 @@ export class MatchRepository extends BaseRepository<IMatchDocument> implements I
         })
             .sort({ created_at: -1 })
             .skip(skip)
+            .limit(limit)
+            .exec();
+    }
+
+    public async find(query: any, limit: number = 10): Promise<IMatchDocument[]> {
+        return this.model.find(query)
+            .sort({ created_at: -1 })
             .limit(limit)
             .exec();
     }

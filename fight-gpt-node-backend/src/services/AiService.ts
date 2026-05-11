@@ -106,9 +106,12 @@ export class AiService extends BaseService implements IAiService {
 
       return result;
 
-    } catch (error) {
+    } catch (error: any) {
       if (fileName) {
         try { await this.deleteFromGcs(fileName); } catch {}
+      }
+      if (error && error.name === 'YoutubeBotBlockError') {
+        throw error;
       }
       throw this.handleError(error, 'analyzeVideo');
     } finally {

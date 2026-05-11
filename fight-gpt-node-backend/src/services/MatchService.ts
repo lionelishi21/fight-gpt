@@ -58,6 +58,18 @@ export class MatchService extends BaseService {
         return this.repository.delete(id);
     }
 
+    public async scoutMatches(gameId?: string, characterId?: string, limit: number = 10): Promise<IMatchDocument[]> {
+        const query: any = { is_pro: true };
+        if (gameId) query.game_id = gameId;
+        if (characterId) {
+            query.$or = [
+                { 'player1.team': characterId },
+                { 'player2.team': characterId }
+            ];
+        }
+        return this.repository.find(query, limit);
+    }
+
     private validateMatchRequest(request: CreateMatchRequest): void {
         if (!request.game_id) throw new Error('game_id is required');
         if (!request.format) throw new Error('format is required');

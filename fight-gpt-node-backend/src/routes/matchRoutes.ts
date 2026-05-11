@@ -48,6 +48,18 @@ router.get(
     controller.getMatchesByGameId
 );
 
+// GET /api/matches/scout
+router.get(
+    '/scout',
+    [
+        query('gameId').optional().isString(),
+        query('characterId').optional().isString(),
+        query('limit').optional().isInt({ min: 1, max: 100 })
+    ],
+    validateRequest,
+    controller.scoutMatches
+);
+
 // GET /api/matches/player/:playerName
 router.get(
     '/player/:playerName',

@@ -16,6 +16,8 @@ import { INotificationRepository } from '../repositories/NotificationRepository'
 import { IRivalRepository } from '../repositories/RivalRepository';
 import { NotificationService } from './NotificationService';
 import { Game } from '../models/Game';
+import TrainingService from './TrainingService';
+import { Analysis } from '../models/Analysis';
 
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
@@ -163,6 +165,16 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         ...analysisResponse,
         analysis_id: analysisId,
       };
+
+      // --- TACTICAL TRAINING ENGINE ---
+      if (userId) {
+          const analysisDoc = await Analysis.findOne({ analysis_id: analysisId });
+          if (analysisDoc) {
+              TrainingService.generateDrillsFromAnalysis(analysisDoc).catch(e => {
+                  console.error('[AnalysisService] Failed to generate drills:', e);
+              });
+          }
+      }
 
       return { success: true, data: responseWithId };
     } catch (error) {

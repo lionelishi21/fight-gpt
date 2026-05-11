@@ -11,6 +11,7 @@ export declare class App {
     private routes;
     private ingestionService;
     private rosterSyncService;
+    private lobbyService;
     constructor();
     /**
      * Setup middleware

@@ -1,40 +1,36 @@
+import { IAnalysis } from '../models/Analysis';
+import mongoose from 'mongoose';
 export declare class TrainingService {
-    private gamificationService;
-    constructor();
     /**
-     * Get missions for a user (Daily rotation + their status)
-     * For this MVP, we return all active missions or a random subset.
+     * Parse an analysis and generate personalized training drills (Missions)
      */
-    getMissionsForUser(userId: string): Promise<{
-        id: import("mongoose").Types.ObjectId;
-        title: string;
-        description: string;
-        type: "DRILL" | "MATCHUP" | "KNOWLEDGE";
-        difficulty: "EASY" | "MEDIUM" | "HARD";
-        reward: string;
-        rewardValue: number;
-        targetLink: string;
-        status: string;
-        completed: boolean;
-        feedback: any;
-        score: any;
-    }[]>;
+    generateDrillsFromAnalysis(analysis: IAnalysis): Promise<void>;
+    private createMissionFromAI;
+    private createMissionFromMistake;
     /**
-     * Complete a mission manually (e.g. user clicks "Claim" or "I did this")
+     * Get all active and completed missions for a user
      */
-    completeMission(userId: string, missionId: string): Promise<{
-        success: boolean;
-        missionId: string;
-        status: string;
-        rewardedXp: number;
+    getMissionsForUser(userId: string): Promise<(mongoose.Document<unknown, {}, import("../models/UserMission").IUserMission, {}, {}> & import("../models/UserMission").IUserMission & Required<{
+        _id: mongoose.Types.ObjectId;
+    }> & {
+        __v: number;
+    })[]>;
+    /**
+     * Manually complete a mission and award XP
+     */
+    completeMission(userId: string, userMissionId: string): Promise<mongoose.Document<unknown, {}, import("../models/UserMission").IUserMission, {}, {}> & import("../models/UserMission").IUserMission & Required<{
+        _id: mongoose.Types.ObjectId;
+    }> & {
+        __v: number;
     }>;
     /**
-     * Submit video proof for a mission (Tactical Loop)
+     * Submit video proof (links to a new analysis)
      */
-    submitProof(userId: string, missionId: string, proofUrl: string): Promise<{
+    submitProof(userId: string, userMissionId: string, proofUrl: string): Promise<{
         success: boolean;
         message: string;
-        status: string;
     }>;
 }
+declare const _default: TrainingService;
+export default _default;
 //# sourceMappingURL=TrainingService.d.ts.map

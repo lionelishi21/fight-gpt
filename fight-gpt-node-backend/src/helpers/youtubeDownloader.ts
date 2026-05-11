@@ -1,10 +1,20 @@
-import ytdl from '@distube/ytdl-core';
+import { spawn } from 'child_process';
 import { Storage } from '@google-cloud/storage';
 import { Logger } from './logger';
+import fs from 'fs';
+import path from 'path';
+
+export class YoutubeBotBlockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'YoutubeBotBlockError';
+  }
+}
 
 /**
- * Streams a YouTube video directly to Google Cloud Storage.
+ * Streams a YouTube video directly to Google Cloud Storage using yt-dlp.
  * This avoids downloading the video to the local disk, saving memory and disk space.
+ * yt-dlp is more robust than ytdl-core for bypassing YouTube scraping protections.
  */
 export async function streamYoutubeToGcs(
   youtubeUrl: string,
@@ -13,7 +23,8 @@ export async function streamYoutubeToGcs(
   fileName: string
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    Logger.info(`[YoutubeDownloader] Starting stream for ${youtubeUrl} to gs://${bucketName}/${fileName}`);
+    Logger.info(`[YoutubeDownloader] Starting yt-dlp stream for ${youtubeUrl} to gs://${bucketName}/${fileName}`);
+    
     try {
       const bucket = storage.bucket(bucketName);
       const file = bucket.file(fileName);
@@ -22,17 +33,42 @@ export async function streamYoutubeToGcs(
         metadata: {
           contentType: 'video/mp4',
         },
-        // We use non-resumable uploads for direct piping from a stream to avoid chunking errors
         resumable: false, 
       });
 
-      // Fetch the video. We use the default behavior (highest quality audio+video format, usually 720p)
-      // which is perfect for AI analysis without being too large.
-      const videoStream = ytdl(youtubeUrl, { 
-        filter: 'audioandvideo'
-      });
+      // We use yt-dlp to fetch the video and output to stdout (-)
+      // We request a format that is compatible with MP4 and reasonably sized (720p or lower)
+      const ytDlpArgs = [
+        '-f', 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+        '-o', '-',
+      ];
 
-      videoStream.pipe(writeStream);
+      // Use cookies if provided in environment or fallback to uploads/cookies.txt
+      const defaultCookiePath = path.resolve(process.cwd(), 'uploads/cookies.txt');
+      const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
+
+      if (fs.existsSync(cookiePath)) {
+        ytDlpArgs.push('--cookies', cookiePath);
+      } else {
+        // Fallback: try to use the android client which sometimes bypasses basic bot checks
+        ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
+      }
+
+      ytDlpArgs.push(youtubeUrl);
+      
+      let stderrOutput = '';
+      const ytDlp = spawn('yt-dlp', ytDlpArgs);
+
+      ytDlp.stdout.pipe(writeStream);
+
+      // Log stderr for debugging purposes and collect for error checking
+      ytDlp.stderr.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          stderrOutput += message + '\n';
+          Logger.debug(`[yt-dlp stderr] ${message}`);
+        }
+      });
 
       writeStream.on('finish', () => {
         Logger.info(`[YoutubeDownloader] Successfully streamed ${youtubeUrl} to GCS`);
@@ -41,12 +77,24 @@ export async function streamYoutubeToGcs(
 
       writeStream.on('error', (err) => {
         Logger.error(`[YoutubeDownloader] GCS WriteStream error:`, err);
+        ytDlp.kill();
         reject(err);
       });
 
-      videoStream.on('error', (err) => {
-        Logger.error(`[YoutubeDownloader] YouTube Stream error:`, err);
+      ytDlp.on('error', (err) => {
+        Logger.error(`[YoutubeDownloader] yt-dlp process error:`, err);
         reject(err);
+      });
+
+      ytDlp.on('close', (code) => {
+        if (code !== 0 && code !== null) {
+          Logger.error(`[YoutubeDownloader] yt-dlp exited with code ${code}`);
+          if (stderrOutput.includes('Sign in to confirm you’re not a bot')) {
+            reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing or expired.'));
+          } else {
+            reject(new Error(`yt-dlp exited with code ${code}`));
+          }
+        }
       });
 
     } catch (err) {

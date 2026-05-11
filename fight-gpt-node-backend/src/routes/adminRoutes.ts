@@ -3,6 +3,9 @@ import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import { adminKeyAuth } from '../middleware/adminKeyAuth';
+import multer from 'multer';
+
+const upload = multer({ dest: 'uploads/temp/' });
 
 export class AdminRoutes {
     private router: Router;
@@ -74,6 +77,9 @@ export class AdminRoutes {
         this.router.post('/invites', inviteController.createAdminInvite);
         this.router.get('/invites', inviteController.listAdminInvites);
         this.router.delete('/invites/:token', inviteController.revokeInvite);
+
+        // System Settings
+        this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
     }
 
     public getRouter(): Router {

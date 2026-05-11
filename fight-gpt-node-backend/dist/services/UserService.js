@@ -98,6 +98,18 @@ class UserService extends BaseService_1.BaseService {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to register push token' };
         }
     }
+    async getLeaderboard(limit = 20) {
+        try {
+            const topUsers = await User_1.default.find({})
+                .sort({ 'gamification.xp': -1 })
+                .limit(limit)
+                .select('name avatar tier gamification.xp gamification.level gamification.rank');
+            return { success: true, data: topUsers };
+        }
+        catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch leaderboard' };
+        }
+    }
 }
 exports.UserService = UserService;
 exports.default = UserService;

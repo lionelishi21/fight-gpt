@@ -10,6 +10,8 @@ const BaseService_1 = require("./BaseService");
 const uuidHelper_1 = require("../helpers/uuidHelper");
 const aiContextHelper_1 = require("../helpers/aiContextHelper");
 const Game_1 = require("../models/Game");
+const TrainingService_1 = __importDefault(require("./TrainingService"));
+const Analysis_1 = require("../models/Analysis");
 /**
  * Analysis Service implementation
  */
@@ -140,6 +142,15 @@ class AnalysisService extends BaseService_1.BaseService {
                 ...analysisResponse,
                 analysis_id: analysisId,
             };
+            // --- TACTICAL TRAINING ENGINE ---
+            if (userId) {
+                const analysisDoc = await Analysis_1.Analysis.findOne({ analysis_id: analysisId });
+                if (analysisDoc) {
+                    TrainingService_1.default.generateDrillsFromAnalysis(analysisDoc).catch(e => {
+                        console.error('[AnalysisService] Failed to generate drills:', e);
+                    });
+                }
+            }
             return { success: true, data: responseWithId };
         }
         catch (error) {

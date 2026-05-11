@@ -30,7 +30,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
     "@google-cloud/storage": "^7.19.0",
     "@google-cloud/vertexai": "^1.12.0",
     "@google/generative-ai": "^0.24.1",

@@ -80,4 +80,15 @@ export class MatchController {
             next(error);
         }
     };
+
+    public scoutMatches = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { gameId, characterId } = req.query;
+            const limit = parseInt(req.query.limit as string) || 10;
+            const matches = await this.service.scoutMatches(gameId as string, characterId as string, limit);
+            res.json({ success: true, data: matches });
+        } catch (error) {
+            next(error);
+        }
+    };
 }

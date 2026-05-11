@@ -52,6 +52,7 @@ import { ChatService } from './services/ChatService';
 import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
+import { LobbyService } from './services/LobbyService';
 import { NotificationService } from './services/NotificationService';
 import { AutoResearchService } from './services/AutoResearchService';
 import { RivalService } from './services/RivalService';
@@ -102,6 +103,7 @@ export class App {
   private routes: Routes;
   private ingestionService: InstanceType<typeof IngestionService> | null = null;
   private rosterSyncService: RosterSyncService | null = null;
+  private lobbyService: LobbyService;
 
   constructor() {
     // Validate configuration
@@ -165,13 +167,14 @@ export class App {
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;
     const searchStrategyRepository = AppConfig.MONGODB_URI ? new GameSearchStrategyRepository() : null as any;
-    this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository) : null;
+    this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository, notificationService) : null;
     const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
     const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
     const adminService = AppConfig.MONGODB_URI ? new AdminService() : null as any;
     const scraperService = AppConfig.MONGODB_URI ? new ScraperService(characterEncyclopediaService) : null as any;
     this.rosterSyncService = AppConfig.MONGODB_URI ? new RosterSyncService(scraperService) : null as any;
+    this.lobbyService = new LobbyService();
     const autoResearchService = AppConfig.MONGODB_URI
         ? new AutoResearchService(theoryService, notificationService)
         : null;
@@ -408,6 +411,51 @@ export class App {
 
       socket.on('disconnect', () => {
         Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
+      });
+    });
+
+    // Lobby Namespace for real-time Dojo interaction
+    const lobbyNamespace = this.io.of('/lobby');
+    lobbyNamespace.on('connection', (socket: any) => {
+      Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
+
+      socket.on('join_lobby', async (data: { lobbyId: string; userId: string }) => {
+        const { lobbyId, userId } = data;
+        if (!lobbyId || !userId) return;
+
+        socket.join(`lobby_${lobbyId}`);
+        socket.lobbyId = lobbyId; // Store for disconnect
+        await this.lobbyService.updateActiveCount(lobbyId, 1);
+        
+        // Broadcast user joined
+        lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
+        Logger.info(`DOJO_LOBBY: User ${userId} joined room ${lobbyId}`);
+      });
+
+      socket.on('send_message', async (data: { 
+        lobbyId: string; 
+        userId: string; 
+        content: string; 
+        intelLink?: any 
+      }) => {
+        const message = await this.lobbyService.saveMessage(data);
+        if (message) {
+          lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+        }
+      });
+
+      socket.on('leave_lobby', async (data: { lobbyId: string; userId: string }) => {
+        const { lobbyId, userId } = data;
+        socket.leave(`lobby_${lobbyId}`);
+        await this.lobbyService.updateActiveCount(lobbyId, -1);
+        lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
+      });
+
+      socket.on('disconnect', async () => {
+        if (socket.lobbyId) {
+          await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+        }
+        Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
       });
     });
   }

@@ -17,6 +17,7 @@ export declare class MatchService extends BaseService {
     getMatchesByPlayerName(playerName: string, page?: number, limit?: number): Promise<IMatchDocument[]>;
     updateMatch(id: string, request: UpdateMatchRequest): Promise<IMatchDocument | null>;
     deleteMatch(id: string): Promise<boolean>;
+    scoutMatches(gameId?: string, characterId?: string, limit?: number): Promise<IMatchDocument[]>;
     private validateMatchRequest;
 }
 //# sourceMappingURL=MatchService.d.ts.map

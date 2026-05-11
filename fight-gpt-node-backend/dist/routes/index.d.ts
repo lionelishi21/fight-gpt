@@ -40,6 +40,7 @@ export declare class Routes {
     private notificationRoutes;
     private rivalRoutes;
     private userRoutes;
+    private lobbyRoutes;
     private adminRoutes;
     private paymentRoutes;
     private engagementRoutes;

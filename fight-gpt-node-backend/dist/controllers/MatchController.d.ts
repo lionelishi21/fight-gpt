@@ -10,5 +10,6 @@ export declare class MatchController {
     getMatchesByPlayerName: (req: Request, res: Response, next: NextFunction) => Promise<void>;
     updateMatch: (req: Request, res: Response, next: NextFunction) => Promise<void>;
     deleteMatch: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+    scoutMatches: (req: Request, res: Response, next: NextFunction) => Promise<void>;
 }
 //# sourceMappingURL=MatchController.d.ts.map

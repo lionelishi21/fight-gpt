@@ -26,6 +26,11 @@ export declare class UserController extends BaseController {
      * Register an FCM push notification token for the user
      */
     registerPushToken: (req: Request, res: Response) => Promise<void>;
+    /**
+     * GET /api/users/leaderboard
+     * Get the global operator leaderboard
+     */
+    getLeaderboard: (req: Request, res: Response) => Promise<void>;
 }
 export default UserController;
 //# sourceMappingURL=UserController.d.ts.map

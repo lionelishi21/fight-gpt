@@ -6,6 +6,7 @@ export interface IUserService {
     switchActiveSlot(userId: string, index: number): Promise<ApiResponse<IUser>>;
     getUserProfile(userId: string): Promise<ApiResponse<IUser>>;
     registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>>;
+    getLeaderboard(limit?: number): Promise<ApiResponse<any[]>>;
 }
 export declare class UserService extends BaseService implements IUserService {
     constructor();
@@ -13,6 +14,7 @@ export declare class UserService extends BaseService implements IUserService {
     switchActiveSlot(userId: string, index: number): Promise<ApiResponse<IUser>>;
     getUserProfile(userId: string): Promise<ApiResponse<IUser>>;
     registerPushToken(userId: string, token: string): Promise<ApiResponse<IUser>>;
+    getLeaderboard(limit?: number): Promise<ApiResponse<any[]>>;
 }
 export default UserService;
 //# sourceMappingURL=UserService.d.ts.map

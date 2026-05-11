@@ -52,6 +52,7 @@ const ChatService_1 = require("./services/ChatService");
 const MetaService_1 = require("./services/MetaService");
 const IngestionService_1 = require("./services/IngestionService");
 const TheoryService_1 = require("./services/TheoryService");
+const LobbyService_1 = require("./services/LobbyService");
 const NotificationService_1 = require("./services/NotificationService");
 const AutoResearchService_1 = require("./services/AutoResearchService");
 const RivalService_1 = require("./services/RivalService");
@@ -99,6 +100,7 @@ class App {
     routes;
     ingestionService = null;
     rosterSyncService = null;
+    lobbyService;
     constructor() {
         // Validate configuration
         app_1.AppConfig.validate();
@@ -150,6 +152,7 @@ class App {
         const adminService = app_1.AppConfig.MONGODB_URI ? new AdminService_1.AdminService() : null;
         const scraperService = app_1.AppConfig.MONGODB_URI ? new ScraperService_1.ScraperService(characterEncyclopediaService) : null;
         this.rosterSyncService = app_1.AppConfig.MONGODB_URI ? new RosterSyncService_1.RosterSyncService(scraperService) : null;
+        this.lobbyService = new LobbyService_1.LobbyService();
         const autoResearchService = app_1.AppConfig.MONGODB_URI
             ? new AutoResearchService_1.AutoResearchService(theoryService, notificationService)
             : null;
@@ -327,6 +330,40 @@ class App {
             });
             socket.on('disconnect', () => {
                 logger_1.Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
+            });
+        });
+        // Lobby Namespace for real-time Dojo interaction
+        const lobbyNamespace = this.io.of('/lobby');
+        lobbyNamespace.on('connection', (socket) => {
+            logger_1.Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
+            socket.on('join_lobby', async (data) => {
+                const { lobbyId, userId } = data;
+                if (!lobbyId || !userId)
+                    return;
+                socket.join(`lobby_${lobbyId}`);
+                socket.lobbyId = lobbyId; // Store for disconnect
+                await this.lobbyService.updateActiveCount(lobbyId, 1);
+                // Broadcast user joined
+                lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
+                logger_1.Logger.info(`DOJO_LOBBY: User ${userId} joined room ${lobbyId}`);
+            });
+            socket.on('send_message', async (data) => {
+                const message = await this.lobbyService.saveMessage(data);
+                if (message) {
+                    lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+                }
+            });
+            socket.on('leave_lobby', async (data) => {
+                const { lobbyId, userId } = data;
+                socket.leave(`lobby_${lobbyId}`);
+                await this.lobbyService.updateActiveCount(lobbyId, -1);
+                lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
+            });
+            socket.on('disconnect', async () => {
+                if (socket.lobbyId) {
+                    await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+                }
+                logger_1.Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
             });
         });
     }

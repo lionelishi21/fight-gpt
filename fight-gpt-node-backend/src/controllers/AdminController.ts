@@ -13,6 +13,8 @@ import { GameSearchStrategy } from '../models/GameSearchStrategy';
 import { GameOnboardingService } from '../services/GameOnboardingService';
 import { PatchService } from '../services/PatchService';
 import { RosterSyncService } from '../services/RosterSyncService';
+import fs from 'fs';
+import path from 'path';
 
 export class AdminController extends BaseController {
     private readonly onboardingService: GameOnboardingService;
@@ -721,6 +723,36 @@ export class AdminController extends BaseController {
             this.sendResponse(res, { success: true, data: theory, message: `Theory ${status}` });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to update theory status');
+        }
+    };
+
+    /**
+     * POST /api/admin/settings/cookie
+     * Upload a new cookies.txt file for YouTube ingestion
+     */
+    uploadCookies = async (req: Request, res: Response): Promise<void> => {
+        try {
+            if (!req.file) {
+                res.status(400).json({ success: false, error: 'No cookie file uploaded' });
+                return;
+            }
+
+            const uploadsDir = path.join(process.cwd(), 'uploads');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+
+            const targetPath = path.join(uploadsDir, 'cookies.txt');
+            
+            // Move uploaded file to cookies.txt
+            fs.renameSync(req.file.path, targetPath);
+
+            this.sendResponse(res, { 
+                success: true, 
+                message: 'YouTube cookies successfully updated.' 
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to update cookies');
         }
     };
 }

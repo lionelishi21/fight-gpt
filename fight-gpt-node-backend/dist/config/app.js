@@ -31,7 +31,7 @@ class AppConfig {
     }
     static get LOG_LEVEL() { return process.env.LOG_LEVEL || 'info'; }
     static get GEMINI_API_KEY() { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
-    static get GEMINI_MODEL() { return process.env.GEMINI_MODEL || 'gemini-2.5-flash'; }
+    static get GEMINI_MODEL() { return process.env.GEMINI_MODEL || 'gemini-1.5-flash'; }
     static get STRIPE_SECRET_KEY() { return process.env.STRIPE_SECRET_KEY || ''; }
     static get STRIPE_WEBHOOK_SECRET() { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
     static get APP_URL() { return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; }

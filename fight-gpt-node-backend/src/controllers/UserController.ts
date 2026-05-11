@@ -92,6 +92,20 @@ export class UserController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to register push token', 500);
         }
     };
+
+    /**
+     * GET /api/users/leaderboard
+     * Get the global operator leaderboard
+     */
+    public getLeaderboard = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+            const result = await this.userService.getLeaderboard(limit);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, 'Failed to fetch leaderboard', 500);
+        }
+    };
 }
 
 export default UserController;

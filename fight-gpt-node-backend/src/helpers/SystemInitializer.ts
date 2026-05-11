@@ -11,6 +11,7 @@ import { Character } from '../models/Character';
  */
 import { RosterSyncService } from '../services/RosterSyncService';
 import { IMetaService } from '../services/MetaService';
+import { LobbySeeder } from '../seeders/LobbySeeder';
 import cron from 'node-cron';
 
 /**
@@ -55,6 +56,9 @@ export class SystemInitializer {
                     await rosterSyncService.syncRoster('sf6', true);
                 });
             }
+
+            // 4. Seed Default Lobbies
+            await LobbySeeder.seedDefaultLobbies();
 
             Logger.info('SYSTEM_INITIALIZATION: Complete.');
         } catch (error) {

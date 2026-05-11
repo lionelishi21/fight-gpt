@@ -26,7 +26,7 @@ export class AppConfig {
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
-  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.5-flash'; }
+  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-1.5-flash'; }
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
   public static get STRIPE_WEBHOOK_SECRET(): string { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
   public static get APP_URL(): string { return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; }

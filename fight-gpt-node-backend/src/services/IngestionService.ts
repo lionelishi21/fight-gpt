@@ -11,6 +11,8 @@ import { Logger } from '../helpers/logger';
 import { queueService } from './QueueService';
 
 import { normalizeYoutubeUrl, isBadVideoTitle } from '../helpers/youtubeHelper';
+import { NotificationService } from './NotificationService';
+import { YoutubeBotBlockError } from '../helpers/youtubeDownloader';
 
 const execAsync = promisify(exec);
 
@@ -73,6 +75,7 @@ export class IngestionService extends BaseService implements IIngestionService {
         private readonly analysisService: IAnalysisService,
         private readonly metaService?: IMetaService,
         private readonly searchStrategyRepository?: IGameSearchStrategyRepository,
+        private readonly notificationService?: NotificationService,
     ) {
         super();
     }
@@ -219,6 +222,16 @@ export class IngestionService extends BaseService implements IIngestionService {
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : 'Unknown error';
                     const shouldRetry = job.retry_count < 2;
+
+                    if (e && (e as Error).name === 'YoutubeBotBlockError') {
+                        Logger.error(`[IngestionService] YouTube bot block detected for job ${job.job_id}`);
+                        if (this.notificationService) {
+                            await this.notificationService.systemAlert(
+                                'YouTube Bot Block Detected',
+                                'yt-dlp was blocked by YouTube. Video ingestion has failed. Please update the cookies.txt file via the admin dashboard.'
+                            );
+                        }
+                    }
 
                     await this.ingestionRepository.updateJobStatus(
                         job.job_id,
