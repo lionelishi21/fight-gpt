@@ -696,6 +696,40 @@ class AdminController extends BaseController_1.BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to update cookies');
         }
     };
+    /**
+     * GET /api/admin/settings/cookie/status
+     * Check if a cookies.txt file exists and its status
+     */
+    getCookieStatus = async (_req, res) => {
+        try {
+            const cookiePath = path_1.default.join(process.cwd(), 'uploads', 'cookies.txt');
+            if (!fs_1.default.existsSync(cookiePath)) {
+                this.sendResponse(res, {
+                    success: true,
+                    data: { exists: false, message: 'No cookies.txt file found on server.' }
+                });
+                return;
+            }
+            const stats = fs_1.default.statSync(cookiePath);
+            const content = fs_1.default.readFileSync(cookiePath, 'utf8');
+            const isNetscape = content.includes('# Netscape HTTP Cookie File');
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    exists: true,
+                    size: stats.size,
+                    updatedAt: stats.mtime,
+                    isNetscape,
+                    message: isNetscape
+                        ? 'Valid Netscape cookie file detected.'
+                        : 'File found but may not be in valid Netscape format.'
+                }
+            });
+        }
+        catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to check cookie status');
+        }
+    };
 }
 exports.AdminController = AdminController;
 //# sourceMappingURL=AdminController.js.map

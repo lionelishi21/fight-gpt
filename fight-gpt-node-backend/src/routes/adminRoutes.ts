@@ -80,6 +80,7 @@ export class AdminRoutes {
 
         // System Settings
         this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
+        this.router.get('/settings/cookie/status', this.adminController.getCookieStatus);
     }
 
     public getRouter(): Router {

@@ -71,6 +71,7 @@ class AdminRoutes {
         this.router.delete('/invites/:token', InviteController_1.inviteController.revokeInvite);
         // System Settings
         this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
+        this.router.get('/settings/cookie/status', this.adminController.getCookieStatus);
     }
     getRouter() {
         return this.router;

@@ -186,5 +186,10 @@ export declare class AdminController extends BaseController {
      * Upload a new cookies.txt file for YouTube ingestion
      */
     uploadCookies: (req: Request, res: Response) => Promise<void>;
+    /**
+     * GET /api/admin/settings/cookie/status
+     * Check if a cookies.txt file exists and its status
+     */
+    getCookieStatus: (_req: Request, res: Response) => Promise<void>;
 }
 //# sourceMappingURL=AdminController.d.ts.map
