@@ -1,7 +1,7 @@
 import { Database } from '../config/database';
 import Analysis from '../models/Analysis';
 import { Scenario } from '../models/Scenario';
-import { TheoryDocument } from '../models/TheoryDocument';
+import { TheoryDoc } from '../models/TheoryDocument';
 import { IngestionJob } from '../models/IngestionJob';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -26,7 +26,7 @@ async function resetData() {
     console.log(`Deleted ${scenarioResult.deletedCount} scenarios.`);
 
     // 3. Delete all Theories
-    const theoryResult = await TheoryDocument.deleteMany({});
+    const theoryResult = await TheoryDoc.deleteMany({});
     console.log(`Deleted ${theoryResult.deletedCount} theories.`);
 
     // 4. Reset all IngestionJobs that were already processed
