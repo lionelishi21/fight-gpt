@@ -1,5 +1,5 @@
 import { Database } from '../config/database';
-import Analysis from '../models/Analysis';
+import { Analysis } from '../models/Analysis';
 import { Scenario } from '../models/Scenario';
 import { TheoryDoc } from '../models/TheoryDocument';
 import { IngestionJob } from '../models/IngestionJob';
