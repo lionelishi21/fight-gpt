@@ -1,5 +1,5 @@
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
-import { INotificationService } from './NotificationService';
+import { NotificationService } from './NotificationService';
 import { IGameMetadataService } from './GameMetadataService';
 
 /**
@@ -13,7 +13,7 @@ export interface ITrendAnalysisService {
 export class TrendAnalysisService implements ITrendAnalysisService {
   constructor(
     private readonly analysisRepository: IAnalysisRepository,
-    private readonly notificationService: INotificationService,
+    private readonly notificationService: NotificationService,
     private readonly gameMetadataService: IGameMetadataService
   ) {}
 
@@ -65,17 +65,17 @@ export class TrendAnalysisService implements ITrendAnalysisService {
       if (frequency > 25) {
         console.log(`[TrendAnalysisService] Meta shift detected for ${topChar} in ${gameId} (${frequency.toFixed(1)}%)`);
         
-        await this.notificationService.createGlobalNotification({
-          type: 'META_SHIFT',
-          severity: 'high',
-          payload: {
+        await this.notificationService.broadcast(
+          'META_SHIFT',
+          {
             title: `META ALERT: ${topChar} Dominating`,
             description: `${topChar} has appeared in ${frequency.toFixed(0)}% of recent high-level matches. Watch now to learn the counter-play.`,
             gameId: gameId,
             characterId: topChar,
             link: `analysis/discovery?p1_character=${encodeURIComponent(topChar)}`
-          }
-        });
+          },
+          'high'
+        );
       }
     }
     

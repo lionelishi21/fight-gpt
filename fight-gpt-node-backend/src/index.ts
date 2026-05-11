@@ -210,8 +210,8 @@ export class App {
       this.ingestionService ?? undefined, 
       metaService ?? undefined, 
       autoResearchService ?? undefined, 
-      this.rosterSyncService ?? undefined,
-      trendAnalysisService ?? undefined
+      trendAnalysisService ?? undefined,
+      this.rosterSyncService ?? undefined
     ) : null;
     let paymentService: PaymentService;
     let paymentController: PaymentController;
@@ -289,8 +289,22 @@ export class App {
     // CORS middleware
     this.app.use(
       cors({
-        origin: AppConfig.CORS_ORIGINS,
+        origin: (origin, callback) => {
+          const allowedOrigins = AppConfig.CORS_ORIGINS;
+          // allow requests with no origin (like mobile apps or curl)
+          if (!origin) return callback(null, true);
+          
+          if (allowedOrigins === true) {
+            callback(null, true);
+          } else if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-key'],
       })
     );
 

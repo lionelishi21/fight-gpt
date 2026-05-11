@@ -14,11 +14,20 @@ class AppConfig {
     static get RATE_LIMIT_WINDOW_MS() { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
     static get RATE_LIMIT_MAX_REQUESTS() { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10); }
     static get CORS_ORIGINS() {
-        if (process.env.CORS_ORIGIN === '*')
+        const origins = process.env.CORS_ORIGIN;
+        if (origins === '*')
             return true;
-        if (process.env.CORS_ORIGIN)
-            return process.env.CORS_ORIGIN.split(',').map(o => o.trim());
-        return ['http://localhost:5174', 'http://localhost:3000', 'https://metapunish.com', 'https://www.metapunish.com'];
+        if (origins)
+            return origins.split(',').map(o => o.trim());
+        return [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://localhost:5174',
+            'https://metapunish.com',
+            'https://www.metapunish.com',
+            'https://fightingames.online',
+            'https://api.fightingames.online'
+        ];
     }
     static get LOG_LEVEL() { return process.env.LOG_LEVEL || 'info'; }
     static get GEMINI_API_KEY() { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }

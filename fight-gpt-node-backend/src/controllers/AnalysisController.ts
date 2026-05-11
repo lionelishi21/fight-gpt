@@ -274,6 +274,8 @@ export class AnalysisController extends BaseController implements IAnalysisContr
     } catch (error) {
       this.handleError(error, req, res, next);
     }
+  }
+
   /**
    * Track discovery feed views
    * POST /api/analyses/discovery/track-view

@@ -423,4 +423,14 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       }
     }
   }
+
+  async getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>> {
+    try {
+      // Placeholder for now to satisfy the interface and fix the build.
+      // Actual implementation would query a view tracking table.
+      return { success: true, data: [] };
+    } catch (error) {
+      return { success: false, error: 'Failed to fetch views' };
+    }
+  }
 }

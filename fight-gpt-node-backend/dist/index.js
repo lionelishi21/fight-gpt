@@ -222,8 +222,24 @@ class App {
         this.app.use((0, helmet_1.default)());
         // CORS middleware
         this.app.use((0, cors_1.default)({
-            origin: app_1.AppConfig.CORS_ORIGINS,
+            origin: (origin, callback) => {
+                const allowedOrigins = app_1.AppConfig.CORS_ORIGINS;
+                // allow requests with no origin (like mobile apps or curl)
+                if (!origin)
+                    return callback(null, true);
+                if (allowedOrigins === true) {
+                    callback(null, true);
+                }
+                else if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) {
+                    callback(null, true);
+                }
+                else {
+                    callback(new Error('Not allowed by CORS'));
+                }
+            },
             credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-key'],
         }));
         // Compression middleware
         this.app.use((0, compression_1.default)());

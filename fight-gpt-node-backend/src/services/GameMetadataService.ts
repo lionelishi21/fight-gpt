@@ -23,6 +23,7 @@ export interface IGameMetadataService {
     request: UpdateGameMetadataRequest
   ): Promise<ApiResponse<IGameMetadata>>;
   deleteGameMetadata(id: string): Promise<ApiResponse<boolean>>;
+  getActiveGames(): Promise<IGameMetadata[]>;
 }
 
 /**
@@ -309,5 +310,18 @@ export class GameMetadataService extends BaseService implements IGameMetadataSer
       created_at: document.created_at,
       updated_at: document.updated_at,
     };
+  }
+
+  /**
+   * Get all active games (where is_current is true)
+   */
+  async getActiveGames(): Promise<IGameMetadata[]> {
+    try {
+      const activeGames = await this.gameMetadataRepository.findActiveGames();
+      return activeGames.map((game) => this.mapToGameMetadata(game));
+    } catch (error) {
+      console.error('[GameMetadataService] Failed to get active games:', error);
+      return [];
+    }
   }
 }

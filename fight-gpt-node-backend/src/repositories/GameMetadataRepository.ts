@@ -15,6 +15,7 @@ export interface IGameMetadataRepository {
   updateGameMetadata(id: string, data: UpdateGameMetadataRequest): Promise<IGameMetadataDocument | null>;
   updateGameMetadataByGameId(gameId: string, data: UpdateGameMetadataRequest): Promise<IGameMetadataDocument | null>;
   delete(id: string): Promise<boolean>;
+  findActiveGames(): Promise<IGameMetadataDocument[]>;
 }
 
 /**
@@ -126,6 +127,17 @@ export class GameMetadataRepository
       return updated;
     } catch (error) {
       throw this.handleError(error, 'updateGameMetadataByGameId');
+    }
+  }
+
+  /**
+   * Find all active games (where is_current is true)
+   */
+  async findActiveGames(): Promise<IGameMetadataDocument[]> {
+    try {
+      return await this.findMany({ is_current: true });
+    } catch (error) {
+      throw this.handleError(error, 'findActiveGames');
     }
   }
 }

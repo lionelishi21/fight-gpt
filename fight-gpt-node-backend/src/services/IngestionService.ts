@@ -136,7 +136,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             source: 'scheduled',
                             status: 'pending',
                             retry_count: 0,
-                            metadata: { title: res.title }
+                            video_title: res.title
                         });
 
                         // Enqueue for background processing
@@ -144,7 +144,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             job_id: job.job_id,
                             game_id: gameId,
                             youtube_url: url,
-                            metadata: { title: res.title }
+                            video_title: res.title
                         });
 
                         result.queued_count++;
@@ -195,14 +195,13 @@ export class IngestionService extends BaseService implements IIngestionService {
                     await this.ingestionRepository.updateJobStatus(job.job_id, 'processing');
 
                     // Run the analysis pipeline
-                    const proPlayerId = (job as any).metadata?.pro_player_id;
-                    const videoTitle = (job as any).metadata?.title;
+                    const proPlayerId = job.pro_player_id;
+                    const videoTitle = job.video_title;
                     const analysisResult = await this.analysisService.analyzeVideo({
                         youtube_url: job.youtube_url,
                         game_id: job.game_id,
                         pro_player_id: proPlayerId,
                         video_title: videoTitle,
-                        metadata: (job as any).metadata
                     });
 
                     if (analysisResult.success && analysisResult.data) {
@@ -343,7 +342,8 @@ export class IngestionService extends BaseService implements IIngestionService {
                             source: 'pro_scout',
                             status: 'pending',
                             retry_count: 0,
-                            pro_player_id: (pro as any)._id.toString()
+                            pro_player_id: (pro as any)._id.toString(),
+                            video_title: v.title
                         });
 
                         // Enqueue for background processing
@@ -351,7 +351,8 @@ export class IngestionService extends BaseService implements IIngestionService {
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,
-                            pro_player_id: (pro as any)._id.toString()
+                            pro_player_id: (pro as any)._id.toString(),
+                            video_title: v.title
                         });
                         
                         Logger.info(`[IngestionService] Queued new pro match via Playlist Tracking: ${url} (${pro.name})`);
@@ -369,7 +370,7 @@ export class IngestionService extends BaseService implements IIngestionService {
      * Fetch the 5 most recent videos from a playlist using the YouTube API.
      * COST: 1 unit per call.
      */
-    private async fetchRecentVideosViaPlaylist(playlistId: string, apiKey: string): Promise<string[]> {
+    private async fetchRecentVideosViaPlaylist(playlistId: string, apiKey: string): Promise<{url: string, title: string}[]> {
         try {
             const params = new URLSearchParams({
                 part: 'snippet',
@@ -455,11 +456,11 @@ export class IngestionService extends BaseService implements IIngestionService {
             
             for (const pro of pros) {
                 for (const channel of pro.channels) {
-                    // Search for recent matches by this specific pro
                     const query = `${pro.name} ${pro.gameId} high level ranked match pro player`;
-                    const urls = await this.searchYouTube(query, 1); // Only 1 result for pro scout search
+                    const searchResults = await this.searchYouTube(query, 1); // Only 1 result for pro scout search
                     
-                    for (const url of urls) {
+                    for (const res of searchResults) {
+                        const url = res.url;
                         const existing = await this.ingestionRepository.findByUrl(url);
                         if (existing) continue;
 
@@ -467,6 +468,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             job_id: UuidHelper.generate(),
                             game_id: pro.gameId,
                             youtube_url: url,
+                            video_title: res.title,
                             search_query: `PRO_SCOUT: ${pro.name} (${pro.region})`,
                             source: 'pro_scout',
                             status: 'pending',
@@ -479,6 +481,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,
+                            video_title: res.title,
                             pro_player_id: (pro as any)._id.toString()
                         });
                     }
