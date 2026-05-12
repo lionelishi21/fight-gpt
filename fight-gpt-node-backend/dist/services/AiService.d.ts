@@ -21,17 +21,17 @@ export interface IAiService {
     generateEmbedding(text: string): Promise<number[]>;
 }
 /**
- * AI Service implementation (Google Cloud Vertex AI)
+ * AI Service implementation using Google Generative AI SDK (API key-based auth)
+ * Migrated from Vertex AI to avoid service account key requirement.
  */
 export declare class AiService extends BaseService implements IAiService {
-    private vertexAI;
+    private genAI;
     private model;
     private modelName;
     private readonly gameMetadataService;
     private readonly characterEncyclopediaService;
     private storage;
-    constructor(apiKey: string, // Kept for interface compatibility, but we rely on Vertex AI ADC
-    modelName: string, gameMetadataService: IGameMetadataService, characterEncyclopediaService: ICharacterEncyclopediaService);
+    constructor(apiKey: string, modelName: string, gameMetadataService: IGameMetadataService, characterEncyclopediaService: ICharacterEncyclopediaService);
     /**
      * Analyze video using Vertex AI Gemini
      */

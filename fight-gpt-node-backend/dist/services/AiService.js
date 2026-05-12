@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiService = void 0;
-const vertexai_1 = require("@google-cloud/vertexai");
+const generative_ai_1 = require("@google/generative-ai");
 const storage_1 = require("@google-cloud/storage");
 const BaseService_1 = require("./BaseService");
 const VersionResolver_1 = require("../helpers/VersionResolver");
@@ -42,27 +42,24 @@ const app_1 = require("../config/app");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 /**
- * AI Service implementation (Google Cloud Vertex AI)
+ * AI Service implementation using Google Generative AI SDK (API key-based auth)
+ * Migrated from Vertex AI to avoid service account key requirement.
  */
 class AiService extends BaseService_1.BaseService {
-    vertexAI;
+    genAI;
     model;
     modelName;
     gameMetadataService;
     characterEncyclopediaService;
     storage;
-    constructor(apiKey, // Kept for interface compatibility, but we rely on Vertex AI ADC
-    modelName, gameMetadataService, characterEncyclopediaService) {
+    constructor(apiKey, modelName, gameMetadataService, characterEncyclopediaService) {
         super();
         this.modelName = modelName;
-        // Initialize Vertex AI using Google Cloud ADC
-        this.vertexAI = new vertexai_1.VertexAI({
-            project: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
-            location: app_1.AppConfig.GOOGLE_CLOUD_LOCATION
-        });
-        this.model = this.vertexAI.getGenerativeModel({
+        // Use Google AI API key — no service account needed
+        this.genAI = new generative_ai_1.GoogleGenerativeAI(apiKey || app_1.AppConfig.GEMINI_API_KEY);
+        this.model = this.genAI.getGenerativeModel({
             model: this.modelName,
-            generationConfig: { responseMimeType: 'application/json' }
+            generationConfig: { responseMimeType: 'application/json' },
         });
         this.storage = new storage_1.Storage({
             projectId: app_1.AppConfig.GOOGLE_CLOUD_PROJECT,
@@ -144,31 +141,19 @@ class AiService extends BaseService_1.BaseService {
         }
         const contentParts = [];
         // Pass video to Gemini:
-        // 1. GCS URI (for local file uploads)
-        // 2. YouTube URL directly as fileUri — Gemini supports this natively, no download needed!
+        // 1. GCS URI for local file uploads
+        // 2. YouTube URL directly — @google/generative-ai supports YouTube URLs natively
         if (videoUri && videoUri.startsWith('gs://')) {
             const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
-            contentParts.push({
-                fileData: {
-                    mimeType,
-                    fileUri: videoUri
-                }
-            });
+            contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
         }
         else if (request.youtube_url) {
-            // Pass YouTube URL directly — Gemini fetches it internally via Google's infrastructure
-            // This completely bypasses bot detection, cookies, and IP blocks.
-            contentParts.push({
-                fileData: {
-                    fileUri: request.youtube_url
-                }
-            });
+            // Gemini fetches YouTube internally — no download or bot detection needed
+            contentParts.push({ fileData: { fileUri: request.youtube_url } });
         }
         contentParts.push({ text: fullPrompt });
         try {
-            const result = await this.model.generateContent({
-                contents: [{ role: 'user', parts: contentParts }]
-            });
+            const result = await this.model.generateContent({ contents: [{ role: 'user', parts: contentParts }] });
             const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             try {
@@ -246,19 +231,7 @@ class AiService extends BaseService_1.BaseService {
     }
     async generateEmbedding(text) {
         try {
-            const embeddingModel = this.vertexAI.getGenerativeModel({ model: 'text-embedding-004' });
-            const result = await embeddingModel.generateContent(text); // Vertex AI text embedding
-            // Need to map Vertex AI embedding structure.
-            // Vertex AI typically returns embeddings under result.response.candidates[0].content.parts[0].text or similar for some endpoints, 
-            // but if we are just using getGenerativeModel, we should verify the API. 
-            // Note: For embeddings in Vertex AI Node SDK it's slightly different. Let's fallback to fetch API or GoogleGenerativeAI just for embeddings if needed.
-            // However, sticking to the standard VertexAI wrapper:
-            // Actually, Vertex AI getGenerativeModel doesn't directly support embedContent in the same way. 
-            // Let's import GoogleGenerativeAI locally just for embeddings to preserve existing behavior without breaking it, 
-            // since the main goal was changing the video generation.
-            const { GoogleGenerativeAI } = require('@google/generative-ai');
-            const genAI = new GoogleGenerativeAI(app_1.AppConfig.GEMINI_API_KEY);
-            const embedModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+            const embedModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
             const embedResult = await embedModel.embedContent(text);
             return embedResult.embedding.values;
         }
