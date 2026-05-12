@@ -154,9 +154,10 @@ class AuthController extends BaseController_1.BaseController {
             }
             // Fetch the primary active game slot + populate the character reference so we get
             // the character slug (e.g. 'ryu') not a raw ObjectId.
-            const activeGame = await UserGame_1.default.findOne({ user: userId, isActive: true })
+            const activeGameQuery = UserGame_1.default.findOne({ user: userId, isActive: true })
                 .sort({ createdAt: -1 })
                 .populate('character', 'name aliases');
+            const activeGame = await activeGameQuery.exec();
             // Resolve main character: prefer slot (string slug) → populated UserGame character name → preferences fallback
             const resolvedMainCharacter = user.slots?.[0]?.characterId ||
                 activeGame?.character?.name?.toLowerCase().replace(/\s+/g, '_') ||
