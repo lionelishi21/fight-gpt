@@ -8,6 +8,7 @@ exports.streamYoutubeToGcs = streamYoutubeToGcs;
 const child_process_1 = require("child_process");
 const logger_1 = require("./logger");
 const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 class YoutubeBotBlockError extends Error {
     constructor(message) {
         super(message);
@@ -40,20 +41,20 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
                 '--ignore-config',
                 '-o', '-',
             ];
-            // Use TV and iOS clients which often skip the n-challenge puzzles
-            ytDlpArgs.push('--extractor-args', 'youtube:player_client=tv,ios');
-            // TEMPORARY: Disable cookies to force yt-dlp to use TV/iOS clients.
-            // This bypasses the 'web' client requirement for JavaScript puzzle solving.
-            /*
-            if (fs.existsSync(cookiePath)) {
-              Logger.info(`[YoutubeDownloader] Using cookies found at: ${cookiePath}`);
-              ytDlpArgs.push('--cookies', cookiePath);
-            } else {
-              Logger.warn(`[YoutubeDownloader] No cookies.txt found at ${cookiePath}. Falling back to android client.`);
-              // Fallback: try to use the android client which sometimes bypasses basic bot checks
-              ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
+            // Use Stealth clients (android_vr and web_embedded) 
+            // These are currently the most reliable for bypassing data-center blocks.
+            ytDlpArgs.push('--extractor-args', 'youtube:player_client=android_vr,web_embedded');
+            // Attempt to use cookies again, but we'll fall back gracefully if the solver fails.
+            // Use cookies if provided in environment or fallback to uploads/cookies.txt
+            const defaultCookiePath = path_1.default.resolve(process.cwd(), 'uploads', 'cookies.txt');
+            const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
+            if (fs_1.default.existsSync(cookiePath)) {
+                logger_1.Logger.info(`[YoutubeDownloader] Using cookies found at: ${cookiePath}`);
+                ytDlpArgs.push('--cookies', cookiePath);
             }
-            */
+            else {
+                logger_1.Logger.warn(`[YoutubeDownloader] No cookies.txt found at ${cookiePath}.`);
+            }
             ytDlpArgs.push('--no-check-certificates');
             ytDlpArgs.push('--prefer-free-formats');
             ytDlpArgs.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
