@@ -130,14 +130,33 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             }
         }
         catch { /* No ad, continue */ }
-        // Get the video duration so we know how long to wait
+        // Wait for video metadata to load — duration is 0 until loadedmetadata fires
+        logger_1.Logger.info('[YoutubeDownloader] Waiting for video metadata to load...');
         const durationSec = await page.evaluate(() => {
-            const video = document.querySelector('video');
-            return video?.duration || 0;
+            return new Promise((resolve) => {
+                const video = document.querySelector('video');
+                if (!video) {
+                    resolve(0);
+                    return;
+                }
+                // Already loaded
+                if (video.readyState >= 1 && video.duration > 0 && isFinite(video.duration)) {
+                    resolve(video.duration);
+                    return;
+                }
+                const onMeta = () => {
+                    if (video.duration > 0 && isFinite(video.duration))
+                        resolve(video.duration);
+                };
+                video.addEventListener('loadedmetadata', onMeta);
+                video.addEventListener('durationchange', onMeta);
+                // Give up after 30s
+                setTimeout(() => resolve(0), 30000);
+            });
         });
         logger_1.Logger.info(`[YoutubeDownloader] Video duration: ${Math.round(durationSec)}s — waiting for playback to complete`);
         if (durationSec <= 0) {
-            throw new YoutubeBotBlockError('Could not detect video duration. The video may be private, deleted, or geo-restricted.');
+            throw new YoutubeBotBlockError('Could not detect video duration. The video may be private, deleted, age-restricted, or geo-blocked.');
         }
         // Wait for the video to finish playing (duration + 10s buffer)
         const waitMs = Math.min((durationSec + 10) * 1000, TIMEOUT_MS);

@@ -115,16 +115,33 @@ export async function streamYoutubeToGcs(
       }
     } catch { /* No ad, continue */ }
 
-    // Get the video duration so we know how long to wait
+    // Wait for video metadata to load — duration is 0 until loadedmetadata fires
+    Logger.info('[YoutubeDownloader] Waiting for video metadata to load...');
     const durationSec: number = await page.evaluate(() => {
-      const video = document.querySelector('video') as HTMLVideoElement;
-      return video?.duration || 0;
+      return new Promise<number>((resolve) => {
+        const video = document.querySelector('video') as HTMLVideoElement;
+        if (!video) { resolve(0); return; }
+
+        // Already loaded
+        if (video.readyState >= 1 && video.duration > 0 && isFinite(video.duration)) {
+          resolve(video.duration); return;
+        }
+
+        const onMeta = () => {
+          if (video.duration > 0 && isFinite(video.duration)) resolve(video.duration);
+        };
+        video.addEventListener('loadedmetadata', onMeta);
+        video.addEventListener('durationchange', onMeta);
+
+        // Give up after 30s
+        setTimeout(() => resolve(0), 30000);
+      });
     });
 
     Logger.info(`[YoutubeDownloader] Video duration: ${Math.round(durationSec)}s — waiting for playback to complete`);
 
     if (durationSec <= 0) {
-      throw new YoutubeBotBlockError('Could not detect video duration. The video may be private, deleted, or geo-restricted.');
+      throw new YoutubeBotBlockError('Could not detect video duration. The video may be private, deleted, age-restricted, or geo-blocked.');
     }
 
     // Wait for the video to finish playing (duration + 10s buffer)
