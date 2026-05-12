@@ -48,6 +48,33 @@ class YoutubeBotBlockError extends Error {
 }
 exports.YoutubeBotBlockError = YoutubeBotBlockError;
 /**
+ * Parse Netscape format cookies.txt into Playwright cookie objects.
+ * Netscape format: domain\tincludeSubDomains\tpath\tsecure\texpiry\tname\tvalue
+ */
+function parseNetscapeCookies(cookieTxt) {
+    const cookies = [];
+    for (const line of cookieTxt.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#'))
+            continue;
+        const parts = trimmed.split('\t');
+        if (parts.length < 7)
+            continue;
+        const [domain, , cookiePath, secure, expiry, name, value] = parts;
+        cookies.push({
+            name: name.trim(),
+            value: value.trim(),
+            domain: domain.trim().startsWith('.') ? domain.trim() : `.${domain.trim()}`,
+            path: cookiePath.trim() || '/',
+            expires: parseInt(expiry.trim()) || -1,
+            httpOnly: false,
+            secure: secure.trim().toUpperCase() === 'TRUE',
+            sameSite: 'None',
+        });
+    }
+    return cookies;
+}
+/**
  * Streams a YouTube video to GCS by recording it in a real Chromium browser session.
  * This completely bypasses YouTube bot detection by using a real browser engine
  * that naturally executes JavaScript challenges and appears as a genuine user.
@@ -84,6 +111,26 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             locale: 'en-US',
             timezoneId: 'America/New_York',
         });
+        // Inject cookies from cookies.txt into the browser context BEFORE navigating
+        // This makes YouTube see a signed-in session and bypass the bot wall
+        const defaultCookiePath = path.resolve(process.cwd(), 'uploads', 'cookies.txt');
+        const cookieFile = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
+        if (fs.existsSync(cookieFile)) {
+            try {
+                const raw = fs.readFileSync(cookieFile, 'utf8');
+                const playwrightCookies = parseNetscapeCookies(raw);
+                if (playwrightCookies.length > 0) {
+                    await context.addCookies(playwrightCookies);
+                    logger_1.Logger.info(`[YoutubeDownloader] Injected ${playwrightCookies.length} cookies into browser context`);
+                }
+            }
+            catch (e) {
+                logger_1.Logger.warn(`[YoutubeDownloader] Failed to parse cookies.txt: ${e.message}`);
+            }
+        }
+        else {
+            logger_1.Logger.warn(`[YoutubeDownloader] No cookies.txt found at ${cookieFile} — YouTube may show sign-in wall`);
+        }
         const page = await context.newPage();
         // Hide automation fingerprints
         await page.addInitScript(() => {
