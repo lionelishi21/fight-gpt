@@ -83,7 +83,8 @@ export class AiService extends BaseService implements IAiService {
         fileName = `analysis/${Date.now()}-${path.basename(request.video_path)}`;
         gcsUri = await this.uploadToGcs(request.video_path, fileName);
       } else if (request.youtube_url) {
-        // Stream YouTube video directly to GCS
+        // Stream YouTube video directly to GCS via Playwright browser recording
+        // The downloader will convert the fileName to .webm automatically
         fileName = `analysis/${Date.now()}-youtube.mp4`;
         if (!AppConfig.GOOGLE_STORAGE_BUCKET) {
             throw new Error('GOOGLE_STORAGE_BUCKET is required for video analysis');
@@ -94,6 +95,10 @@ export class AiService extends BaseService implements IAiService {
             AppConfig.GOOGLE_STORAGE_BUCKET, 
             fileName
         );
+        // Update fileName to match the actual .webm file created by Playwright
+        if (gcsUri.endsWith('.webm')) {
+            fileName = fileName.replace('.mp4', '.webm');
+        }
       }
 
       // Generate analysis using the GCS URI
@@ -156,9 +161,10 @@ export class AiService extends BaseService implements IAiService {
     
     // Pass the GCS URI as a fileData Part to Vertex AI so it actually watches the video
     if (videoUri && videoUri.startsWith('gs://')) {
+        const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
         contentParts.push({
             fileData: {
-                mimeType: 'video/mp4',
+                mimeType,
                 fileUri: videoUri
             }
         });

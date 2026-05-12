@@ -97,7 +97,7 @@ async function runWorker() {
             }
         }, {
             connection,
-            concurrency: 2, // Process 2 videos at once (adjust based on CPU/RAM)
+            concurrency: 1, // Playwright/Chromium is CPU-intensive — process 1 video at a time
             limiter: {
                 max: 5,
                 duration: 60000 // 5 analyses per minute (Gemini 1.5 Flash RPM limit)
