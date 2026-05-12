@@ -144,53 +144,53 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             }
         }
         catch { /* No ad, continue */ }
-        // Wait for video metadata to load — duration is 0 until loadedmetadata fires
-        logger_1.Logger.info('[YoutubeDownloader] Waiting for video metadata to load...');
-        const durationSec = await page.evaluate(() => {
+        // STEP 1: Wait for actual video playback to begin using readyState + videoWidth.
+        // This is the real signal that frames are being decoded — not duration.
+        logger_1.Logger.info('[YoutubeDownloader] Waiting for video playback to start (readyState >= 2 + videoWidth > 0)...');
+        const isPlaying = await page.evaluate(() => {
             return new Promise((resolve) => {
-                const video = document.querySelector('video');
-                if (!video) {
-                    resolve(0);
-                    return;
-                }
-                // Already loaded
-                if (video.readyState >= 1 && video.duration > 0 && isFinite(video.duration)) {
-                    resolve(video.duration);
-                    return;
-                }
-                const onMeta = () => {
-                    if (video.duration > 0 && isFinite(video.duration))
-                        resolve(video.duration);
-                };
-                video.addEventListener('loadedmetadata', onMeta);
-                video.addEventListener('durationchange', onMeta);
-                // Give up after 30s
-                setTimeout(() => resolve(0), 30000);
+                const check = setInterval(() => {
+                    const video = document.querySelector('video');
+                    if (video && video.readyState >= 2 && video.videoWidth > 0) {
+                        clearInterval(check);
+                        resolve(true);
+                    }
+                }, 500);
+                // Give up after 45s — if still not playing, something is blocking it
+                setTimeout(() => { clearInterval(check); resolve(false); }, 45000);
             });
         });
-        logger_1.Logger.info(`[YoutubeDownloader] Video duration: ${Math.round(durationSec)}s — waiting for playback to complete`);
-        if (durationSec <= 0) {
-            // Take a screenshot so we can diagnose what YouTube is showing
+        if (!isPlaying) {
+            // Take a diagnostic screenshot to see what YouTube is actually showing
             const screenshotPath = path.join(tempDir, 'debug-screenshot.png');
             try {
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 const debugInfo = await page.evaluate(() => ({
                     title: document.title,
                     url: window.location.href,
-                    videoSrc: document.querySelector('video')?.src || 'none',
+                    videoSrc: document.querySelector('video')?.src?.substring(0, 100) || 'none',
                     videoReadyState: document.querySelector('video')?.readyState ?? -1,
-                    bodyText: document.body?.innerText?.substring(0, 300),
+                    videoWidth: document.querySelector('video')?.videoWidth ?? 0,
+                    bodyText: document.body?.innerText?.substring(0, 400),
                 }));
-                logger_1.Logger.error(`[YoutubeDownloader] Duration=0 debug info: ${JSON.stringify(debugInfo)}`);
+                logger_1.Logger.error(`[YoutubeDownloader] Video not playing. Debug: ${JSON.stringify(debugInfo)}`);
                 logger_1.Logger.info(`[YoutubeDownloader] Screenshot saved to: ${screenshotPath}`);
             }
-            catch (screenshotErr) {
+            catch {
                 logger_1.Logger.warn('[YoutubeDownloader] Could not take debug screenshot');
             }
-            throw new YoutubeBotBlockError('Could not detect video duration. Check the debug screenshot in the logs for what YouTube is showing.');
+            throw new YoutubeBotBlockError('Video did not start playing. YouTube may be showing a sign-in or consent wall. Check the debug screenshot.');
         }
-        // Wait for the video to finish playing (duration + 10s buffer)
-        const waitMs = Math.min((durationSec + 10) * 1000, TIMEOUT_MS);
+        // STEP 2: Now that video is confirmed playing, read the duration (it will be valid now)
+        const durationSec = await page.evaluate(() => {
+            const video = document.querySelector('video');
+            return video?.duration || 0;
+        });
+        logger_1.Logger.info(`[YoutubeDownloader] Video is PLAYING ✓ | Duration: ${Math.round(durationSec)}s | Waiting for playback to finish...`);
+        // STEP 3: Wait for the video to finish (ended event or duration+10s buffer fallback)
+        const waitMs = durationSec > 0
+            ? Math.min((durationSec + 10) * 1000, TIMEOUT_MS)
+            : TIMEOUT_MS;
         await page.evaluate((ms) => {
             return new Promise((resolve) => {
                 const video = document.querySelector('video');
