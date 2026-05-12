@@ -12,6 +12,7 @@ export interface IIngestionRepository {
         pending: number;
     }>;
     getRecentJobs(gameId: string, limit?: number): Promise<IIngestionJobDocument[]>;
+    updateStuckJobs(): Promise<number>;
 }
 export declare class IngestionRepository extends BaseRepository<IIngestionJobDocument> implements IIngestionRepository {
     constructor();
@@ -26,5 +27,6 @@ export declare class IngestionRepository extends BaseRepository<IIngestionJobDoc
         pending: number;
     }>;
     getRecentJobs(gameId: string, limit?: number): Promise<IIngestionJobDocument[]>;
+    updateStuckJobs(): Promise<number>;
 }
 //# sourceMappingURL=IngestionRepository.d.ts.map

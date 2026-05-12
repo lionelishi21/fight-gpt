@@ -8,6 +8,7 @@ export interface IIngestionRepository {
     updateJobStatus(jobId: string, status: IngestionJobStatus, extra?: Partial<IIngestionJobDocument>): Promise<IIngestionJobDocument | null>;
     getJobStats(gameId: string): Promise<{ total: number; completed: number; failed: number; pending: number }>;
     getRecentJobs(gameId: string, limit?: number): Promise<IIngestionJobDocument[]>;
+    updateStuckJobs(): Promise<number>;
 }
 
 export class IngestionRepository extends BaseRepository<IIngestionJobDocument> implements IIngestionRepository {
@@ -63,5 +64,13 @@ export class IngestionRepository extends BaseRepository<IIngestionJobDocument> i
             .sort({ created_at: -1 })
             .limit(limit)
             .exec();
+    }
+
+    async updateStuckJobs(): Promise<number> {
+        const result = await this.model.updateMany(
+            { status: 'processing' },
+            { $set: { status: 'pending' } }
+        ).exec();
+        return result.modifiedCount;
     }
 }

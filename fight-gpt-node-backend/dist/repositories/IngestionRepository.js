@@ -48,6 +48,10 @@ class IngestionRepository extends BaseRepository_1.BaseRepository {
             .limit(limit)
             .exec();
     }
+    async updateStuckJobs() {
+        const result = await this.model.updateMany({ status: 'processing' }, { $set: { status: 'pending' } }).exec();
+        return result.modifiedCount;
+    }
 }
 exports.IngestionRepository = IngestionRepository;
 //# sourceMappingURL=IngestionRepository.js.map

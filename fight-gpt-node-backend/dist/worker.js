@@ -36,6 +36,12 @@ async function runWorker() {
         await database_1.Database.connect();
         // 2. Initialize Repositories
         const ingestionRepo = new IngestionRepository_1.IngestionRepository();
+        // Cleanup: If the worker just started/restarted, reset any 'processing' jobs back to 'pending'
+        // This ensures that if the worker crashed, the jobs don't stay stuck in 'processing' forever.
+        const stuckJobs = await ingestionRepo.updateStuckJobs();
+        if (stuckJobs > 0) {
+            logger_1.Logger.info(`[Worker] Reset ${stuckJobs} stuck 'processing' jobs back to 'pending'`);
+        }
         const analysisRepo = new AnalysisRepository_1.AnalysisRepository();
         const gameMetadataRepo = new GameMetadataRepository_1.GameMetadataRepository();
         const characterEncyclopediaRepo = new CharacterEncyclopediaRepository_1.CharacterEncyclopediaRepository();
