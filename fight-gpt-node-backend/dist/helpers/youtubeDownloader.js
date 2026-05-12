@@ -51,14 +51,19 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
                 // Fallback: try to use the android client which sometimes bypasses basic bot checks
                 ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
             }
-            // Add a common User-Agent to look more like a real browser
+            ytDlpArgs.push('--no-check-certificates');
+            ytDlpArgs.push('--prefer-free-formats');
             ytDlpArgs.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+            ytDlpArgs.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
+            ytDlpArgs.push('--add-header', 'Sec-Fetch-Mode: navigate');
             ytDlpArgs.push(youtubeUrl);
             let stderrOutput = '';
             const ytDlpPath = '/usr/local/bin/yt-dlp';
-            // Fallback to 'yt-dlp' if absolute path doesn't exist (for local dev)
             const command = fs_1.default.existsSync(ytDlpPath) ? ytDlpPath : 'yt-dlp';
             const ytDlp = (0, child_process_1.spawn)(command, ytDlpArgs);
+            // Log the command (masking cookies for safety)
+            const maskedArgs = ytDlpArgs.map(arg => arg.includes('cookies.txt') ? 'REDACTED_COOKIES' : arg);
+            logger_1.Logger.info(`[YoutubeDownloader] Executing: ${command} ${maskedArgs.join(' ')}`);
             // Set a 10-minute timeout for the download process
             const timeoutMinutes = 10;
             const timeout = setTimeout(() => {
@@ -72,6 +77,8 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
                 const message = data.toString().trim();
                 if (message) {
                     stderrOutput += message + '\n';
+                    // We only log to debug to keep worker-out.log clean, 
+                    // but we will show full stderr on failure.
                     logger_1.Logger.debug(`[yt-dlp stderr] ${message}`);
                 }
             });
@@ -94,12 +101,12 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             ytDlp.on('close', (code) => {
                 clearTimeout(timeout);
                 if (code !== 0 && code !== null) {
-                    logger_1.Logger.error(`[YoutubeDownloader] yt-dlp exited with code ${code}`);
+                    logger_1.Logger.error(`[YoutubeDownloader] yt-dlp failed with code ${code}. Full Error: ${stderrOutput}`);
                     if (stderrOutput.includes('Sign in to confirm you’re not a bot') || stderrOutput.includes('The following content is not available on this app')) {
-                        reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing, expired, or invalid.'));
+                        reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing, expired, or invalid. Try exporting fresh cookies.'));
                     }
                     else {
-                        reject(new Error(`yt-dlp exited with code ${code}: ${stderrOutput.split('\n').pop()}`));
+                        reject(new Error(`yt-dlp failed: ${stderrOutput.split('\n').filter(l => l.startsWith('ERROR')).join(' ') || stderrOutput.split('\n').pop()}`));
                     }
                 }
             });
