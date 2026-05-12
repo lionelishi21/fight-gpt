@@ -50,27 +50,48 @@ exports.YoutubeBotBlockError = YoutubeBotBlockError;
 /**
  * Parse Netscape format cookies.txt into Playwright cookie objects.
  * Netscape format: domain\tincludeSubDomains\tpath\tsecure\texpiry\tname\tvalue
+ * Skips any malformed lines instead of crashing the entire batch.
  */
 function parseNetscapeCookies(cookieTxt) {
     const cookies = [];
+    let skipped = 0;
     for (const line of cookieTxt.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#'))
             continue;
         const parts = trimmed.split('\t');
-        if (parts.length < 7)
+        if (parts.length < 7) {
+            skipped++;
             continue;
-        const [domain, , cookiePath, secure, expiry, name, value] = parts;
+        }
+        const [rawDomain, , cookiePath, secure, expiry, name, ...valueParts] = parts;
+        const value = valueParts.join('\t'); // Value might contain tabs
+        // Skip cookies with empty name or value — Playwright rejects these
+        if (!name?.trim() || !rawDomain?.trim()) {
+            skipped++;
+            continue;
+        }
+        // Parse expiry — must be a valid integer
+        const expiryInt = parseInt(expiry?.trim());
+        if (expiry?.trim() && isNaN(expiryInt)) {
+            skipped++;
+            continue;
+        }
+        // Normalize domain — must start with a dot for Playwright
+        const domain = rawDomain.trim().startsWith('.') ? rawDomain.trim() : `.${rawDomain.trim()}`;
         cookies.push({
             name: name.trim(),
-            value: value.trim(),
-            domain: domain.trim().startsWith('.') ? domain.trim() : `.${domain.trim()}`,
-            path: cookiePath.trim() || '/',
-            expires: parseInt(expiry.trim()) || -1,
+            value: (value ?? '').trim(),
+            domain,
+            path: cookiePath?.trim() || '/',
+            expires: isNaN(expiryInt) ? -1 : expiryInt,
             httpOnly: false,
-            secure: secure.trim().toUpperCase() === 'TRUE',
+            secure: secure?.trim().toUpperCase() === 'TRUE',
             sameSite: 'None',
         });
+    }
+    if (skipped > 0) {
+        logger_1.Logger.warn(`[YoutubeDownloader] Cookie parser: skipped ${skipped} malformed lines`);
     }
     return cookies;
 }
