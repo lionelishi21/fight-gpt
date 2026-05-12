@@ -34,14 +34,15 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
                 resumable: false,
             });
             // We use yt-dlp to fetch the video and output to stdout (-)
-            // We relax the format to ensure we get something even if the n-challenge is tricky
+            // We relax the format to 'best' to ensure we get something regardless of challenges
             const ytDlpArgs = [
-                '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                '--merge-output-format', 'mp4',
+                '-f', 'best',
+                '--no-playlist',
+                '--ignore-config',
                 '-o', '-',
             ];
-            // Use mobile clients which often have simpler challenges
-            ytDlpArgs.push('--extractor-args', 'youtube:player_client=ios,android,web');
+            // Use TV and iOS clients which often skip the n-challenge puzzles
+            ytDlpArgs.push('--extractor-args', 'youtube:player_client=tv,ios');
             // Use cookies if provided in environment or fallback to uploads/cookies.txt
             const defaultCookiePath = path_1.default.resolve(process.cwd(), 'uploads/cookies.txt');
             const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
