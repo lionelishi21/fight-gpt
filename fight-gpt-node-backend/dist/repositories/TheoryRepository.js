@@ -10,13 +10,15 @@ class TheoryRepository extends BaseRepository_1.BaseRepository {
     async upsertCharacterTheory(data) {
         // Mark previous theories for this character AND skill level as not current
         await this.model.updateMany({ game_id: data.game_id, character_id: data.character_id, target_skill_level: data.target_skill_level, type: 'character' }, { $set: { is_current_patch: false } }).exec();
-        return this.model.findOneAndUpdate({ game_id: data.game_id, character_id: data.character_id, target_skill_level: data.target_skill_level, type: 'character', patch_version: data.patch_version }, { $set: { ...data, is_current_patch: true } }, { upsert: true, new: true }).exec();
+        const result = await this.model.findOneAndUpdate({ game_id: data.game_id, character_id: data.character_id, target_skill_level: data.target_skill_level, type: 'character', patch_version: data.patch_version }, { $set: { ...data, is_current_patch: true } }, { upsert: true, new: true }).exec();
+        return result;
     }
     async upsertMatchupTheory(data) {
         const [charA, charB] = [data.character_a, data.character_b].sort();
         // Mark previous theories for this matchup AND skill level as not current
         await this.model.updateMany({ game_id: data.game_id, character_a: charA, character_b: charB, target_skill_level: data.target_skill_level, type: 'matchup' }, { $set: { is_current_patch: false } }).exec();
-        return this.model.findOneAndUpdate({ game_id: data.game_id, character_a: charA, character_b: charB, target_skill_level: data.target_skill_level, type: 'matchup', patch_version: data.patch_version }, { $set: { ...data, character_a: charA, character_b: charB, is_current_patch: true } }, { upsert: true, new: true }).exec();
+        const result = await this.model.findOneAndUpdate({ game_id: data.game_id, character_a: charA, character_b: charB, target_skill_level: data.target_skill_level, type: 'matchup', patch_version: data.patch_version }, { $set: { ...data, character_a: charA, character_b: charB, is_current_patch: true } }, { upsert: true, new: true }).exec();
+        return result;
     }
     async getCharacterTheory(gameId, characterId, skillLevel) {
         const filter = { game_id: gameId, character_id: characterId, type: 'character' };

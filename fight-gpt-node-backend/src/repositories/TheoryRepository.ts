@@ -22,11 +22,12 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
             { game_id: data.game_id, character_id: data.character_id, target_skill_level: data.target_skill_level, type: 'character' },
             { $set: { is_current_patch: false } }
         ).exec();
-        return this.model.findOneAndUpdate(
+        const result = await this.model.findOneAndUpdate(
             { game_id: data.game_id, character_id: data.character_id, target_skill_level: data.target_skill_level, type: 'character', patch_version: data.patch_version },
             { $set: { ...data, is_current_patch: true } },
             { upsert: true, new: true }
-        ).exec() as Promise<ITheoryDocumentDocument>;
+        ).exec();
+        return result as unknown as ITheoryDocumentDocument;
     }
 
     async upsertMatchupTheory(data: Partial<ITheoryDocumentDocument>): Promise<ITheoryDocumentDocument> {
@@ -36,11 +37,12 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
             { game_id: data.game_id, character_a: charA, character_b: charB, target_skill_level: data.target_skill_level, type: 'matchup' },
             { $set: { is_current_patch: false } }
         ).exec();
-        return this.model.findOneAndUpdate(
+        const result = await this.model.findOneAndUpdate(
             { game_id: data.game_id, character_a: charA, character_b: charB, target_skill_level: data.target_skill_level, type: 'matchup', patch_version: data.patch_version },
             { $set: { ...data, character_a: charA, character_b: charB, is_current_patch: true } },
             { upsert: true, new: true }
-        ).exec() as Promise<ITheoryDocumentDocument>;
+        ).exec();
+        return result as unknown as ITheoryDocumentDocument;
     }
 
     async getCharacterTheory(gameId: string, characterId: string, skillLevel?: string): Promise<ITheoryDocumentDocument | null> {
