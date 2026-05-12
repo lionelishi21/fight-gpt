@@ -57,7 +57,19 @@ export async function streamYoutubeToGcs(
       ytDlpArgs.push(youtubeUrl);
       
       let stderrOutput = '';
-      const ytDlp = spawn('yt-dlp', ytDlpArgs);
+      const ytDlpPath = '/usr/local/bin/yt-dlp';
+      // Fallback to 'yt-dlp' if absolute path doesn't exist (for local dev)
+      const command = fs.existsSync(ytDlpPath) ? ytDlpPath : 'yt-dlp';
+      
+      const ytDlp = spawn(command, ytDlpArgs);
+
+      // Set a 10-minute timeout for the download process
+      const timeoutMinutes = 10;
+      const timeout = setTimeout(() => {
+        Logger.error(`[YoutubeDownloader] yt-dlp timed out after ${timeoutMinutes} minutes for ${youtubeUrl}`);
+        ytDlp.kill('SIGKILL');
+        reject(new Error(`Download timed out after ${timeoutMinutes} minutes`));
+      }, timeoutMinutes * 60 * 1000);
 
       ytDlp.stdout.pipe(writeStream);
 
@@ -71,28 +83,32 @@ export async function streamYoutubeToGcs(
       });
 
       writeStream.on('finish', () => {
+        clearTimeout(timeout);
         Logger.info(`[YoutubeDownloader] Successfully streamed ${youtubeUrl} to GCS`);
         resolve(`gs://${bucketName}/${fileName}`);
       });
 
       writeStream.on('error', (err) => {
+        clearTimeout(timeout);
         Logger.error(`[YoutubeDownloader] GCS WriteStream error:`, err);
         ytDlp.kill();
         reject(err);
       });
 
       ytDlp.on('error', (err) => {
+        clearTimeout(timeout);
         Logger.error(`[YoutubeDownloader] yt-dlp process error:`, err);
         reject(err);
       });
 
       ytDlp.on('close', (code) => {
+        clearTimeout(timeout);
         if (code !== 0 && code !== null) {
           Logger.error(`[YoutubeDownloader] yt-dlp exited with code ${code}`);
-          if (stderrOutput.includes('Sign in to confirm you’re not a bot')) {
-            reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing or expired.'));
+          if (stderrOutput.includes('Sign in to confirm you’re not a bot') || stderrOutput.includes('The following content is not available on this app')) {
+            reject(new YoutubeBotBlockError('YouTube blocked the request. The cookies.txt file may be missing, expired, or invalid.'));
           } else {
-            reject(new Error(`yt-dlp exited with code ${code}`));
+            reject(new Error(`yt-dlp exited with code ${code}: ${stderrOutput.split('\n').pop()}`));
           }
         }
       });
