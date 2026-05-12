@@ -165,6 +165,13 @@ class AdminService extends BaseService_1.BaseService {
             job.retry_count = (job.retry_count || 0) + 1;
             job.error_message = undefined;
             await job.save();
+            // PUSH TO QUEUE
+            await QueueService_1.queueService.addAnalysisJob({
+                job_id: job.job_id,
+                game_id: job.game_id,
+                youtube_url: job.youtube_url,
+                video_title: job.video_title
+            });
             return { success: true, data: true };
         }
         catch (error) {
@@ -192,6 +199,12 @@ class AdminService extends BaseService_1.BaseService {
                 status: 'pending'
             });
             await newJob.save();
+            // PUSH TO QUEUE
+            await QueueService_1.queueService.addAnalysisJob({
+                job_id: jobId,
+                game_id: gameId,
+                youtube_url: normalizedUrl
+            });
             return { success: true, data: newJob };
         }
         catch (error) {
@@ -208,7 +221,7 @@ class AdminService extends BaseService_1.BaseService {
                     skipped++;
                     continue;
                 }
-                await new IngestionJob_1.IngestionJob({
+                const newJob = new IngestionJob_1.IngestionJob({
                     job_id: `seed_${Date.now()}_${queued}`,
                     game_id: gameId,
                     youtube_url: url,
@@ -216,7 +229,14 @@ class AdminService extends BaseService_1.BaseService {
                     source: 'manual',
                     status: 'pending',
                     retry_count: 0,
-                }).save();
+                });
+                await newJob.save();
+                // PUSH TO QUEUE
+                await QueueService_1.queueService.addAnalysisJob({
+                    job_id: newJob.job_id,
+                    game_id: gameId,
+                    youtube_url: url
+                });
                 queued++;
             }
             catch {

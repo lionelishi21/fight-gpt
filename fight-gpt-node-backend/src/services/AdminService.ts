@@ -195,6 +195,14 @@ export class AdminService extends BaseService implements IAdminService {
             job.error_message = undefined;
             await job.save();
 
+            // PUSH TO QUEUE
+            await queueService.addAnalysisJob({
+                job_id: job.job_id,
+                game_id: job.game_id,
+                youtube_url: job.youtube_url,
+                video_title: job.video_title
+            });
+
             return { success: true, data: true };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to retry job' };
@@ -224,6 +232,14 @@ export class AdminService extends BaseService implements IAdminService {
             });
 
             await newJob.save();
+
+            // PUSH TO QUEUE
+            await queueService.addAnalysisJob({
+                job_id: jobId,
+                game_id: gameId,
+                youtube_url: normalizedUrl
+            });
+
             return { success: true, data: newJob };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger job' };
@@ -237,7 +253,7 @@ export class AdminService extends BaseService implements IAdminService {
             try {
                 const existing = await IngestionJob.findOne({ youtube_url: url });
                 if (existing) { skipped++; continue; }
-                await new IngestionJob({
+                const newJob = new IngestionJob({
                     job_id: `seed_${Date.now()}_${queued}`,
                     game_id: gameId,
                     youtube_url: url,
@@ -245,7 +261,16 @@ export class AdminService extends BaseService implements IAdminService {
                     source: 'manual',
                     status: 'pending',
                     retry_count: 0,
-                }).save();
+                });
+                await newJob.save();
+
+                // PUSH TO QUEUE
+                await queueService.addAnalysisJob({
+                    job_id: newJob.job_id,
+                    game_id: gameId,
+                    youtube_url: url
+                });
+
                 queued++;
             } catch {
                 skipped++;
