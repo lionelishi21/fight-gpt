@@ -48,10 +48,9 @@ export async function streamYoutubeToGcs(
       // Use TV and iOS clients which often skip the n-challenge puzzles
       ytDlpArgs.push('--extractor-args', 'youtube:player_client=tv,ios');
 
-      // Use cookies if provided in environment or fallback to uploads/cookies.txt
-      const defaultCookiePath = path.resolve(process.cwd(), 'uploads/cookies.txt');
-      const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
-
+      // TEMPORARY: Disable cookies to force yt-dlp to use TV/iOS clients.
+      // This bypasses the 'web' client requirement for JavaScript puzzle solving.
+      /*
       if (fs.existsSync(cookiePath)) {
         Logger.info(`[YoutubeDownloader] Using cookies found at: ${cookiePath}`);
         ytDlpArgs.push('--cookies', cookiePath);
@@ -60,6 +59,7 @@ export async function streamYoutubeToGcs(
         // Fallback: try to use the android client which sometimes bypasses basic bot checks
         ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
       }
+      */
 
       ytDlpArgs.push('--no-check-certificates');
       ytDlpArgs.push('--prefer-free-formats');
