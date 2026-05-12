@@ -39,7 +39,6 @@ const storage_1 = require("@google-cloud/storage");
 const BaseService_1 = require("./BaseService");
 const VersionResolver_1 = require("../helpers/VersionResolver");
 const app_1 = require("../config/app");
-const youtubeDownloader_1 = require("../helpers/youtubeDownloader");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 /**
@@ -81,27 +80,17 @@ class AiService extends BaseService_1.BaseService {
             if (!request.video_path && !request.youtube_url) {
                 throw new Error('Video path or YouTube URL is required for analysis');
             }
-            // If a local file is provided, upload to GCS
+            // If a local file is provided, upload to GCS first
             if (request.video_path) {
                 fileName = `analysis/${Date.now()}-${path.basename(request.video_path)}`;
                 gcsUri = await this.uploadToGcs(request.video_path, fileName);
             }
-            else if (request.youtube_url) {
-                // Stream YouTube video directly to GCS via Playwright browser recording
-                // The downloader will convert the fileName to .webm automatically
-                fileName = `analysis/${Date.now()}-youtube.mp4`;
-                if (!app_1.AppConfig.GOOGLE_STORAGE_BUCKET) {
-                    throw new Error('GOOGLE_STORAGE_BUCKET is required for video analysis');
-                }
-                gcsUri = await (0, youtubeDownloader_1.streamYoutubeToGcs)(request.youtube_url, this.storage, app_1.AppConfig.GOOGLE_STORAGE_BUCKET, fileName);
-                // Update fileName to match the actual .webm file created by Playwright
-                if (gcsUri.endsWith('.webm')) {
-                    fileName = fileName.replace('.mp4', '.webm');
-                }
-            }
-            // Generate analysis using the GCS URI
+            // For YouTube URLs: pass directly to Gemini — it supports YouTube URLs natively.
+            // This completely bypasses any download/bot-detection issues.
+            // gcsUri stays null; generateAnalysis will use request.youtube_url as fileUri.
+            // Generate analysis — Gemini will use YouTube URL or GCS URI
             const result = await this.generateAnalysis(gcsUri, request);
-            // Cleanup GCS file after analysis
+            // Cleanup GCS file after analysis (only applies to local file uploads)
             if (fileName) {
                 await this.deleteFromGcs(fileName).catch(e => console.warn('[AiService] GCS Cleanup failed:', e));
             }
@@ -154,7 +143,9 @@ class AiService extends BaseService_1.BaseService {
             fullPrompt += `\n\nVideo Title: ${request.video_title}`;
         }
         const contentParts = [];
-        // Pass the GCS URI as a fileData Part to Vertex AI so it actually watches the video
+        // Pass video to Gemini:
+        // 1. GCS URI (for local file uploads)
+        // 2. YouTube URL directly as fileUri — Gemini supports this natively, no download needed!
         if (videoUri && videoUri.startsWith('gs://')) {
             const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
             contentParts.push({
@@ -165,9 +156,12 @@ class AiService extends BaseService_1.BaseService {
             });
         }
         else if (request.youtube_url) {
-            // Fallback (should not be reached if downloader succeeded)
+            // Pass YouTube URL directly — Gemini fetches it internally via Google's infrastructure
+            // This completely bypasses bot detection, cookies, and IP blocks.
             contentParts.push({
-                text: `Video source: ${request.youtube_url}`
+                fileData: {
+                    fileUri: request.youtube_url
+                }
             });
         }
         contentParts.push({ text: fullPrompt });
