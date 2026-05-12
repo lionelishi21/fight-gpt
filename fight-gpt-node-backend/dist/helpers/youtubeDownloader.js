@@ -90,16 +90,30 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         });
         logger_1.Logger.info(`[YoutubeDownloader] Navigating to ${youtubeUrl}`);
-        await page.goto(youtubeUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        // Dismiss cookie/consent dialogs if present
-        try {
-            const consentBtn = page.locator('button:has-text("Accept all"), button:has-text("I agree"), button:has-text("Accept")').first();
-            if (await consentBtn.isVisible({ timeout: 5000 })) {
-                await consentBtn.click();
-                logger_1.Logger.info('[YoutubeDownloader] Dismissed consent dialog');
+        await page.goto(youtubeUrl, { waitUntil: 'load', timeout: 60000 });
+        // Log page title to see what YouTube is actually showing
+        const pageTitle = await page.title();
+        logger_1.Logger.info(`[YoutubeDownloader] Page title: "${pageTitle}"`);
+        // Dismiss cookie/consent/sign-in dialogs if present — try multiple selectors
+        const consentSelectors = [
+            'button:has-text("Accept all")',
+            'button:has-text("I agree")',
+            'button:has-text("Accept")',
+            '[aria-label="Accept all"]',
+            'tp-yt-paper-button:has-text("AGREE")',
+        ];
+        for (const sel of consentSelectors) {
+            try {
+                const btn = page.locator(sel).first();
+                if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await btn.click();
+                    logger_1.Logger.info(`[YoutubeDownloader] Dismissed dialog via: ${sel}`);
+                    await page.waitForTimeout(1500);
+                    break;
+                }
             }
+            catch { /* continue */ }
         }
-        catch { /* No consent dialog, continue */ }
         // Wait for the video element to be present
         await page.waitForSelector('video', { timeout: 30000 });
         // Inject CSS to maximize the video and hide all YouTube UI chrome
@@ -156,7 +170,24 @@ async function streamYoutubeToGcs(youtubeUrl, storage, bucketName, fileName) {
         });
         logger_1.Logger.info(`[YoutubeDownloader] Video duration: ${Math.round(durationSec)}s — waiting for playback to complete`);
         if (durationSec <= 0) {
-            throw new YoutubeBotBlockError('Could not detect video duration. The video may be private, deleted, age-restricted, or geo-blocked.');
+            // Take a screenshot so we can diagnose what YouTube is showing
+            const screenshotPath = path.join(tempDir, 'debug-screenshot.png');
+            try {
+                await page.screenshot({ path: screenshotPath, fullPage: true });
+                const debugInfo = await page.evaluate(() => ({
+                    title: document.title,
+                    url: window.location.href,
+                    videoSrc: document.querySelector('video')?.src || 'none',
+                    videoReadyState: document.querySelector('video')?.readyState ?? -1,
+                    bodyText: document.body?.innerText?.substring(0, 300),
+                }));
+                logger_1.Logger.error(`[YoutubeDownloader] Duration=0 debug info: ${JSON.stringify(debugInfo)}`);
+                logger_1.Logger.info(`[YoutubeDownloader] Screenshot saved to: ${screenshotPath}`);
+            }
+            catch (screenshotErr) {
+                logger_1.Logger.warn('[YoutubeDownloader] Could not take debug screenshot');
+            }
+            throw new YoutubeBotBlockError('Could not detect video duration. Check the debug screenshot in the logs for what YouTube is showing.');
         }
         // Wait for the video to finish playing (duration + 10s buffer)
         const waitMs = Math.min((durationSec + 10) * 1000, TIMEOUT_MS);
