@@ -48,11 +48,16 @@ export async function streamYoutubeToGcs(
       const cookiePath = process.env.YTDL_COOKIES_FILE || defaultCookiePath;
 
       if (fs.existsSync(cookiePath)) {
+        Logger.info(`[YoutubeDownloader] Using cookies found at: ${cookiePath}`);
         ytDlpArgs.push('--cookies', cookiePath);
       } else {
+        Logger.warn(`[YoutubeDownloader] No cookies.txt found at ${cookiePath}. Falling back to android client.`);
         // Fallback: try to use the android client which sometimes bypasses basic bot checks
         ytDlpArgs.push('--extractor-args', 'youtube:player_client=android');
       }
+
+      // Add a common User-Agent to look more like a real browser
+      ytDlpArgs.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
 
       ytDlpArgs.push(youtubeUrl);
       
