@@ -16,14 +16,15 @@ export class LobbyService {
      * Get or create a lobby for a specific game
      */
     public async ensureLobby(gameId: string, name: string): Promise<ILobby> {
-        let lobby = await Lobby.findOne({ game_id: gameId });
+        const normalizedId = gameId.toLowerCase();
+        let lobby = await Lobby.findOne({ game_id: normalizedId });
         if (!lobby) {
             lobby = await Lobby.create({
-                game_id: gameId,
+                game_id: normalizedId,
                 name: name,
                 description: `Tactical comms for ${name} operators.`,
             });
-            Logger.info(`LOBBY_SERVICE: Created new lobby for ${gameId}`);
+            Logger.info(`LOBBY_SERVICE: Created new lobby for ${normalizedId}`);
         }
         return lobby;
     }

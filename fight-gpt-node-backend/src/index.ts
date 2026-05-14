@@ -412,7 +412,7 @@ export class App {
         
         // Broadcast user joined
         lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
-        Logger.info(`DOJO_LOBBY: User ${userId} joined room ${lobbyId}`);
+        Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId}`);
       });
 
       socket.on('send_message', async (data: { 
@@ -421,9 +421,11 @@ export class App {
         content: string; 
         intelLink?: any 
       }) => {
+        Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}: ${data.content.substring(0, 20)}...`);
         const message = await this.lobbyService.saveMessage(data);
         if (message) {
           lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+          Logger.info(`DOJO_LOBBY: Broadcasted new_message to lobby_${data.lobbyId}`);
         }
       });
 
