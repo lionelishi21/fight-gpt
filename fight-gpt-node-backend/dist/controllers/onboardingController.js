@@ -9,7 +9,9 @@ const User_1 = __importDefault(require("../models/User"));
 const UserGame_1 = __importDefault(require("../models/UserGame"));
 const Game_1 = require("../models/Game");
 const Character_1 = require("../models/Character");
+const EmailService_1 = require("../services/EmailService");
 class OnboardingController extends BaseController_1.BaseController {
+    emailService = new EmailService_1.EmailService();
     /**
      * Complete onboarding step: save game and character selection
      */
@@ -95,6 +97,15 @@ class OnboardingController extends BaseController_1.BaseController {
                 success: true,
                 message: 'Onboarding completed successfully with Slot 0 initialized',
             });
+            // 5. Send Welcome Email
+            try {
+                if (user && user.email) {
+                    await this.emailService.sendWelcomeEmail(user.email, user.name || 'Fighter');
+                }
+            }
+            catch (emailErr) {
+                console.error('[OnboardingController] Welcome email failed:', emailErr);
+            }
         }
         catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Onboarding failed', 500);

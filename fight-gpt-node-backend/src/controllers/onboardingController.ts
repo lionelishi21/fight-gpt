@@ -4,8 +4,11 @@ import User from '../models/User';
 import UserGame from '../models/UserGame';
 import { Game } from '../models/Game';
 import { Character } from '../models/Character';
+import { EmailService } from '../services/EmailService';
 
 export class OnboardingController extends BaseController {
+    private emailService = new EmailService();
+
     /**
      * Complete onboarding step: save game and character selection
      */
@@ -100,6 +103,15 @@ export class OnboardingController extends BaseController {
                 success: true,
                 message: 'Onboarding completed successfully with Slot 0 initialized',
             });
+
+            // 5. Send Welcome Email
+            try {
+                if (user && user.email) {
+                    await this.emailService.sendWelcomeEmail(user.email, user.name || 'Fighter');
+                }
+            } catch (emailErr) {
+                console.error('[OnboardingController] Welcome email failed:', emailErr);
+            }
 
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Onboarding failed', 500);

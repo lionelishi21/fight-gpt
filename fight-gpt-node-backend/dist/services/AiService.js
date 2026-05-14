@@ -231,7 +231,8 @@ class AiService extends BaseService_1.BaseService {
     }
     async generateEmbedding(text) {
         try {
-            const embedModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+            // Use gemini-embedding-001 as confirmed by model listing
+            const embedModel = this.genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
             const embedResult = await embedModel.embedContent(text);
             return embedResult.embedding.values;
         }

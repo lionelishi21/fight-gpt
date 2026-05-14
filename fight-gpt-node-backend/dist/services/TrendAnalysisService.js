@@ -1,6 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrendAnalysisService = void 0;
+const node_cron_1 = __importDefault(require("node-cron"));
+const logger_1 = require("../helpers/logger");
 class TrendAnalysisService {
     analysisRepository;
     notificationService;
@@ -9,6 +14,16 @@ class TrendAnalysisService {
         this.analysisRepository = analysisRepository;
         this.notificationService = notificationService;
         this.gameMetadataService = gameMetadataService;
+    }
+    /**
+     * Start the Trend Analysis scheduler (runs daily at 05:00 UTC)
+     */
+    startScheduler() {
+        node_cron_1.default.schedule('0 5 * * *', async () => {
+            logger_1.Logger.info('[TrendAnalysisService] Running nightly meta-shift analysis...');
+            await this.analyzeMetaShifts();
+        });
+        logger_1.Logger.info('[TrendAnalysisService] Trend Analysis Scheduler started (05:00 daily)');
     }
     /**
      * Run nightly meta-shift analysis

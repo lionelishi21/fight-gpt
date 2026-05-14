@@ -3,8 +3,85 @@ import Mission from '../models/Mission';
 import UserMission from '../models/UserMission';
 import { TimelineEvent } from '../types';
 import mongoose from 'mongoose';
+import cron from 'node-cron';
+import { Logger } from '../helpers/logger';
 
 export class TrainingService {
+    private missionTemplates = [
+        { title: 'ANTI_AIR_MASTER', goal: 'Land 5 clean anti-airs in a single match.', reward: 150 },
+        { title: 'PERFECT_PARRY_PRACTICE', goal: 'Perform 3 Perfect Parries during match pressure.', reward: 100 },
+        { title: 'COMBO_SPECIALIST', goal: 'Execute a full Drive Rush combo in a real match.', reward: 200 },
+        { title: 'DEFENSIVE_WALL', goal: 'Successfully tech 3 throw attempts.', reward: 100 },
+        { title: 'WHIFF_PUNISH_GOD', goal: 'Punish 3 heavy whiffs with a medium or heavy button.', reward: 150 },
+        { title: 'RESOURCE_MANAGER', goal: 'Win a round without entering Burnout.', reward: 150 },
+        { title: 'CHIP_DAMAGE_THREAT', goal: 'Win a round using chip damage from a Super Art.', reward: 100 },
+    ];
+
+    /**
+     * Start the Daily Mission scheduler (runs at 00:00 daily)
+     */
+    public startScheduler(): void {
+        cron.schedule('0 0 * * *', async () => {
+            Logger.info('[TrainingService] Running daily mission assignment cycle...');
+            await this.generateDailyMissionsForAllUsers();
+        });
+        Logger.info('[TrainingService] Daily Mission Scheduler started (00:00 daily)');
+    }
+
+    /**
+     * Generate and assign new daily missions to all active users
+     */
+    public async generateDailyMissionsForAllUsers(): Promise<void> {
+        try {
+            const User = mongoose.model('User');
+            const users = await User.find({ onboardingCompleted: true }).exec();
+            
+            Logger.info(`[TrainingService] Assigning missions to ${users.length} users...`);
+
+            for (const user of users) {
+                await this.assignDailyMissionsToUser(user._id);
+            }
+            
+            Logger.info('[TrainingService] Daily mission assignment complete.');
+        } catch (error) {
+            Logger.error('[TrainingService] Failed to assign daily missions', error);
+        }
+    }
+
+    private async assignDailyMissionsToUser(userId: mongoose.Types.ObjectId): Promise<void> {
+        try {
+            // 1. Clear old pending daily missions (keep completed ones)
+            await UserMission.deleteMany({
+                user: userId,
+                status: 'PENDING',
+                type: 'DAILY' // We should tag these
+            });
+
+            // 2. Pick 3 random templates
+            const shuffled = [...this.missionTemplates].sort(() => 0.5 - Math.random());
+            const selected = shuffled.slice(0, 3);
+
+            for (const template of selected) {
+                const mission = await Mission.create({
+                    title: template.title,
+                    description: template.goal,
+                    type: 'DAILY',
+                    difficulty: 'MEDIUM',
+                    reward: { xp: template.reward }
+                });
+
+                await UserMission.create({
+                    user: userId,
+                    mission: mission._id,
+                    status: 'AVAILABLE',
+                    type: 'DAILY'
+                });
+            }
+        } catch (e) {
+            Logger.error(`[TrainingService] Failed to assign missions to user ${userId}`, e);
+        }
+    }
+
     /**
      * Parse an analysis and generate personalized training drills (Missions)
      */

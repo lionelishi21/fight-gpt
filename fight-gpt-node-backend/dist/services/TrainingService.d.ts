@@ -1,6 +1,16 @@
 import { IAnalysis } from '../models/Analysis';
 import mongoose from 'mongoose';
 export declare class TrainingService {
+    private missionTemplates;
+    /**
+     * Start the Daily Mission scheduler (runs at 00:00 daily)
+     */
+    startScheduler(): void;
+    /**
+     * Generate and assign new daily missions to all active users
+     */
+    generateDailyMissionsForAllUsers(): Promise<void>;
+    private assignDailyMissionsToUser;
     /**
      * Parse an analysis and generate personalized training drills (Missions)
      */

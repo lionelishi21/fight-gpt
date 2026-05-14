@@ -1,8 +1,4 @@
 import { Router } from 'express';
-import { ArtistOnboardingRoutes } from './artistOnboardingRoutes';
-import { AdminArtistRoutes } from './adminArtistRoutes';
-import { ArtistOnboardingController } from '../controllers/ArtistOnboardingController';
-import { AdminArtistController } from '../controllers/AdminArtistController';
 import { AnalysisRoutes } from './analysisRoutes';
 import { HealthRoutes } from './healthRoutes';
 import { CharacterRoutes } from './characterRoutes';
@@ -72,8 +68,6 @@ export class Routes {
   private adminRoutes: AdminRoutes | null;
   private paymentRoutes: PaymentRoutes;
   private engagementRoutes: EngagementRoutes;
-  private artistOnboardingRoutes: ArtistOnboardingRoutes | null = null;
-  private adminArtistRoutes: AdminArtistRoutes | null = null;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -249,15 +243,6 @@ export class Routes {
     return this.router;
   }
 
-  public mountArtistRoutes(
-    artistController: ArtistOnboardingController,
-    adminArtistController: AdminArtistController
-  ): void {
-    this.artistOnboardingRoutes = new ArtistOnboardingRoutes(artistController);
-    this.adminArtistRoutes = new AdminArtistRoutes(adminArtistController);
-    this.router.use('/artist', this.artistOnboardingRoutes.getRouter());
-    this.router.use('/admin/artists', this.adminArtistRoutes.getRouter());
-  }
 
   public getMetaRoutes(): MetaRoutes | null {
     return this.metaRoutes;

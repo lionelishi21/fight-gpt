@@ -39,6 +39,7 @@ class AppConfig {
     static get GEMINI_MODEL() { return process.env.GEMINI_MODEL || 'gemini-1.5-flash'; }
     static get STRIPE_SECRET_KEY() { return process.env.STRIPE_SECRET_KEY || ''; }
     static get STRIPE_WEBHOOK_SECRET() { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
+    static get RESEND_API_KEY() { return process.env.RESEND_API_KEY || ''; }
     static get APP_URL() { return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; }
     static get GOOGLE_CLOUD_PROJECT() { return process.env.GOOGLE_CLOUD_PROJECT || ''; }
     static get GOOGLE_CLOUD_LOCATION() { return process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'; }

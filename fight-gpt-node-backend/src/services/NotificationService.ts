@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 export class NotificationService extends BaseService {
     constructor(
         private readonly notificationRepository: INotificationRepository,
-        private readonly emailService?: any // Injected to avoid circular dep if needed
+        private readonly emailService?: any
     ) {
         super();
     }
@@ -36,7 +36,24 @@ export class NotificationService extends BaseService {
                 isRead: false
             });
 
-            // Handle push notifications/emails if necessary in the future
+            // Trigger Email if Service is available
+            if (this.emailService) {
+                try {
+                    const User = (await import('../models/User')).default;
+                    const user = await User.findById(userId).select('email').lean();
+                    if (user && user.email) {
+                        await this.emailService.sendNotificationEmail(
+                            user.email,
+                            payload.title,
+                            payload.description,
+                            payload.link
+                        );
+                    }
+                } catch (e) {
+                    console.error('[NotificationService] Email dispatch failed:', e);
+                }
+            }
+
             console.log(`[NotificationService] Notified user ${userId}: ${payload.title}`);
         } catch (error) {
             console.error('[NotificationService] Failed to create notification:', error);

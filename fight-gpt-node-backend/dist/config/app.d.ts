@@ -16,6 +16,7 @@ export declare class AppConfig {
     static get GEMINI_MODEL(): string;
     static get STRIPE_SECRET_KEY(): string;
     static get STRIPE_WEBHOOK_SECRET(): string;
+    static get RESEND_API_KEY(): string;
     static get APP_URL(): string;
     static get GOOGLE_CLOUD_PROJECT(): string;
     static get GOOGLE_CLOUD_LOCATION(): string;

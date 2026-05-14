@@ -42,8 +42,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 class NotificationService extends BaseService_1.BaseService {
     notificationRepository;
     emailService;
-    constructor(notificationRepository, emailService // Injected to avoid circular dep if needed
-    ) {
+    constructor(notificationRepository, emailService) {
         super();
         this.notificationRepository = notificationRepository;
         this.emailService = emailService;
@@ -60,7 +59,19 @@ class NotificationService extends BaseService_1.BaseService {
                 payload,
                 isRead: false
             });
-            // Handle push notifications/emails if necessary in the future
+            // Trigger Email if Service is available
+            if (this.emailService) {
+                try {
+                    const User = (await Promise.resolve().then(() => __importStar(require('../models/User')))).default;
+                    const user = await User.findById(userId).select('email').lean();
+                    if (user && user.email) {
+                        await this.emailService.sendNotificationEmail(user.email, payload.title, payload.description, payload.link);
+                    }
+                }
+                catch (e) {
+                    console.error('[NotificationService] Email dispatch failed:', e);
+                }
+            }
             console.log(`[NotificationService] Notified user ${userId}: ${payload.title}`);
         }
         catch (error) {

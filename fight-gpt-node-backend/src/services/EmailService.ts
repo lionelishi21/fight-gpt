@@ -1,248 +1,142 @@
 import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder');
-
-const FROM_EMAIL = process.env.EMAIL_FROM || 'MetaPunish <noreply@metapunish.com>';
-const APP_URL = process.env.APP_URL || 'https://metapunish.com';
+import { AppConfig } from '../config/app';
+import { Logger } from '../helpers/logger';
 
 export class EmailService {
-    async sendAdminInviteEmail(to: string, inviterName: string, inviteUrl: string, promoCode?: string): Promise<void> {
-        if (!process.env.RESEND_API_KEY) {
-            console.warn('[EmailService] RESEND_API_KEY not set — skipping admin invite email');
-            return;
-        }
-        try {
-            await resend.emails.send({
-                from: FROM_EMAIL,
-                to,
-                subject: `${inviterName} invited you to MetaPunish as Admin`,
-                html: this.buildAdminInviteHtml(inviterName, inviteUrl, promoCode),
-            });
-        } catch (error) {
-            console.error('[EmailService] Failed to send admin invite email:', error);
+    private resend: Resend | null = null;
+    private fromEmail = 'MetaPunish <intelligence@fightingames.online>';
+
+    constructor() {
+        if (AppConfig.RESEND_API_KEY) {
+            this.resend = new Resend(AppConfig.RESEND_API_KEY);
+        } else {
+            Logger.warn('[EmailService] RESEND_API_KEY not set. Emails will be logged but not sent.');
         }
     }
 
-    async sendReferralInviteEmail(to: string, inviterName: string, inviteUrl: string): Promise<void> {
-        if (!process.env.RESEND_API_KEY) {
-            console.warn('[EmailService] RESEND_API_KEY not set — skipping referral invite email');
-            return;
-        }
-        try {
-            await resend.emails.send({
-                from: FROM_EMAIL,
-                to,
-                subject: `${inviterName} invited you to MetaPunish`,
-                html: this.buildReferralInviteHtml(inviterName, inviteUrl),
-            });
-        } catch (error) {
-            console.error('[EmailService] Failed to send referral invite email:', error);
-        }
-    }
-
-    private buildAdminInviteHtml(inviterName: string, inviteUrl: string, promoCode?: string): string {
-        return `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <tr><td style="padding-bottom:32px;text-align:left;">
-          <span style="display:inline-block;background-color:#f43f5e;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">ADMIN ACCESS</span>
-        </td></tr>
-        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #f43f5e;padding:40px;">
-          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#f43f5e;">ADMIN INVITE</h1>
-          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">${inviterName} is granting you admin access</p>
-          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">You've been invited to join MetaPunish as an administrator. This gives you full access to Mission Control — user management, game registry, ingestion queue, and system stats.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This invite expires in 48 hours.</p>
-          ${promoCode ? `<p style="margin:0 0 24px;padding:12px 16px;background:#111;border:1px solid rgba(244,63,94,0.3);font-size:13px;color:#ffffff;">Beta promo code: <strong style="color:#f43f5e;letter-spacing:0.1em;">${promoCode}</strong> — apply at checkout for your discount.</p>` : ''}
-          <a href="${inviteUrl}" style="display:inline-block;background-color:#f43f5e;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ACCEPT ADMIN INVITE →</a>
-        </td></tr>
-        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
-    }
-
-    private buildReferralInviteHtml(inviterName: string, inviteUrl: string): string {
-        return `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <tr><td style="padding-bottom:32px;text-align:left;">
-          <span style="display:inline-block;background-color:#06b6d4;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#000000;">INVITED BY ${inviterName.toUpperCase()}</span>
-        </td></tr>
-        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #06b6d4;padding:40px;">
-          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#06b6d4;">JOIN THE ARENA</h1>
-          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">${inviterName} wants you on MetaPunish</p>
-          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">Get real-time meta intelligence, AI match analysis, and character theory for every major fighting game. ${inviterName} thinks you'd crush it here.</p>
-          <a href="${inviteUrl}" style="display:inline-block;background-color:#06b6d4;color:#000000;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ENTER THE META →</a>
-        </td></tr>
-        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
-    }
-
-    async sendWelcomeEmail(to: string, name: string): Promise<void> {
-        if (!process.env.RESEND_API_KEY) {
-            console.warn('[EmailService] RESEND_API_KEY not set — skipping welcome email');
-            return;
+    private async send(to: string, subject: string, html: string): Promise<boolean> {
+        if (!this.resend) {
+            Logger.info(`[EmailService] Simulation: To: ${to}, Subject: ${subject}`);
+            return true;
         }
 
         try {
-            await resend.emails.send({
-                from: FROM_EMAIL,
+            const { error } = await this.resend.emails.send({
+                from: this.fromEmail,
                 to,
-                subject: 'Welcome to MetaPunish — Your Meta Intel Awaits',
-                html: this.buildWelcomeHtml(name),
+                subject,
+                html,
             });
-        } catch (error) {
-            // Non-fatal — log but don't throw so registration still succeeds
-            console.error('[EmailService] Failed to send welcome email:', error);
+
+            if (error) {
+                Logger.error('[EmailService] Resend error:', error);
+                return false;
+            }
+
+            return true;
+        } catch (err) {
+            Logger.error('[EmailService] Failed to send email:', err);
+            return false;
         }
     }
 
-    async sendRivalWatchAlert(to: string, userName: string, rivalName: string, gameName: string, analysisUrl: string): Promise<void> {
-        if (!process.env.RESEND_API_KEY) {
-            console.warn('[EmailService] RESEND_API_KEY not set — skipping rival watch alert');
-            return;
-        }
-
-        try {
-            await resend.emails.send({
-                from: FROM_EMAIL,
-                to,
-                subject: `RIVAL SPOTTED: ${rivalName} is back in the arena`,
-                html: this.buildRivalWatchHtml(userName, rivalName, gameName, analysisUrl),
-            });
-        } catch (error) {
-            console.error('[EmailService] Failed to send rival watch alert:', error);
-        }
+    /**
+     * Welcome email for new users after onboarding
+     */
+    async sendWelcomeEmail(to: string, name: string): Promise<boolean> {
+        const subject = `Welcome to the Dojo, ${name}`;
+        const html = `
+            <div style="font-family: 'Space Grotesk', sans-serif; background-color: #000; color: #fff; padding: 40px;">
+                <h1 style="color: #F43F5E; font-style: italic; text-transform: uppercase;">Uplink Established.</h1>
+                <p>Welcome, <strong>${name}</strong>. You have been successfully onboarded into the MetaPunish Intelligence Network.</p>
+                <p>Your tactical dashboard is now active. We are scouting tournaments and pro matches to provide you with the most accurate frame data and theory updates.</p>
+                <div style="border: 1px solid #F43F5E; padding: 20px; margin: 20px 0;">
+                    <h3 style="margin-top: 0;">Initial Protocols:</h3>
+                    <ul>
+                        <li>Daily Missions are assigned at 00:00 UTC.</li>
+                        <li>Pro Scout reports refresh every 6 hours.</li>
+                        <li>Character Theory updates daily at 02:00 UTC.</li>
+                    </ul>
+                </div>
+                <a href="${AppConfig.APP_URL}/dashboard" style="background-color: #F43F5E; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: bold; display: inline-block;">ENTER THE DOJO</a>
+                <p style="margin-top: 40px; font-size: 10px; color: #666;">METAPUNISH INTELLIGENCE SUITE v4.0.0</p>
+            </div>
+        `;
+        return this.send(to, subject, html);
     }
 
-    private buildWelcomeHtml(name: string): string {
-        return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to MetaPunish</title>
-</head>
-<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-
-          <!-- Header -->
-          <tr>
-            <td style="padding-bottom:32px;text-align:left;">
-              <span style="display:inline-block;background-color:#f43f5e;padding:6px 16px;transform:skewX(-10deg);font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">
-                SYSTEM ACCESS
-              </span>
-            </td>
-          </tr>
-
-          <!-- Card -->
-          <tr>
-            <td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #f43f5e;padding:40px;">
-
-              <h1 style="margin:0 0 8px;font-size:32px;font-weight:800;text-transform:uppercase;font-style:italic;letter-spacing:-0.01em;line-height:1.1;color:#f43f5e;">
-                ACCOUNT INITIALIZED
-              </h1>
-              <p style="margin:0 0 32px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">
-                Welcome to the arena, ${name}
-              </p>
-
-              <p style="margin:0 0 24px;font-size:15px;color:#ffffff;line-height:1.6;">
-                Your MetaPunish profile is live. You now have access to real-time meta intelligence, character theory, and AI-powered match analysis for the FGC.
-              </p>
-
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;width:100%;">
-                <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #1a1a1a;">
-                    <span style="font-size:18px;margin-right:12px;">📈</span>
-                    <span style="font-size:13px;font-weight:700;text-transform:uppercase;color:#06b6d4;">Meta Intelligence</span>
-                    <span style="display:block;margin-left:36px;font-size:12px;color:#94a3b8;margin-top:2px;">Know what's strong before you queue</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #1a1a1a;">
-                    <span style="font-size:18px;margin-right:12px;">⚔️</span>
-                    <span style="font-size:13px;font-weight:700;text-transform:uppercase;color:#06b6d4;">Character Theory</span>
-                    <span style="display:block;margin-left:36px;font-size:12px;color:#94a3b8;margin-top:2px;">Deep matchup breakdowns from tournament data</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:12px 0;">
-                    <span style="font-size:18px;margin-right:12px;">🎮</span>
-                    <span style="font-size:13px;font-weight:700;text-transform:uppercase;color:#06b6d4;">Match Analysis</span>
-                    <span style="display:block;margin-left:36px;font-size:12px;color:#94a3b8;margin-top:2px;">AI coaching from your own footage</span>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA -->
-              <table cellpadding="0" cellspacing="0">
-                <tr>
-                  <td>
-                    <a href="${APP_URL}/onboarding" style="display:inline-block;background-color:#f43f5e;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;clip-path:polygon(8% 0, 100% 0, 92% 100%, 0 100%);">
-                      ENTER THE META →
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding-top:24px;text-align:left;">
-              <p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">
-                MetaPunish · The Bloomberg Terminal for Fighting Games · <a href="${APP_URL}" style="color:#444;">metapunish.com</a>
-              </p>
-              <p style="margin:4px 0 0;font-size:10px;color:#333;text-transform:uppercase;letter-spacing:0.1em;">
-                You're receiving this because you created an account. You can <a href="${APP_URL}/unsubscribe" style="color:#333;">unsubscribe</a> at any time.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+    /**
+     * Generic notification email
+     */
+    async sendNotificationEmail(to: string, title: string, description: string, link?: string): Promise<boolean> {
+        const subject = `[METAPUNISH] ${title}`;
+        const fullLink = link ? (link.startsWith('http') ? link : `${AppConfig.APP_URL}${link}`) : `${AppConfig.APP_URL}/dashboard`;
+        
+        const html = `
+            <div style="font-family: sans-serif; background-color: #050505; color: #eee; padding: 30px; border-left: 4px solid #F43F5E;">
+                <h2 style="color: #fff; margin-top: 0;">${title}</h2>
+                <p style="font-size: 16px; line-height: 1.5;">${description}</p>
+                <br />
+                <a href="${fullLink}" style="color: #F43F5E; font-weight: bold; text-decoration: none;">VIEW INTEL &rarr;</a>
+                <hr style="border: 0; border-top: 1px solid #222; margin: 30px 0;" />
+                <p style="font-size: 10px; color: #555;">Sent from MetaPunish Dojo. You received this because you are an active operator.</p>
+            </div>
+        `;
+        return this.send(to, subject, html);
     }
 
-    private buildRivalWatchHtml(userName: string, rivalName: string, gameName: string, analysisUrl: string): string {
-        return `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#050505;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#050505;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <tr><td style="padding-bottom:32px;text-align:left;">
-          <span style="display:inline-block;background-color:#f43f5e;padding:6px 16px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">RIVAL WATCH ALERT</span>
-        </td></tr>
-        <tr><td style="background-color:#0a0a0a;border:1px solid rgba(255,255,255,0.1);border-top:2px solid #f43f5e;padding:40px;">
-          <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;text-transform:uppercase;font-style:italic;color:#f43f5e;">TARGET IDENTIFIED</h1>
-          <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">New Match Intel for ${rivalName}</p>
-          <p style="margin:0 0 32px;font-size:15px;color:#ffffff;line-height:1.6;">Attention ${userName}. Our sensors just detected a new match involving your tracked rival <strong>${rivalName}</strong> in <strong>${gameName}</strong>. The AI has already analyzed the footage for weaknesses.</p>
-          <a href="${analysisUrl}" style="display:inline-block;background-color:#f43f5e;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ANALYZE RIVAL DATA →</a>
-        </td></tr>
-        <tr><td style="padding-top:24px;"><p style="margin:0;font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.1em;">MetaPunish · <a href="${APP_URL}" style="color:#444;">metapunish.com</a></p></td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
+    /**
+     * High priority Rival Watch alert
+     */
+    async sendRivalWatchAlert(to: string, name: string, rivalName: string, gameName: string, link: string): Promise<boolean> {
+        const subject = `⚠️ RIVAL DETECTED: ${rivalName}`;
+        const html = `
+            <div style="font-family: sans-serif; background-color: #0a0002; color: #fff; padding: 30px; border: 2px solid #F43F5E;">
+                <h1 style="color: #F43F5E;">THREAT DETECTED</h1>
+                <p>Operator <strong>${name}</strong>, your rival <strong>${rivalName}</strong> has been spotted in ${gameName}.</p>
+                <p>New match data has been analyzed and indexed in the vector database. Review their current strategies immediately.</p>
+                <br />
+                <a href="${link}" style="background-color: #F43F5E; color: #fff; padding: 15px 30px; text-decoration: none; font-weight: bold; display: inline-block;">ANALYZE RIVAL TECH</a>
+            </div>
+        `;
+        return this.send(to, subject, html);
+    }
+
+    /**
+     * Admin invite email
+     */
+    async sendAdminInviteEmail(to: string, adminName: string, inviteUrl: string, promoCode?: string): Promise<boolean> {
+        const subject = `[METAPUNISH] Priority Operator Access Invited`;
+        const html = `
+            <div style="font-family: sans-serif; background-color: #000; color: #fff; padding: 40px; border: 1px solid #F43F5E;">
+                <h1 style="color: #F43F5E; text-transform: uppercase;">Operator Access Granted</h1>
+                <p>Admin <strong>${adminName}</strong> has invited you to join the MetaPunish Intelligence Suite as an Operator.</p>
+                <p>Access the tactical dashboard via the secure link below:</p>
+                <div style="margin: 30px 0;">
+                    <a href="${inviteUrl}" style="background-color: #F43F5E; color: #fff; padding: 15px 30px; text-decoration: none; font-weight: bold;">INITIALIZE UPLINK</a>
+                </div>
+                ${promoCode ? `<p style="font-size: 12px; color: #888;">Beta Access Code: <strong>${promoCode}</strong></p>` : ''}
+                <p style="font-size: 10px; color: #555; margin-top: 40px;">This link expires in 48 hours.</p>
+            </div>
+        `;
+        return this.send(to, subject, html);
+    }
+
+    /**
+     * Referral invite email
+     */
+    async sendReferralInviteEmail(to: string, senderName: string, inviteUrl: string): Promise<boolean> {
+        const subject = `${senderName} invited you to the Dojo`;
+        const html = `
+            <div style="font-family: sans-serif; background-color: #050505; color: #eee; padding: 30px; border: 1px solid #222;">
+                <h2 style="color: #F43F5E; margin-top: 0;">JOIN THE INTELLIGENCE NETWORK</h2>
+                <p><strong>${senderName}</strong> is using MetaPunish to dominate the competitive scene and wants you to join their crew.</p>
+                <p>Get real-time frame data analysis, pro scout reports, and automated theory for your character.</p>
+                <br />
+                <a href="${inviteUrl}" style="color: #F43F5E; font-weight: bold; text-decoration: none;">ACCEPT INVITATION &rarr;</a>
+            </div>
+        `;
+        return this.send(to, subject, html);
     }
 }
 

@@ -11,6 +11,8 @@ export declare class App {
     private routes;
     private ingestionService;
     private rosterSyncService;
+    private trainingService;
+    private trendAnalysisService;
     private lobbyService;
     constructor();
     /**

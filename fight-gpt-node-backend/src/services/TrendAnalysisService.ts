@@ -1,6 +1,8 @@
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
 import { NotificationService } from './NotificationService';
 import { IGameMetadataService } from './GameMetadataService';
+import cron from 'node-cron';
+import { Logger } from '../helpers/logger';
 
 /**
  * Service responsible for analyzing trends in discovery data
@@ -8,6 +10,7 @@ import { IGameMetadataService } from './GameMetadataService';
  */
 export interface ITrendAnalysisService {
   analyzeMetaShifts(): Promise<void>;
+  startScheduler(): void;
 }
 
 export class TrendAnalysisService implements ITrendAnalysisService {
@@ -16,6 +19,17 @@ export class TrendAnalysisService implements ITrendAnalysisService {
     private readonly notificationService: NotificationService,
     private readonly gameMetadataService: IGameMetadataService
   ) {}
+
+  /**
+   * Start the Trend Analysis scheduler (runs daily at 05:00 UTC)
+   */
+  public startScheduler(): void {
+    cron.schedule('0 5 * * *', async () => {
+        Logger.info('[TrendAnalysisService] Running nightly meta-shift analysis...');
+        await this.analyzeMetaShifts();
+    });
+    Logger.info('[TrendAnalysisService] Trend Analysis Scheduler started (05:00 daily)');
+  }
 
   /**
    * Run nightly meta-shift analysis

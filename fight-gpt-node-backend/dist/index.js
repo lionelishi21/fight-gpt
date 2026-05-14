@@ -59,18 +59,11 @@ const RivalService_1 = require("./services/RivalService");
 const UserService_1 = require("./services/UserService");
 const AdminService_1 = require("./services/AdminService");
 const TrendAnalysisService_1 = require("./services/TrendAnalysisService");
+const TrainingService_1 = require("./services/TrainingService");
 const PaymentService_1 = require("./services/PaymentService");
 const RosterSyncService_1 = require("./services/RosterSyncService");
 const ScraperService_1 = require("./services/ScraperService");
-const ArtistOnboardingService_1 = require("./services/ArtistOnboardingService");
-const AdminArtistService_1 = require("./services/AdminArtistService");
-const ArtistOnboardingController_1 = require("./controllers/ArtistOnboardingController");
-const AdminArtistController_1 = require("./controllers/AdminArtistController");
-const ArtistProfileRepository_1 = require("./repositories/ArtistProfileRepository");
-const OnboardingDocumentRepository_1 = require("./repositories/OnboardingDocumentRepository");
-const SplitSheetRepository_1 = require("./repositories/SplitSheetRepository");
-const TrackSubmissionRepository_1 = require("./repositories/TrackSubmissionRepository");
-const AdminArtistReviewRepository_1 = require("./repositories/AdminArtistReviewRepository");
+const EmailService_1 = require("./services/EmailService");
 // Import repositories
 const AnalysisRepository_1 = require("./repositories/AnalysisRepository");
 const AuditLogRepository_1 = require("./repositories/AuditLogRepository");
@@ -100,6 +93,8 @@ class App {
     routes;
     ingestionService = null;
     rosterSyncService = null;
+    trainingService = null;
+    trendAnalysisService = null;
     lobbyService;
     constructor() {
         // Validate configuration
@@ -137,7 +132,8 @@ class App {
         // Only initialize services that need MongoDB if MongoDB is available
         const gameMetadataService = app_1.AppConfig.MONGODB_URI ? new GameMetadataService_1.GameMetadataService(gameMetadataRepository) : null;
         const characterEncyclopediaService = app_1.AppConfig.MONGODB_URI ? new CharacterEncyclopediaService_1.CharacterEncyclopediaService(characterEncyclopediaRepository) : null;
-        const notificationService = app_1.AppConfig.MONGODB_URI ? new NotificationService_1.NotificationService(notificationRepository) : null;
+        const emailService = new EmailService_1.EmailService();
+        const notificationService = app_1.AppConfig.MONGODB_URI ? new NotificationService_1.NotificationService(notificationRepository, emailService) : null;
         const aiService = app_1.AppConfig.MONGODB_URI ? new AiService_1.AiService(app_1.AppConfig.GEMINI_API_KEY, app_1.AppConfig.GEMINI_MODEL, gameMetadataService, characterEncyclopediaService) : null;
         const characterService = app_1.AppConfig.MONGODB_URI ? new CharacterService_1.CharacterService(characterRepository, gameRepository) : null;
         const analysisService = app_1.AppConfig.MONGODB_URI ? new AnalysisService_1.AnalysisService(analysisRepository, aiService, gameMetadataService, characterEncyclopediaService, characterService, // Pass characterService for character name lookup
@@ -157,7 +153,8 @@ class App {
             ? new AutoResearchService_1.AutoResearchService(theoryService, notificationService)
             : null;
         autoResearchService?.start();
-        const trendAnalysisService = app_1.AppConfig.MONGODB_URI
+        this.trainingService = app_1.AppConfig.MONGODB_URI ? new TrainingService_1.TrainingService() : null;
+        this.trendAnalysisService = app_1.AppConfig.MONGODB_URI
             ? new TrendAnalysisService_1.TrendAnalysisService(analysisRepository, notificationService, gameMetadataService)
             : null;
         const chatService = new ChatService_1.ChatService();
@@ -174,7 +171,7 @@ class App {
         const notificationController = app_1.AppConfig.MONGODB_URI ? new NotificationController_1.NotificationController(notificationRepository) : null;
         const rivalController = app_1.AppConfig.MONGODB_URI ? new RivalController_1.RivalController(rivalService, auditLogRepository) : null;
         const userController = app_1.AppConfig.MONGODB_URI ? new UserController_1.UserController(userService, auditLogRepository) : null;
-        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, trendAnalysisService ?? undefined, this.rosterSyncService ?? undefined) : null;
+        const adminController = app_1.AppConfig.MONGODB_URI ? new AdminController_1.AdminController(adminService, this.ingestionService ?? undefined, metaService ?? undefined, autoResearchService ?? undefined, this.trendAnalysisService ?? undefined, this.rosterSyncService ?? undefined) : null;
         let paymentService;
         let paymentController;
         try {
@@ -186,29 +183,11 @@ class App {
             paymentService = null;
             paymentController = new PaymentController_1.PaymentController(null);
         }
-        // Artist onboarding
-        const artistProfileRepo = app_1.AppConfig.MONGODB_URI ? new ArtistProfileRepository_1.ArtistProfileRepository() : null;
-        const onboardingDocRepo = app_1.AppConfig.MONGODB_URI ? new OnboardingDocumentRepository_1.OnboardingDocumentRepository() : null;
-        const splitSheetRepo = app_1.AppConfig.MONGODB_URI ? new SplitSheetRepository_1.SplitSheetRepository() : null;
-        const trackSubmissionRepo = app_1.AppConfig.MONGODB_URI ? new TrackSubmissionRepository_1.TrackSubmissionRepository() : null;
-        const adminArtistReviewRepo = app_1.AppConfig.MONGODB_URI ? new AdminArtistReviewRepository_1.AdminArtistReviewRepository() : null;
-        const artistOnboardingService = app_1.AppConfig.MONGODB_URI
-            ? new ArtistOnboardingService_1.ArtistOnboardingService(artistProfileRepo, onboardingDocRepo, splitSheetRepo, trackSubmissionRepo, adminArtistReviewRepo)
-            : null;
-        const adminArtistService = app_1.AppConfig.MONGODB_URI
-            ? new AdminArtistService_1.AdminArtistService(artistProfileRepo, adminArtistReviewRepo, trackSubmissionRepo, onboardingDocRepo)
-            : null;
-        const artistOnboardingController = app_1.AppConfig.MONGODB_URI ? new ArtistOnboardingController_1.ArtistOnboardingController(artistOnboardingService) : null;
-        const adminArtistController = app_1.AppConfig.MONGODB_URI ? new AdminArtistController_1.AdminArtistController(adminArtistService) : null;
         // Setup routes
         const engagementService = new EngagementService_1.EngagementService(theoryService);
         const engagementController = new EngagementController_1.EngagementController(engagementService);
         const engagementRoutes = new engagementRoutes_1.EngagementRoutes(engagementController);
         this.routes = new routes_1.Routes(analysisController, healthController, characterController, gameController, gameMetadataController, characterEncyclopediaController, chatController, metaController, theoryController, notificationController, rivalController, userController, adminController, paymentController, engagementController);
-        // Mount artist onboarding routes
-        if (app_1.AppConfig.MONGODB_URI && artistOnboardingController && adminArtistController) {
-            this.routes.mountArtistRoutes(artistOnboardingController, adminArtistController);
-        }
         // Inject Socket.io into chat controller
         chatController.setIo(this.io);
         this.setupRoutes();
@@ -392,6 +371,13 @@ class App {
                 if (startMetaService) {
                     startMetaService.startScheduler();
                 }
+            }
+            // Start trend analysis and training schedulers
+            if (this.trendAnalysisService) {
+                this.trendAnalysisService.startScheduler();
+            }
+            if (this.trainingService) {
+                this.trainingService.startScheduler();
             }
             // Start server
             this.server.listen(app_1.AppConfig.PORT, () => {

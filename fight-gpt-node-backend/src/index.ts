@@ -58,19 +58,12 @@ import { AutoResearchService } from './services/AutoResearchService';
 import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
 import { AdminService } from './services/AdminService';
-import { TrendAnalysisService } from './services/TrendAnalysisService';
+import { TrendAnalysisService, ITrendAnalysisService } from './services/TrendAnalysisService';
+import { TrainingService } from './services/TrainingService';
 import { PaymentService } from './services/PaymentService';
 import { RosterSyncService } from './services/RosterSyncService';
 import { ScraperService } from './services/ScraperService';
-import { ArtistOnboardingService } from './services/ArtistOnboardingService';
-import { AdminArtistService } from './services/AdminArtistService';
-import { ArtistOnboardingController } from './controllers/ArtistOnboardingController';
-import { AdminArtistController } from './controllers/AdminArtistController';
-import { ArtistProfileRepository } from './repositories/ArtistProfileRepository';
-import { OnboardingDocumentRepository } from './repositories/OnboardingDocumentRepository';
-import { SplitSheetRepository } from './repositories/SplitSheetRepository';
-import { TrackSubmissionRepository } from './repositories/TrackSubmissionRepository';
-import { AdminArtistReviewRepository } from './repositories/AdminArtistReviewRepository';
+import { EmailService } from './services/EmailService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -103,6 +96,8 @@ export class App {
   private routes: Routes;
   private ingestionService: InstanceType<typeof IngestionService> | null = null;
   private rosterSyncService: RosterSyncService | null = null;
+  private trainingService: TrainingService | null = null;
+  private trendAnalysisService: ITrendAnalysisService | null = null;
   private lobbyService: LobbyService;
 
   constructor() {
@@ -146,7 +141,8 @@ export class App {
     // Only initialize services that need MongoDB if MongoDB is available
     const gameMetadataService = AppConfig.MONGODB_URI ? new GameMetadataService(gameMetadataRepository) : null as any;
     const characterEncyclopediaService = AppConfig.MONGODB_URI ? new CharacterEncyclopediaService(characterEncyclopediaRepository) : null as any;
-    const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository) : null as any;
+    const emailService = new EmailService();
+    const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository, emailService) : null as any;
     const aiService = AppConfig.MONGODB_URI ? new AiService(
       AppConfig.GEMINI_API_KEY,
       AppConfig.GEMINI_MODEL,
@@ -180,7 +176,9 @@ export class App {
         : null;
     autoResearchService?.start();
     
-    const trendAnalysisService = AppConfig.MONGODB_URI
+    this.trainingService = AppConfig.MONGODB_URI ? new TrainingService() : null;
+    
+    this.trendAnalysisService = AppConfig.MONGODB_URI
         ? new TrendAnalysisService(analysisRepository, notificationService, gameMetadataService)
         : null;
 
@@ -213,7 +211,7 @@ export class App {
       this.ingestionService ?? undefined, 
       metaService ?? undefined, 
       autoResearchService ?? undefined, 
-      trendAnalysisService ?? undefined,
+      this.trendAnalysisService ?? undefined,
       this.rosterSyncService ?? undefined
     ) : null;
     let paymentService: PaymentService;
@@ -227,20 +225,6 @@ export class App {
       paymentController = new PaymentController(null as any);
     }
 
-    // Artist onboarding
-    const artistProfileRepo = AppConfig.MONGODB_URI ? new ArtistProfileRepository() : null as any;
-    const onboardingDocRepo = AppConfig.MONGODB_URI ? new OnboardingDocumentRepository() : null as any;
-    const splitSheetRepo = AppConfig.MONGODB_URI ? new SplitSheetRepository() : null as any;
-    const trackSubmissionRepo = AppConfig.MONGODB_URI ? new TrackSubmissionRepository() : null as any;
-    const adminArtistReviewRepo = AppConfig.MONGODB_URI ? new AdminArtistReviewRepository() : null as any;
-    const artistOnboardingService = AppConfig.MONGODB_URI
-      ? new ArtistOnboardingService(artistProfileRepo, onboardingDocRepo, splitSheetRepo, trackSubmissionRepo, adminArtistReviewRepo)
-      : null as any;
-    const adminArtistService = AppConfig.MONGODB_URI
-      ? new AdminArtistService(artistProfileRepo, adminArtistReviewRepo, trackSubmissionRepo, onboardingDocRepo)
-      : null as any;
-    const artistOnboardingController = AppConfig.MONGODB_URI ? new ArtistOnboardingController(artistOnboardingService) : null as any;
-    const adminArtistController = AppConfig.MONGODB_URI ? new AdminArtistController(adminArtistService) : null as any;
 
     // Setup routes
     const engagementService = new EngagementService(theoryService);
@@ -265,10 +249,6 @@ export class App {
       engagementController
     );
     
-    // Mount artist onboarding routes
-    if (AppConfig.MONGODB_URI && artistOnboardingController && adminArtistController) {
-      this.routes.mountArtistRoutes(artistOnboardingController, adminArtistController);
-    }
 
     // Inject Socket.io into chat controller
     chatController.setIo(this.io);
@@ -488,6 +468,14 @@ export class App {
         if (startMetaService) {
           startMetaService.startScheduler();
         }
+      }
+
+      // Start trend analysis and training schedulers
+      if (this.trendAnalysisService) {
+        this.trendAnalysisService.startScheduler();
+      }
+      if (this.trainingService) {
+        this.trainingService.startScheduler();
       }
 
       // Start server

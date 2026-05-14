@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from './BaseController';
 export declare class OnboardingController extends BaseController {
+    private emailService;
     /**
      * Complete onboarding step: save game and character selection
      */

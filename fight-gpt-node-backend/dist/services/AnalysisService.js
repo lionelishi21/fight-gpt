@@ -294,8 +294,15 @@ class AnalysisService extends BaseService_1.BaseService {
      * if they are novel, or links them to existing scenarios if they are similar.
      */
     async processVectorIntelligence(analysisId, request, analysisResponse) {
-        if (!this.vectorRepository || !analysisResponse.timeline)
+        if (!this.vectorRepository) {
+            console.warn('[VectorIntelligence] Skipping: Vector repository not initialized');
             return;
+        }
+        if (!analysisResponse.timeline) {
+            console.warn('[VectorIntelligence] Skipping: No timeline in analysis response');
+            return;
+        }
+        console.log(`[VectorIntelligence] Processing ${analysisResponse.timeline.length} events for analysis ${analysisId}`);
         for (const event of analysisResponse.timeline) {
             try {
                 const p1 = this.sanitizeAiString(analysisResponse.p1_character) || 'P1';
@@ -329,10 +336,10 @@ class AnalysisService extends BaseService_1.BaseService {
                     // Threshold increased to 0.85 for better variety
                     if (topScore > 0.85)
                         isNovel = false;
-                    console.log(`[VectorIntelligence] Situation: ${event.description.slice(0, 30)}... Score: ${topScore.toFixed(4)} -> Novel: ${isNovel}`);
+                    console.log(`[VectorIntelligence] Event: ${event.description.slice(0, 30)}... Score: ${topScore.toFixed(4)} -> Novel: ${isNovel}`);
                 }
                 else {
-                    console.log(`[VectorIntelligence] No similar scenarios found. Situation is unique.`);
+                    console.log(`[VectorIntelligence] No similar scenarios found (treated as unique).`);
                 }
                 // Save scenario ONLY IF NOVEL to avoid duplicates
                 const scenarioId = uuidHelper_1.UuidHelper.generate();
@@ -356,8 +363,9 @@ class AnalysisService extends BaseService_1.BaseService {
                         frame_advantage: event.frame_advantage,
                         p1_state: event.p1_state,
                         p2_state: event.p2_state,
-                        timestamp: event.timestamp ? Number(event.timestamp) : undefined,
+                        timestamp: this.parseTimestamp(event.timestamp),
                     });
+                    console.log(`[VectorIntelligence] Created new scenario: ${scenarioId}`);
                     // TECH_DISCOVERY Alert — only for genuinely novel scenarios
                     if (this.notificationService) {
                         const chars = [
@@ -404,6 +412,33 @@ class AnalysisService extends BaseService_1.BaseService {
         }
         catch (error) {
             return { success: false, error: 'Failed to fetch views' };
+        }
+    }
+    /**
+     * Parse timestamp string (MM:SS or HH:MM:SS) into total seconds
+     */
+    parseTimestamp(ts) {
+        if (ts === undefined || ts === null)
+            return undefined;
+        if (typeof ts === 'number')
+            return isNaN(ts) ? undefined : ts;
+        try {
+            const parts = ts.toString().split(':').map(Number);
+            if (parts.some(isNaN))
+                return undefined;
+            if (parts.length === 3) {
+                return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+            }
+            else if (parts.length === 2) {
+                return (parts[0] * 60) + parts[1];
+            }
+            else if (parts.length === 1) {
+                return parts[0];
+            }
+            return undefined;
+        }
+        catch {
+            return undefined;
         }
     }
 }

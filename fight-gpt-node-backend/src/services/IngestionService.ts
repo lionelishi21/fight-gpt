@@ -274,7 +274,7 @@ export class IngestionService extends BaseService implements IIngestionService {
 
     /**
      * Start background scheduler that triggers ingestion + processing on an interval
-     * Default: every 1 hour
+     * Default: every 6 hours
      */
     startScheduler(intervalMs: number = 6 * 60 * 60 * 1000): void {
         if (this.schedulerTimer) {
@@ -285,22 +285,34 @@ export class IngestionService extends BaseService implements IIngestionService {
         Logger.info(`[IngestionService] Starting ingestion scheduler (every ${intervalMs / 3600000}h)`);
 
         const runIngestion = async () => {
-            // 1. Regular search-based ingestion
-            const gameIds = Object.keys(GAME_SEARCH_QUERIES);
-            gameIds.sort((a, b) => (a === 'sf6' ? -1 : b === 'sf6' ? 1 : 0));
+            try {
+                // 1. Fetch all active games from the DB (Dynamically discover new games)
+                const { Game } = await import('../models/Game');
+                const games = await Game.find({ is_active: true }).lean().exec();
+                
+                Logger.info(`[IngestionService] Scheduler running discovery for ${games.length} active games`);
 
-            for (const gameId of gameIds) {
-                try {
-                    const maxVideosToFetch = gameId === 'sf6' ? 10 : 5;
-                    await this.triggerIngestion(gameId, maxVideosToFetch);
-                } catch (e) {
-                    Logger.error(`[IngestionService] Scheduler failed for ${gameId}`, e);
+                for (const game of games) {
+                    try {
+                        const gameId = game.game_id;
+                        // Prioritize SF6 for more videos
+                        const maxVideosToFetch = gameId === 'sf6' ? 10 : 5;
+                        
+                        Logger.info(`[IngestionService] Triggering discovery for ${game.name} (${gameId})...`);
+                        await this.triggerIngestion(gameId, maxVideosToFetch);
+                    } catch (e) {
+                        Logger.error(`[IngestionService] Scheduler failed for game ${(game as any).game_id}`, e);
+                    }
                 }
-            }
 
-            // 2. Pro Player prioritized ingestion (including Japan)
-            // Using Direct Playlist Tracking to save quota (1 unit vs 100 units for search)
-            await this.ingestProPlayersDirect();
+                // 2. Pro Player prioritized ingestion (including Japan)
+                // Using Direct Playlist Tracking to save quota (1 unit vs 100 units for search)
+                await this.ingestProPlayersDirect();
+                
+                Logger.info('[IngestionService] Daily discovery cycle complete.');
+            } catch (err) {
+                Logger.error('[IngestionService] Scheduler loop failed', err);
+            }
         };
 
         // Run once immediately on startup

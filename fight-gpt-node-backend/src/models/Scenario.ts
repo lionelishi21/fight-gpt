@@ -54,6 +54,5 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
 });
 
 ScenarioSchema.index({ game_id: 1, tags: 1 });
-ScenarioSchema.index({ pro_player_id: 1 });
 
 export const Scenario = mongoose.model<IScenarioDocument>('Scenario', ScenarioSchema);

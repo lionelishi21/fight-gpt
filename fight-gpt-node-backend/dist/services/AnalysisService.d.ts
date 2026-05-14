@@ -46,5 +46,9 @@ export declare class AnalysisService extends BaseService implements IAnalysisSer
      */
     processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse): Promise<void>;
     getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>>;
+    /**
+     * Parse timestamp string (MM:SS or HH:MM:SS) into total seconds
+     */
+    private parseTimestamp;
 }
 //# sourceMappingURL=AnalysisService.d.ts.map

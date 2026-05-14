@@ -47,7 +47,7 @@ export declare class IngestionService extends BaseService implements IIngestionS
     }>>;
     /**
      * Start background scheduler that triggers ingestion + processing on an interval
-     * Default: every 1 hour
+     * Default: every 6 hours
      */
     startScheduler(intervalMs?: number): void;
     /**

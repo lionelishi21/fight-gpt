@@ -62,6 +62,5 @@ const ScenarioSchema = new mongoose_1.Schema({
     }
 });
 ScenarioSchema.index({ game_id: 1, tags: 1 });
-ScenarioSchema.index({ pro_player_id: 1 });
 exports.Scenario = mongoose_1.default.model('Scenario', ScenarioSchema);
 //# sourceMappingURL=Scenario.js.map
