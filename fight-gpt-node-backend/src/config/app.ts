@@ -10,24 +10,44 @@ export class AppConfig {
   public static get MONGODB_URI(): string { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
   public static get RATE_LIMIT_WINDOW_MS(): number { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
   public static get RATE_LIMIT_MAX_REQUESTS(): number { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10); }
-  public static get CORS_ORIGINS(): any { 
-    const origins = process.env.CORS_ORIGIN;
-    if (origins === '*') return true;
-    if (origins) return origins.split(',').map(o => o.trim());
-    return [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:8081',
-      'http://localhost:19000',
-      'http://localhost:19006',
-      'https://metapunish.com',
-      'https://www.metapunish.com',
-      'https://fightingames.online',
-      'https://api.fightingames.online',
-      'https://fightgpt.app'
-    ]; 
+  /**
+   * CORS origin handler. Priority:
+   * 1. CORS_ORIGIN=* → allow everything (useful for staging)
+   * 2. CORS_ORIGIN=url,url → exact list from env
+   * 3. Fallback → function that allows any localhost port (dev) +
+   *    any subdomain of our owned domains (prod) without needing env updates.
+   */
+  public static get CORS_ORIGINS(): any {
+    const env = process.env.CORS_ORIGIN;
+    if (env === '*') return true;
+    if (env) return env.split(',').map(o => o.trim());
+
+    const OWNED_DOMAINS = [
+      'fightingames.online',
+      'metapunish.com',
+      'fightgpt.app',
+    ];
+
+    return (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+      // Server-to-server or same-origin requests (no Origin header) — allow
+      if (!origin) return cb(null, true);
+
+      // Any localhost / loopback — allow in all environments
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return cb(null, true);
+      }
+
+      // Any subdomain (or apex) of our owned domains — allow
+      const allowed = OWNED_DOMAINS.some(domain =>
+        origin === `https://${domain}` ||
+        origin === `http://${domain}` ||
+        origin.endsWith(`.${domain}`)
+      );
+
+      if (allowed) return cb(null, true);
+
+      cb(new Error(`CORS: origin not allowed — ${origin}`));
+    };
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
