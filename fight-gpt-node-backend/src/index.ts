@@ -332,12 +332,16 @@ export class App {
     // In development: skip all rate limiting so local testing is never blocked.
     const isDev = AppConfig.isDevelopment();
 
-    // Redis client for rate limit store — shared, lazy-connects.
-    // Falls back gracefully if Redis is unavailable (store throws → limiter skips).
+    // Redis client for rate limit store.
+    // MUST have an error handler — without it, connection failures emit an
+    // unhandled 'error' event that crashes the Node.js process entirely.
     const redisClient = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
       maxRetriesPerRequest: 0,
       enableOfflineQueue: false,
       lazyConnect: true,
+    });
+    redisClient.on('error', (err) => {
+      Logger.warn(`[RateLimit] Redis unavailable — rate limiting falling back to memory store: ${err.message}`);
     });
 
     const makeStore = (prefix: string) => new RedisRateLimitStore(redisClient, prefix);

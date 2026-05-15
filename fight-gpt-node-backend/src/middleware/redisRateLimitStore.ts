@@ -22,32 +22,41 @@ export class RedisRateLimitStore implements Store {
     }
 
     async increment(rawKey: string): Promise<ClientRateLimitInfo> {
-        const key = `${this.keyPrefix}${rawKey}`;
-        const ttlSec = Math.ceil(this.windowMs / 1000);
+        try {
+            const key = `${this.keyPrefix}${rawKey}`;
+            const ttlSec = Math.ceil(this.windowMs / 1000);
 
-        const pipeline = this.client.pipeline();
-        pipeline.incr(key);
-        pipeline.pttl(key);
-        const results = await pipeline.exec();
+            const pipeline = this.client.pipeline();
+            pipeline.incr(key);
+            pipeline.pttl(key);
+            const results = await pipeline.exec();
 
-        const totalHits = (results?.[0]?.[1] as number) ?? 1;
-        let ttlMs = (results?.[1]?.[1] as number) ?? -1;
+            const totalHits = (results?.[0]?.[1] as number) ?? 1;
+            let ttlMs = (results?.[1]?.[1] as number) ?? -1;
 
-        if (ttlMs < 0) {
-            await this.client.expire(key, ttlSec);
-            ttlMs = this.windowMs;
+            if (ttlMs < 0) {
+                await this.client.expire(key, ttlSec);
+                ttlMs = this.windowMs;
+            }
+
+            return { totalHits, resetTime: new Date(Date.now() + ttlMs) };
+        } catch {
+            // Redis unavailable — allow the request through rather than blocking everyone
+            return { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
         }
-
-        return { totalHits, resetTime: new Date(Date.now() + ttlMs) };
     }
 
     async decrement(rawKey: string): Promise<void> {
-        const key = `${this.keyPrefix}${rawKey}`;
-        const val = await this.client.get(key);
-        if (val && parseInt(val) > 0) await this.client.decr(key);
+        try {
+            const key = `${this.keyPrefix}${rawKey}`;
+            const val = await this.client.get(key);
+            if (val && parseInt(val) > 0) await this.client.decr(key);
+        } catch { /* silent */ }
     }
 
     async resetKey(rawKey: string): Promise<void> {
-        await this.client.del(`${this.keyPrefix}${rawKey}`);
+        try {
+            await this.client.del(`${this.keyPrefix}${rawKey}`);
+        } catch { /* silent */ }
     }
 }
