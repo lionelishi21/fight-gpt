@@ -7,7 +7,6 @@ import { initSentry } from './helpers/sentry';
 initSentry();
 
 import express, { Express } from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
@@ -115,8 +114,8 @@ export class App {
     this.server = createServer(this.app);
     this.io = new Server(this.server, {
       cors: {
-        origin: AppConfig.CORS_ORIGINS,
-        credentials: true
+        origin: (origin, cb) => cb(null, true), // CORS handled by raw middleware above
+        credentials: true,
       }
     });
 
@@ -274,13 +273,33 @@ export class App {
       contentSecurityPolicy: false,
     }));
 
-    // CORS middleware
-    this.app.use(
-      cors({
-        origin: AppConfig.CORS_ORIGINS,
-        credentials: true,
-      })
-    );
+    // CORS — raw header middleware, runs before everything else.
+    // Does NOT rely on the cors package so nothing can interfere with it.
+    const OWNED_DOMAINS = ['fightingames.online', 'metapunish.com', 'fightgpt.app'];
+    const isAllowedOrigin = (origin: string | undefined): boolean => {
+      if (!origin) return true;
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+      return OWNED_DOMAINS.some(d =>
+        origin === `https://${d}` || origin === `http://${d}` || origin.endsWith(`.${d}`)
+      );
+    };
+
+    this.app.use((req: any, res: any, next: any) => {
+      const origin = req.headers.origin as string | undefined;
+      if (isAllowedOrigin(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-auth-token,x-admin-key,x-internal-secret');
+        res.setHeader('Access-Control-Max-Age', '86400'); // 24h preflight cache
+      }
+      // Answer preflight immediately — no need to hit any other middleware
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(204);
+        return;
+      }
+      next();
+    });
 
     // Compression middleware
     this.app.use(compression());
