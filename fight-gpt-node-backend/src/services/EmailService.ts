@@ -14,7 +14,7 @@ export class EmailService {
         }
     }
 
-    private async send(to: string, subject: string, html: string): Promise<boolean> {
+    private async send(to: string, subject: string, html: string, attempt = 1): Promise<boolean> {
         if (!this.resend) {
             Logger.info(`[EmailService] Simulation: To: ${to}, Subject: ${subject}`);
             return true;
@@ -29,13 +29,19 @@ export class EmailService {
             });
 
             if (error) {
-                Logger.error('[EmailService] Resend error:', error);
-                return false;
+                throw new Error(typeof error === 'object' && 'message' in error ? (error as any).message : String(error));
             }
 
             return true;
         } catch (err) {
-            Logger.error('[EmailService] Failed to send email:', err);
+            const maxAttempts = 3;
+            if (attempt < maxAttempts) {
+                const delayMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s
+                Logger.warn(`[EmailService] Attempt ${attempt}/${maxAttempts} failed for "${subject}" — retrying in ${delayMs}ms`);
+                await new Promise(r => setTimeout(r, delayMs));
+                return this.send(to, subject, html, attempt + 1);
+            }
+            Logger.error(`[EmailService] All ${maxAttempts} attempts failed for "${subject}" to ${to}:`, err);
             return false;
         }
     }

@@ -212,7 +212,7 @@ export class MetaService extends BaseService implements IMetaService {
             // Embed the query
             let queryVector;
             try {
-                const embeddingModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+                const embeddingModel = this.genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
                 const embeddingResult = await embeddingModel.embedContent(query);
                 queryVector = embeddingResult.embedding.values;
             } catch (embedError) {

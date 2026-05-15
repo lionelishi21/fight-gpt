@@ -13,6 +13,7 @@ import { GameSearchStrategy } from '../models/GameSearchStrategy';
 import { GameOnboardingService } from '../services/GameOnboardingService';
 import { PatchService } from '../services/PatchService';
 import { RosterSyncService } from '../services/RosterSyncService';
+import { GameScanService, DeepScanResult } from '../services/GameScanService';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,6 +21,7 @@ export class AdminController extends BaseController {
     private readonly onboardingService: GameOnboardingService;
     private readonly patchService: PatchService;
     private readonly rosterSyncService?: RosterSyncService;
+    private readonly gameScanService: GameScanService;
 
     constructor(
         private readonly adminService: IAdminService,
@@ -33,6 +35,7 @@ export class AdminController extends BaseController {
         this.onboardingService = new GameOnboardingService(ingestionService);
         this.patchService = new PatchService(ingestionService);
         this.rosterSyncService = rosterSyncService;
+        this.gameScanService = new GameScanService();
     }
 
     /**
@@ -668,6 +671,55 @@ export class AdminController extends BaseController {
             }
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Sync failed');
+        }
+    };
+
+    /**
+     * POST /api/admin/games/:gameId/scan
+     * Gemini-powered scan — auto-discovers current patch version + full roster + frame data.
+     * Upserts all characters with no duplication. No manual input required.
+     */
+    scanGame = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId } = req.params;
+            if (!gameId) {
+                res.status(400).json({ success: false, error: 'gameId is required' });
+                return;
+            }
+            const result = await this.gameScanService.scanGame(gameId);
+            this.sendResponse(res, { success: true, data: result });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Scan failed');
+        }
+    };
+
+    /**
+     * POST /api/admin/games/:gameId/deepscan
+     * Phase 2 scan — Gemini generates complete moveset (all normals/specials/supers) +
+     * practical combos for every character. Runs per-character. Can take several minutes.
+     * Always runs in background and returns immediately.
+     */
+    deepScanGame = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId } = req.params;
+            if (!gameId) {
+                res.status(400).json({ success: false, error: 'gameId is required' });
+                return;
+            }
+
+            // Fire in background — can take minutes for a full roster
+            this.gameScanService.deepScanGame(gameId).then((result: DeepScanResult) => {
+                console.log(`[AdminController] Deep scan complete for ${gameId}:`, result);
+            }).catch((err: Error) => {
+                console.error(`[AdminController] Deep scan failed for ${gameId}:`, err.message);
+            });
+
+            this.sendResponse(res, {
+                success: true,
+                message: `Deep scan started for ${gameId}. Gemini is generating full moveset + combos for all characters. Check logs for progress.`,
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Deep scan failed');
         }
     };
 

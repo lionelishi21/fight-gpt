@@ -69,8 +69,8 @@ export class AutoResearchService {
                                 characters_involved: charId,
                             });
 
-                            if (scenarioCount < 3) continue;
-
+                            // Always generate — Gemini produces theory from its own knowledge even
+                            // with 0 scenarios. Scenarios augment quality but are not required.
                             const existing = await TheoryDoc.findOne({
                                 game_id: gameId,
                                 character_id: charId,
@@ -111,8 +111,6 @@ export class AutoResearchService {
                                     game_id: gameId,
                                     characters_involved: { $all: [charA, charB] },
                                 });
-
-                                if (scenarioCount < 3) continue;
 
                                 const [a, b] = [charA, charB].sort();
                                 const existing = await TheoryDoc.findOne({
