@@ -11,42 +11,44 @@ export class AppConfig {
   public static get RATE_LIMIT_WINDOW_MS(): number { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
   public static get RATE_LIMIT_MAX_REQUESTS(): number { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10); }
   /**
-   * CORS origin handler. Priority:
-   * 1. CORS_ORIGIN=* → allow everything (useful for staging)
-   * 2. CORS_ORIGIN=url,url → exact list from env
-   * 3. Fallback → function that allows any localhost port (dev) +
-   *    any subdomain of our owned domains (prod) without needing env updates.
+   * CORS origin handler.
+   * Owned domains are ALWAYS allowed — no env var can block them.
+   * CORS_ORIGIN=* additionally opens to everyone (staging use).
+   * CORS_ORIGIN=url,url adds extra exact origins on top.
    */
   public static get CORS_ORIGINS(): any {
-    const env = process.env.CORS_ORIGIN;
+    const env = (process.env.CORS_ORIGIN || '').trim();
     if (env === '*') return true;
-    if (env) return env.split(',').map(o => o.trim());
 
-    const OWNED_DOMAINS = [
-      'fightingames.online',
-      'metapunish.com',
-      'fightgpt.app',
-    ];
+    // These are always allowed regardless of what CORS_ORIGIN is set to.
+    const OWNED_DOMAINS = ['fightingames.online', 'metapunish.com', 'fightgpt.app'];
+
+    // Extra origins from env var (additive, not replacement)
+    const extraOrigins = new Set(
+      env ? env.split(',').map(o => o.trim()).filter(Boolean) : []
+    );
 
     return (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-      // Server-to-server or same-origin requests (no Origin header) — allow
+      // No Origin header — server-to-server or same-origin, always allow
       if (!origin) return cb(null, true);
 
-      // Any localhost / loopback — allow in all environments
+      // Any localhost / 127.0.0.1 on any port — always allow
       if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return cb(null, true);
       }
 
-      // Any subdomain (or apex) of our owned domains — allow
-      const allowed = OWNED_DOMAINS.some(domain =>
+      // Any apex or subdomain of our owned domains — always allow
+      const ownedMatch = OWNED_DOMAINS.some(domain =>
         origin === `https://${domain}` ||
         origin === `http://${domain}` ||
         origin.endsWith(`.${domain}`)
       );
+      if (ownedMatch) return cb(null, true);
 
-      if (allowed) return cb(null, true);
+      // Extra origins from CORS_ORIGIN env var
+      if (extraOrigins.has(origin)) return cb(null, true);
 
-      cb(new Error(`CORS: origin not allowed — ${origin}`));
+      cb(new Error(`CORS blocked: ${origin}`));
     };
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
