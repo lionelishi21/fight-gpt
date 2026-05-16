@@ -11,8 +11,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import IORedis from 'ioredis';
-import { RedisRateLimitStore } from './middleware/redisRateLimitStore';
 
 // Import configuration
 import { AppConfig } from './config/app';
@@ -336,50 +334,23 @@ export class App {
       this.app.use(morgan('combined'));
     }
 
-    // In development: skip all rate limiting so local testing is never blocked.
     const isDev = AppConfig.isDevelopment();
 
-    // Redis client for rate limit store.
-    // MUST have an error handler — without it, connection failures emit an
-    // unhandled 'error' event that crashes the Node.js process entirely.
-    const redisClient = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 0,
-      enableOfflineQueue: false,
-      lazyConnect: true,
-    });
-    redisClient.on('error', (err) => {
-      Logger.warn(`[RateLimit] Redis unavailable — rate limiting falling back to memory store: ${err.message}`);
-    });
-
-    const makeStore = (prefix: string) => new RedisRateLimitStore(redisClient, prefix);
-
-    // Global limiter — all user-facing routes.
-    // Admin routes excluded (protected by x-admin-key instead).
-    // /auth/me excluded — it's a read-only heartbeat called on every page load.
+    // Global limiter — in-memory, no external dependencies.
     const limiter = rateLimit({
-      windowMs: AppConfig.RATE_LIMIT_WINDOW_MS,        // default: 15 min
-      max: AppConfig.RATE_LIMIT_MAX_REQUESTS,           // default: 1000
-      store: makeStore('rl:global:'),
+      windowMs: AppConfig.RATE_LIMIT_WINDOW_MS,
+      max: AppConfig.RATE_LIMIT_MAX_REQUESTS,
       message: { success: false, error: 'Too many requests. Please slow down.' },
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) =>
-        isDev ||
-        req.path.startsWith('/admin/') ||
-        req.path === '/auth/me',
+      skip: (req) => isDev || req.path.startsWith('/admin/') || req.path === '/auth/me',
     });
 
-    // Auth brute-force limiter — login and register only.
-    // 50 attempts per 15 min per IP — strict enough to stop bots,
-    // loose enough that a real user testing multiple accounts never gets locked out.
+    // Auth limiter — 50 attempts per 15 min, enough for real users, blocks bots.
     const authLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
       max: 50,
-      store: makeStore('rl:auth:'),
-      message: {
-        success: false,
-        error: 'Too many login attempts from this IP. Please wait 15 minutes.',
-      },
+      message: { success: false, error: 'Too many login attempts. Please wait 15 minutes.' },
       standardHeaders: true,
       legacyHeaders: false,
       skip: () => isDev,

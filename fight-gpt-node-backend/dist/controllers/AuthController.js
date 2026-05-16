@@ -82,6 +82,8 @@ class AuthController extends BaseController_1.BaseController {
             }, 'high').catch(() => { });
             // Generate JWT
             const token = this.generateToken(user);
+            const registerTierUpper = (user.tier || 'FREE').toUpperCase();
+            const registerPlanType = (user.role === 'admin' || registerTierUpper !== 'FREE') ? 'premium' : 'free';
             this.sendResponse(res, {
                 success: true,
                 data: {
@@ -90,6 +92,8 @@ class AuthController extends BaseController_1.BaseController {
                         name: user.name,
                         email: user.email,
                         role: user.role,
+                        tier: registerTierUpper,
+                        planType: registerPlanType,
                         onboardingCompleted: user.onboardingCompleted,
                     },
                     token,
@@ -120,6 +124,8 @@ class AuthController extends BaseController_1.BaseController {
             }
             // Generate JWT
             const token = this.generateToken(user);
+            const loginTierUpper = (user.tier || 'FREE').toUpperCase();
+            const loginPlanType = (user.role === 'admin' || loginTierUpper !== 'FREE') ? 'premium' : 'free';
             this.sendResponse(res, {
                 success: true,
                 data: {
@@ -128,6 +134,8 @@ class AuthController extends BaseController_1.BaseController {
                         name: user.name,
                         email: user.email,
                         role: user.role,
+                        tier: loginTierUpper,
+                        planType: loginPlanType,
                         onboardingCompleted: user.onboardingCompleted,
                         preferences: user.preferences,
                         slots: user.slots || [],

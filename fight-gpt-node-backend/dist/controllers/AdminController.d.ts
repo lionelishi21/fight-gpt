@@ -15,6 +15,7 @@ export declare class AdminController extends BaseController {
     private readonly onboardingService;
     private readonly patchService;
     private readonly rosterSyncService?;
+    private readonly gameScanService;
     constructor(adminService: IAdminService, ingestionService?: IIngestionService, metaService?: IMetaService, autoResearchService?: AutoResearchService, trendAnalysisService?: ITrendAnalysisService, rosterSyncService?: RosterSyncService);
     /**
      * GET /api/admin/stats
@@ -171,6 +172,19 @@ export declare class AdminController extends BaseController {
      * Manually trigger roster and frame data sync for a game
      */
     syncGameData: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/:gameId/scan
+     * Gemini-powered scan — auto-discovers current patch version + full roster + frame data.
+     * Upserts all characters with no duplication. No manual input required.
+     */
+    scanGame: (req: Request, res: Response) => Promise<void>;
+    /**
+     * POST /api/admin/games/:gameId/deepscan
+     * Phase 2 scan — Gemini generates complete moveset (all normals/specials/supers) +
+     * practical combos for every character. Runs per-character. Can take several minutes.
+     * Always runs in background and returns immediately.
+     */
+    deepScanGame: (req: Request, res: Response) => Promise<void>;
     /**
      * GET /api/admin/theory/staging
      * Get all pending theories for staging

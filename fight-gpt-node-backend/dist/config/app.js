@@ -13,26 +13,39 @@ class AppConfig {
     static get MONGODB_URI() { return process.env.MONGODB_URI || process.env.MONGO_URI || ''; }
     static get RATE_LIMIT_WINDOW_MS() { return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); }
     static get RATE_LIMIT_MAX_REQUESTS() { return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10); }
+    /**
+     * CORS origin handler.
+     * Owned domains are ALWAYS allowed — no env var can block them.
+     * CORS_ORIGIN=* additionally opens to everyone (staging use).
+     * CORS_ORIGIN=url,url adds extra exact origins on top.
+     */
     static get CORS_ORIGINS() {
-        const origins = process.env.CORS_ORIGIN;
-        if (origins === '*')
+        const env = (process.env.CORS_ORIGIN || '').trim();
+        if (env === '*')
             return true;
-        if (origins)
-            return origins.split(',').map(o => o.trim());
-        return [
-            'http://localhost:3000',
-            'http://127.0.0.1:3000',
-            'http://localhost:5173',
-            'http://localhost:5174',
-            'http://localhost:8081',
-            'http://localhost:19000',
-            'http://localhost:19006',
-            'https://metapunish.com',
-            'https://www.metapunish.com',
-            'https://fightingames.online',
-            'https://api.fightingames.online',
-            'https://fightgpt.app'
-        ];
+        // These are always allowed regardless of what CORS_ORIGIN is set to.
+        const OWNED_DOMAINS = ['fightingames.online', 'metapunish.com', 'fightgpt.app'];
+        // Extra origins from env var (additive, not replacement)
+        const extraOrigins = new Set(env ? env.split(',').map(o => o.trim()).filter(Boolean) : []);
+        return (origin, cb) => {
+            // No Origin header — server-to-server or same-origin, always allow
+            if (!origin)
+                return cb(null, true);
+            // Any localhost / 127.0.0.1 on any port — always allow
+            if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+                return cb(null, true);
+            }
+            // Any apex or subdomain of our owned domains — always allow
+            const ownedMatch = OWNED_DOMAINS.some(domain => origin === `https://${domain}` ||
+                origin === `http://${domain}` ||
+                origin.endsWith(`.${domain}`));
+            if (ownedMatch)
+                return cb(null, true);
+            // Extra origins from CORS_ORIGIN env var
+            if (extraOrigins.has(origin))
+                return cb(null, true);
+            cb(new Error(`CORS blocked: ${origin}`));
+        };
     }
     static get LOG_LEVEL() { return process.env.LOG_LEVEL || 'info'; }
     static get GEMINI_API_KEY() { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }

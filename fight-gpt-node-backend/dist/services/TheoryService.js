@@ -199,33 +199,42 @@ class TheoryService extends BaseService_1.BaseService {
             model: 'gemini-1.5-flash',
             generationConfig: { responseMimeType: 'application/json' },
         });
-        const prompt = `You are a professional fighting game theorist. Based on ${scenarios.length} real match scenarios for ${characterId} in ${gameId}, generate a comprehensive character theory tailored for a ${skillLevel} level player.
-        
-        If Rookie: Focus on basic game plan, easy punishes, and what buttons to press in neutral.
-        If Intermediate: Focus on frame traps, simple oki, and common matchup mistakes.
-        If Pro: Focus on micro-spacing, resource management at high level, and psychological mind games (yomi).
+        const hasScenarios = scenarios.length > 0;
+        const prompt = `You are MetaPunish — the world's most advanced competitive fighting game intelligence system. Your analysis goes beyond what any wiki, frame data site, or community guide covers. You synthesise competitive psychology, decision theory, and high-level match patterns into exclusive intel that cannot be found on Dustloop, SuperCombo, or any other platform.
 
-Scenarios:
-${scenarioText}
+Generate a ${skillLevel}-level character theory for ${characterId} in ${gameId}.
 
-${correctionFeedback ? `CRITICAL COMMUNITY FEEDBACK (PLEASE CORRECT):
-${correctionFeedback}` : ''}
+${hasScenarios ? `You have ${scenarios.length} real high-level match scenarios to draw from:\n${scenarioText}` : `No match data is loaded yet — generate theory purely from your expert knowledge of ${characterId}'s design, frame data, and competitive history. This theory will be updated as match data is ingested.`}
 
-Return ONLY valid JSON in this exact format:
+${correctionFeedback ? `COMMUNITY CORRECTION (apply this):\n${correctionFeedback}\n` : ''}
+
+Skill level guidance:
+- Rookie: core game plan, which 2-3 buttons win neutral, what to do on knockdown, biggest beginner traps to avoid
+- Intermediate: frame trap sequences, oki decision trees, meter usage priorities, anti-airs, punish routes
+- Pro: micro-spacing, conditioning cycles (how to set up habits then break them), resource management under pressure, psychological patterns at the highest level — the "why" behind each decision, not just the "what"
+
+CRITICAL REQUIREMENT: Your full_theory must contain insights NOT found on any standard platform. This means:
+- Psychological conditioning: how to train the opponent to make a mistake, then exploit it
+- Adaptation theory: how the character's gameplan should evolve between rounds based on what the opponent showed
+- Vortex design: what the character's repeating pressure loop looks like and how to maintain it
+- Anti-autopilot: habits that feel right but actually lose at high level and why
+- The opponent's perspective: what it FEELS like to play against this character so you understand what they're trying to escape
+
+Return ONLY valid JSON:
 {
-  "title": "Character theory title (e.g. 'Akuma: S-Tier Pressure Machine')",
-  "summary": "1-2 sentence TL;DR of the character's current meta standing",
-  "full_theory": "3-4 paragraph detailed theory covering neutral, offense, defense, and win conditions",
-  "key_strengths": ["strength1", "strength2", "strength3"],
-  "key_weaknesses": ["weakness1", "weakness2"],
-  "win_conditions": ["win_condition1", "win_condition2", "win_condition3"],
-  "counterplay": ["counterplay_tip1", "counterplay_tip2", "counterplay_tip3"],
+  "title": "<Specific, competitive title — e.g. 'Luke: The Aggression Tax and How to Collect It'>",
+  "summary": "<2 sentences: current meta standing + the one thing that separates good from great ${characterId} players>",
+  "full_theory": "<5-6 paragraphs: (1) neutral philosophy, (2) offense and pressure design, (3) defense and escape, (4) resource management, (5) psychological conditioning and adaptation, (6) the win condition loop. Each paragraph must contain at least one insight not on any public wiki.>",
+  "key_strengths": ["<specific strength with context — not just 'good damage'>"],
+  "key_weaknesses": ["<specific weakness with context — not just 'slow startup'>"],
+  "win_conditions": ["<concrete, situation-specific win condition>"],
+  "counterplay": ["<how the OPPONENT should approach this character — from their perspective>"],
   "vortex_graph": {
     "nodes": [
-      { "id": "n1", "label": "Situation Name", "description": "Short strategic tip", "type": "neutral|pressure|finisher|reset" }
+      { "id": "n1", "label": "<Situation name>", "description": "<What to do here and why>", "type": "neutral|pressure|finisher|reset" }
     ],
     "edges": [
-      { "source": "n1", "target": "n2", "label": "action/condition" }
+      { "source": "n1", "target": "n2", "label": "<The action or read that connects these states>" }
     ]
   }
 }`;
@@ -264,27 +273,36 @@ Return ONLY valid JSON in this exact format:
             model: 'gemini-1.5-flash',
             generationConfig: { responseMimeType: 'application/json' },
         });
-        const prompt = `You are a professional fighting game matchup analyst. Based on ${scenarios.length} real match scenarios for ${charA} vs ${charB} in ${gameId}, write the definitive matchup theory tailored for a ${skillLevel} level player.
-        
-        If Rookie: Focus on basic punishes, which moves to respect, and the simple objective.
-        If Intermediate: Focus on frame traps, spacing, and common habit-breaking tips.
-        If Pro: Focus on high-level conditioning, resource management (meter/drive), and micro-situation optimization.
+        const hasScenarios = scenarios.length > 0;
+        const prompt = `You are MetaPunish — the world's most advanced competitive fighting game intelligence system. You produce matchup analysis that goes beyond anything on Dustloop, SuperCombo, or YouTube breakdown videos. Your reports synthesise competitive psychology, frame-level decision theory, and high-level match patterns.
 
-Scenarios:
-${scenarioText}
+Write a ${skillLevel}-level matchup theory for ${charA} vs ${charB} in ${gameId}.
 
-${correctionFeedback ? `CRITICAL COMMUNITY FEEDBACK (PLEASE CORRECT):
-${correctionFeedback}` : ''}
+${hasScenarios ? `${scenarios.length} real high-level match scenarios:\n${scenarioText}` : `No match data loaded yet — generate theory from expert knowledge of both characters' design, frame data, and competitive history. This theory will be refined as match data is ingested.`}
+
+${correctionFeedback ? `COMMUNITY CORRECTION (apply this):\n${correctionFeedback}\n` : ''}
+
+Skill level guidance:
+- Rookie: the single most important thing to understand about this matchup, biggest punishes, what to avoid
+- Intermediate: spacing rules, which situations favor each character, meter usage, anti-air exchanges, common intermediate mistakes
+- Pro: frame-perfect exchanges, conditioning cycles (how ${charA} can train ${charB}'s habits and vice versa), drive/resource management, round-by-round adaptation, psychological momentum shifts
+
+CRITICAL REQUIREMENT: This analysis must contain insights NOT on any public platform:
+- The key range that defines the entire matchup and why
+- What each character is trying to achieve vs what the other is trying to deny
+- The "tax" — the specific situation that, if one player keeps avoiding, they will lose long-term
+- Adaptation between rounds: what information to extract and how to use it
+- The mental game: what it FEELS like from each side, and how that perception creates exploitable patterns
 
 Return ONLY valid JSON:
 {
-  "title": "Matchup title (e.g. 'Akuma vs Ryu: Pressure vs Fundamentals')",
-  "summary": "1-2 sentence verdict on who wins and why",
-  "full_theory": "3-4 paragraph theory: neutral, key exchanges, corner situations, meter management, and overall advantage",
-  "key_strengths": ["advantage for ${charA}1", "advantage2"],
-  "key_weaknesses": ["disadvantage for ${charA}1", "disadvantage2"],
-  "win_conditions": ["${charA} wins by...", "key setup1", "key setup2"],
-  "counterplay": ["${charB} should...", "tip2", "tip3"]
+  "title": "<Specific, insightful title — not just character names>",
+  "summary": "<2 sentences: verdict on the matchup ratio and the one pivotal factor that determines who wins>",
+  "full_theory": "<5-6 paragraphs: (1) the defining range and neutral objective, (2) ${charA}'s offensive tools and how ${charB} defends, (3) ${charB}'s offensive tools and how ${charA} defends, (4) corner dynamics and resource management, (5) conditioning and psychological adaptation between rounds, (6) the deciding factor at the highest level>",
+  "key_strengths": ["<${charA} advantage with specific context>"],
+  "key_weaknesses": ["<${charA} disadvantage with specific context>"],
+  "win_conditions": ["<How ${charA} wins — specific scenario, not generic>"],
+  "counterplay": ["<How ${charB} should approach this — from their perspective>"]
 }`;
         try {
             const result = await model.generateContent(prompt);

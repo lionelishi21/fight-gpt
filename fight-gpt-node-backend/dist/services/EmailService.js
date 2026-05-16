@@ -15,7 +15,7 @@ class EmailService {
             logger_1.Logger.warn('[EmailService] RESEND_API_KEY not set. Emails will be logged but not sent.');
         }
     }
-    async send(to, subject, html) {
+    async send(to, subject, html, attempt = 1) {
         if (!this.resend) {
             logger_1.Logger.info(`[EmailService] Simulation: To: ${to}, Subject: ${subject}`);
             return true;
@@ -28,13 +28,19 @@ class EmailService {
                 html,
             });
             if (error) {
-                logger_1.Logger.error('[EmailService] Resend error:', error);
-                return false;
+                throw new Error(typeof error === 'object' && 'message' in error ? error.message : String(error));
             }
             return true;
         }
         catch (err) {
-            logger_1.Logger.error('[EmailService] Failed to send email:', err);
+            const maxAttempts = 3;
+            if (attempt < maxAttempts) {
+                const delayMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s
+                logger_1.Logger.warn(`[EmailService] Attempt ${attempt}/${maxAttempts} failed for "${subject}" — retrying in ${delayMs}ms`);
+                await new Promise(r => setTimeout(r, delayMs));
+                return this.send(to, subject, html, attempt + 1);
+            }
+            logger_1.Logger.error(`[EmailService] All ${maxAttempts} attempts failed for "${subject}" to ${to}:`, err);
             return false;
         }
     }

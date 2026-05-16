@@ -10,6 +10,12 @@ export declare class AppConfig {
     static get MONGODB_URI(): string;
     static get RATE_LIMIT_WINDOW_MS(): number;
     static get RATE_LIMIT_MAX_REQUESTS(): number;
+    /**
+     * CORS origin handler.
+     * Owned domains are ALWAYS allowed — no env var can block them.
+     * CORS_ORIGIN=* additionally opens to everyone (staging use).
+     * CORS_ORIGIN=url,url adds extra exact origins on top.
+     */
     static get CORS_ORIGINS(): any;
     static get LOG_LEVEL(): string;
     static get GEMINI_API_KEY(): string;

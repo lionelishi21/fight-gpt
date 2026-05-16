@@ -38,6 +38,8 @@ class AdminRoutes {
         this.router.post('/games/:gameId/bump-patch', this.adminController.bumpEncyclopediaPatch);
         this.router.post('/games/:gameId/patch', this.adminController.declarePatch);
         this.router.get('/games/:gameId/patches', this.adminController.getPatchHistory);
+        this.router.post('/games/:gameId/scan', this.adminController.scanGame);
+        this.router.post('/games/:gameId/deepscan', this.adminController.deepScanGame);
         this.router.post('/games/:gameId/sync', this.adminController.syncGameData);
         // Character Management
         this.router.get('/characters', this.adminController.getCharacters);

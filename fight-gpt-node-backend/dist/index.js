@@ -11,11 +11,12 @@ dotenv_1.default.config();
 const sentry_1 = require("./helpers/sentry");
 (0, sentry_1.initSentry)();
 const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
 const morgan_1 = __importDefault(require("morgan"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const ioredis_1 = __importDefault(require("ioredis"));
+const redisRateLimitStore_1 = require("./middleware/redisRateLimitStore");
 // Import configuration
 const app_1 = require("./config/app");
 const database_1 = require("./config/database");
@@ -107,8 +108,8 @@ class App {
         this.server = createServer(this.app);
         this.io = new Server(this.server, {
             cors: {
-                origin: app_1.AppConfig.CORS_ORIGINS,
-                credentials: true
+                origin: (origin, cb) => cb(null, true), // CORS handled by raw middleware above
+                credentials: true,
             }
         });
         // Initialize Socket.io events
@@ -205,11 +206,36 @@ class App {
             crossOriginResourcePolicy: { policy: "cross-origin" },
             contentSecurityPolicy: false,
         }));
-        // CORS middleware
-        this.app.use((0, cors_1.default)({
-            origin: app_1.AppConfig.CORS_ORIGINS,
-            credentials: true,
-        }));
+        // CORS — raw header middleware, runs before everything else.
+        // Does NOT rely on the cors package so nothing can interfere with it.
+        const OWNED_DOMAINS = ['fightingames.online', 'metapunish.com', 'fightgpt.app'];
+        const isAllowedOrigin = (origin) => {
+            if (!origin)
+                return true;
+            if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+                return true;
+            return OWNED_DOMAINS.some(d => origin === `https://${d}` || origin === `http://${d}` || origin.endsWith(`.${d}`));
+        };
+        this.app.use((req, res, next) => {
+            const origin = req.headers.origin;
+            // Always set Vary so CDNs/proxies never serve a cached CORS response
+            // to a different origin than the one that produced it.
+            res.setHeader('Vary', 'Origin');
+            res.setHeader('X-API-Version', '7801f9a'); // lets us confirm deployed version
+            if (isAllowedOrigin(origin)) {
+                res.setHeader('Access-Control-Allow-Origin', origin ?? '');
+                res.setHeader('Access-Control-Allow-Credentials', 'true');
+                res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-auth-token,x-admin-key,x-internal-secret');
+                res.setHeader('Access-Control-Max-Age', '0'); // disable preflight caching while debugging
+            }
+            // Answer preflight immediately
+            if (req.method === 'OPTIONS') {
+                res.sendStatus(204);
+                return;
+            }
+            next();
+        });
         // Compression middleware
         this.app.use((0, compression_1.default)());
         // Body parsing middleware
@@ -236,33 +262,48 @@ class App {
         else {
             this.app.use((0, morgan_1.default)('combined'));
         }
-        // Global rate limiter — applied to all user-facing API routes.
-        // Admin routes (/api/admin/) are EXCLUDED: they are protected by
-        // the x-admin-key secret header instead, so they never compete
-        // with real user traffic for the same IP bucket.
-        const limiter = (0, express_rate_limit_1.default)({
-            windowMs: app_1.AppConfig.RATE_LIMIT_WINDOW_MS,
-            max: app_1.AppConfig.RATE_LIMIT_MAX_REQUESTS,
-            message: {
-                success: false,
-                error: 'Too many requests from this IP, please try again later.',
-            },
-            standardHeaders: true,
-            legacyHeaders: false,
-            skip: (req) => req.path.startsWith('/admin/'),
+        // In development: skip all rate limiting so local testing is never blocked.
+        const isDev = app_1.AppConfig.isDevelopment();
+        // Redis client for rate limit store.
+        // MUST have an error handler — without it, connection failures emit an
+        // unhandled 'error' event that crashes the Node.js process entirely.
+        const redisClient = new ioredis_1.default(process.env.REDIS_URL || 'redis://localhost:6379', {
+            maxRetriesPerRequest: 0,
+            enableOfflineQueue: false,
+            lazyConnect: true,
         });
-        // Dedicated brute-force limiter for auth routes.
-        // Much stricter: 10 attempts per 15 minutes per IP.
-        // Applies to login and register independently of the global limiter.
+        redisClient.on('error', (err) => {
+            logger_1.Logger.warn(`[RateLimit] Redis unavailable — rate limiting falling back to memory store: ${err.message}`);
+        });
+        const makeStore = (prefix) => new redisRateLimitStore_1.RedisRateLimitStore(redisClient, prefix);
+        // Global limiter — all user-facing routes.
+        // Admin routes excluded (protected by x-admin-key instead).
+        // /auth/me excluded — it's a read-only heartbeat called on every page load.
+        const limiter = (0, express_rate_limit_1.default)({
+            windowMs: app_1.AppConfig.RATE_LIMIT_WINDOW_MS, // default: 15 min
+            max: app_1.AppConfig.RATE_LIMIT_MAX_REQUESTS, // default: 1000
+            store: makeStore('rl:global:'),
+            message: { success: false, error: 'Too many requests. Please slow down.' },
+            standardHeaders: true,
+            legacyHeaders: false,
+            skip: (req) => isDev ||
+                req.path.startsWith('/admin/') ||
+                req.path === '/auth/me',
+        });
+        // Auth brute-force limiter — login and register only.
+        // 50 attempts per 15 min per IP — strict enough to stop bots,
+        // loose enough that a real user testing multiple accounts never gets locked out.
         const authLimiter = (0, express_rate_limit_1.default)({
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            max: 10,
+            windowMs: 15 * 60 * 1000,
+            max: 50,
+            store: makeStore('rl:auth:'),
             message: {
                 success: false,
-                error: 'Too many login attempts from this IP, please try again in 15 minutes.',
+                error: 'Too many login attempts from this IP. Please wait 15 minutes.',
             },
             standardHeaders: true,
             legacyHeaders: false,
+            skip: () => isDev,
         });
         this.app.use('/api/', limiter);
         this.app.use('/api/auth/login', authLimiter);
@@ -327,12 +368,14 @@ class App {
                 await this.lobbyService.updateActiveCount(lobbyId, 1);
                 // Broadcast user joined
                 lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
-                logger_1.Logger.info(`DOJO_LOBBY: User ${userId} joined room ${lobbyId}`);
+                logger_1.Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId}`);
             });
             socket.on('send_message', async (data) => {
+                logger_1.Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}: ${data.content.substring(0, 20)}...`);
                 const message = await this.lobbyService.saveMessage(data);
                 if (message) {
                     lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+                    logger_1.Logger.info(`DOJO_LOBBY: Broadcasted new_message to lobby_${data.lobbyId}`);
                 }
             });
             socket.on('leave_lobby', async (data) => {
