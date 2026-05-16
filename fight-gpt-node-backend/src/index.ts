@@ -421,44 +421,57 @@ export class App {
       Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
 
       socket.on('join_lobby', async (data: { lobbyId: string; userId: string }) => {
-        const { lobbyId, userId } = data;
-        if (!lobbyId || !userId) return;
-
-        socket.join(`lobby_${lobbyId}`);
-        socket.lobbyId = lobbyId; // Store for disconnect
-        await this.lobbyService.updateActiveCount(lobbyId, 1);
-        
-        // Broadcast user joined
-        lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
-        Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId}`);
+        try {
+          const { lobbyId, userId } = data;
+          if (!lobbyId || !userId) return;
+          socket.join(`lobby_${lobbyId}`);
+          socket.lobbyId = lobbyId;
+          await this.lobbyService.updateActiveCount(lobbyId, 1);
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
+          Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId}`);
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: join_lobby error', err);
+        }
       });
 
-      socket.on('send_message', async (data: { 
-        lobbyId: string; 
-        userId: string; 
-        content: string; 
-        intelLink?: any 
+      socket.on('send_message', async (data: {
+        lobbyId: string;
+        userId: string;
+        content: string;
+        intelLink?: any
       }) => {
-        Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}: ${data.content.substring(0, 20)}...`);
-        const message = await this.lobbyService.saveMessage(data);
-        if (message) {
-          lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
-          Logger.info(`DOJO_LOBBY: Broadcasted new_message to lobby_${data.lobbyId}`);
+        try {
+          if (!data.lobbyId || !data.userId || !data.content?.trim()) return;
+          Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}`);
+          const message = await this.lobbyService.saveMessage(data);
+          if (message) {
+            lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+          }
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: send_message error', err);
         }
       });
 
       socket.on('leave_lobby', async (data: { lobbyId: string; userId: string }) => {
-        const { lobbyId, userId } = data;
-        socket.leave(`lobby_${lobbyId}`);
-        await this.lobbyService.updateActiveCount(lobbyId, -1);
-        lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
+        try {
+          const { lobbyId, userId } = data;
+          socket.leave(`lobby_${lobbyId}`);
+          await this.lobbyService.updateActiveCount(lobbyId, -1);
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: leave_lobby error', err);
+        }
       });
 
       socket.on('disconnect', async () => {
-        if (socket.lobbyId) {
-          await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+        try {
+          if (socket.lobbyId) {
+            await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+          }
+          Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: disconnect error', err);
         }
-        Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
       });
     });
   }
