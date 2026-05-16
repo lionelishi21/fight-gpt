@@ -50,11 +50,11 @@ export class TrainingService {
 
     private async assignDailyMissionsToUser(userId: mongoose.Types.ObjectId): Promise<void> {
         try {
-            // 1. Clear old pending daily missions (keep completed ones)
+            // 1. Clear old daily missions that haven't been completed (keep completed ones for history)
             await UserMission.deleteMany({
                 user: userId,
-                status: 'PENDING',
-                type: 'DAILY' // We should tag these
+                status: { $in: ['PENDING', 'AVAILABLE'] },
+                type: 'DAILY'
             });
 
             // 2. Pick 3 random templates
@@ -168,9 +168,18 @@ export class TrainingService {
      * Get all active and completed missions for a user
      */
     public async getMissionsForUser(userId: string) {
-        return await UserMission.find({ user: userId })
+        // Return today's active missions + completed missions from the last 24h
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        return await UserMission.find({
+            user: userId,
+            $or: [
+                { status: { $in: ['AVAILABLE', 'PENDING'] } },
+                { status: 'COMPLETED', completedAt: { $gte: since } },
+            ]
+        })
             .populate('mission')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .limit(10);
     }
 
     /**
