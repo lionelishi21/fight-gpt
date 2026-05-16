@@ -286,14 +286,21 @@ export class App {
 
     this.app.use((req: any, res: any, next: any) => {
       const origin = req.headers.origin as string | undefined;
+
+      // Always set Vary so CDNs/proxies never serve a cached CORS response
+      // to a different origin than the one that produced it.
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('X-API-Version', '7801f9a'); // lets us confirm deployed version
+
       if (isAllowedOrigin(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        res.setHeader('Access-Control-Allow-Origin', origin ?? '');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-auth-token,x-admin-key,x-internal-secret');
-        res.setHeader('Access-Control-Max-Age', '86400'); // 24h preflight cache
+        res.setHeader('Access-Control-Max-Age', '0'); // disable preflight caching while debugging
       }
-      // Answer preflight immediately — no need to hit any other middleware
+
+      // Answer preflight immediately
       if (req.method === 'OPTIONS') {
         res.sendStatus(204);
         return;
