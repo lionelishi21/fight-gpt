@@ -168,9 +168,9 @@ export class TrainingService {
      * Get all active and completed missions for a user
      */
     public async getMissionsForUser(userId: string) {
-        // Return today's active missions + completed missions from the last 24h
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        return await UserMission.find({
+
+        const existing = await UserMission.find({
             user: userId,
             $or: [
                 { status: { $in: ['AVAILABLE', 'PENDING'] } },
@@ -180,6 +180,20 @@ export class TrainingService {
             .populate('mission')
             .sort({ createdAt: -1 })
             .limit(10);
+
+        // Auto-assign if the user has no active missions yet — no waiting for midnight cron
+        if (existing.length === 0) {
+            await this.assignDailyMissionsToUser(new mongoose.Types.ObjectId(userId));
+            return await UserMission.find({
+                user: userId,
+                status: { $in: ['AVAILABLE', 'PENDING'] },
+            })
+                .populate('mission')
+                .sort({ createdAt: -1 })
+                .limit(10);
+        }
+
+        return existing;
     }
 
     /**
