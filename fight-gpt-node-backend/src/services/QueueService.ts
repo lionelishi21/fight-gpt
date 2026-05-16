@@ -55,14 +55,15 @@ export class QueueService {
      */
     public async addAnalysisJob(data: AnalysisJobData): Promise<void> {
         await this.analysisQueue.add('analyze-video', data, {
+            jobId: data.job_id, // deduplicate — same job_id is never queued twice
             attempts: 3,
             backoff: {
                 type: 'exponential',
-                delay: 60000, // Wait 1 min before retry (e.g. for rate limits)
+                delay: 60000,
             },
             removeOnComplete: true,
         });
-        Logger.info(`[QueueService] Analysis job added for: ${data.youtube_url}`);
+        Logger.info(`[QueueService] Analysis job queued: ${data.job_id} — ${data.youtube_url}`);
     }
 
     /**

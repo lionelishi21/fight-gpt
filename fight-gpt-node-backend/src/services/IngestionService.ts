@@ -273,6 +273,39 @@ export class IngestionService extends BaseService implements IIngestionService {
     }
 
     /**
+     * Bulk-enqueue ALL pending jobs from MongoDB into the BullMQ Redis queue.
+     * The worker then drains them automatically at 5/min with retries.
+     * Safe to call multiple times — BullMQ deduplicates by job_id.
+     */
+    async bulkQueuePending(gameId?: string): Promise<{ queued: number; skipped: number; errors: string[] }> {
+        const result = { queued: 0, skipped: 0, errors: [] as string[] };
+
+        // Fetch all pending jobs (no batchSize cap — we want all 660)
+        const jobs = await this.ingestionRepository.getPendingJobs(gameId, 10000);
+        Logger.info(`[IngestionService] Bulk queuing ${jobs.length} pending jobs into Redis...`);
+
+        for (const job of jobs) {
+            try {
+                await queueService.addAnalysisJob({
+                    job_id: job.job_id,
+                    game_id: job.game_id,
+                    youtube_url: job.youtube_url,
+                    pro_player_id: job.pro_player_id,
+                    video_title: job.video_title,
+                });
+                result.queued++;
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                result.errors.push(`${job.job_id}: ${msg}`);
+                result.skipped++;
+            }
+        }
+
+        Logger.info(`[IngestionService] Bulk queue complete — ${result.queued} queued, ${result.skipped} skipped`);
+        return result;
+    }
+
+    /**
      * Start background scheduler that triggers ingestion + processing on an interval
      * Default: every 6 hours
      */

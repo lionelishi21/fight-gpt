@@ -675,6 +675,29 @@ export class AdminController extends BaseController {
     };
 
     /**
+     * POST /api/admin/ingestion/bulk-queue
+     * Enqueues all 660 pending MongoDB jobs into BullMQ so the worker drains
+     * them automatically at 5/min. Safe to call repeatedly — deduped by job_id.
+     */
+    bulkQueuePending = async (req: Request, res: Response): Promise<void> => {
+        if (!this.ingestionService) {
+            res.status(503).json({ success: false, error: 'Ingestion service unavailable' });
+            return;
+        }
+        try {
+            const gameId = req.query.gameId as string | undefined;
+            const result = await (this.ingestionService as any).bulkQueuePending(gameId);
+            this.sendResponse(res, {
+                success: true,
+                data: result,
+                message: `Queued ${result.queued} jobs into worker. Processing at 5/min — check worker logs for progress.`,
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Bulk queue failed');
+        }
+    };
+
+    /**
      * POST /api/admin/games/:gameId/scan
      * Gemini-powered scan — auto-discovers current patch version + full roster + frame data.
      * Upserts all characters with no duplication. No manual input required.
