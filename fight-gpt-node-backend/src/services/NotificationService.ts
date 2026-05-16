@@ -12,7 +12,26 @@ export class NotificationService extends BaseService {
     }
 
     /**
-     * Generic notification method
+     * Returns true if user is on a paid tier (COMPETITOR or PRO).
+     * Character-specific notifications are premium-only.
+     */
+    private async isPremiumUser(userId: string | mongoose.Types.ObjectId): Promise<boolean> {
+        try {
+            const User = (await import('../models/User')).default;
+            const user = await User.findById(userId).select('tier role').lean();
+            if (!user) return false;
+            if ((user as any).role === 'admin') return true;
+            const tier = ((user as any).tier || 'FREE').toUpperCase();
+            return tier !== 'FREE';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Generic notification method.
+     * If payload includes a characterId, only premium users receive it.
+     * General notifications (no characterId) go to all users.
      */
     async notify(
         userId: string | mongoose.Types.ObjectId,
@@ -28,6 +47,12 @@ export class NotificationService extends BaseService {
         severity: NotificationSeverity = 'medium'
     ): Promise<void> {
         try {
+            // Character-specific intel is a premium feature
+            if (payload.characterId) {
+                const premium = await this.isPremiumUser(userId);
+                if (!premium) return;
+            }
+
             await this.notificationRepository.createNotification({
                 userId: typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) as any : userId as any,
                 type,
@@ -150,12 +175,24 @@ export class NotificationService extends BaseService {
         severity: NotificationSeverity = 'medium'
     ): Promise<void> {
         try {
-            await this.notificationRepository.broadcastToAllUsers({
-                type,
-                severity,
-                payload,
-                isRead: false
-            });
+            if (payload.characterId) {
+                // Character-specific broadcast: only premium users
+                const User = (await import('../models/User')).default;
+                const premiumUsers = await User.find({
+                    $or: [{ tier: { $in: ['COMPETITOR', 'PRO'] } }, { role: 'admin' }]
+                }).select('_id').lean();
+                for (const u of premiumUsers) {
+                    await this.notify(u._id.toString(), type, payload, severity);
+                }
+            } else {
+                // General broadcast: all users
+                await this.notificationRepository.broadcastToAllUsers({
+                    type,
+                    severity,
+                    payload,
+                    isRead: false
+                });
+            }
         } catch (error) {
             console.error('[NotificationService] Broadcast failed:', error);
         }
