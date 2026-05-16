@@ -511,6 +511,9 @@ export class App {
         this.trainingService.startScheduler();
       }
 
+      // Seed default lobbies for active games (non-blocking)
+      this.lobbyService.seedDefaultLobbies().catch(() => {});
+
       // Start server
       this.server.listen(AppConfig.PORT, () => {
         Logger.info(`Server running on port ${AppConfig.PORT} in ${AppConfig.NODE_ENV} mode`);

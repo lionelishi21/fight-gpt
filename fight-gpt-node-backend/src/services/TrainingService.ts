@@ -50,18 +50,45 @@ export class TrainingService {
 
     private async assignDailyMissionsToUser(userId: mongoose.Types.ObjectId): Promise<void> {
         try {
-            // 1. Clear old daily missions that haven't been completed (keep completed ones for history)
+            // 1. Clear old uncompleted daily missions
             await UserMission.deleteMany({
                 user: userId,
                 status: { $in: ['PENDING', 'AVAILABLE'] },
                 type: 'DAILY'
             });
 
-            // 2. Pick 3 random templates
-            const shuffled = [...this.missionTemplates].sort(() => 0.5 - Math.random());
-            const selected = shuffled.slice(0, 3);
+            // 2. Look up user's main character for character-specific missions
+            const User = mongoose.model('User');
+            const user = await User.findById(userId).select('slots activeSlotIndex').lean();
+            const slots = (user as any)?.slots || [];
+            const activeSlot = slots[(user as any)?.activeSlotIndex ?? 0];
+            const mainCharId = activeSlot?.characterId;
+            let mainCharName: string | null = null;
+            let gameId: string | null = activeSlot?.gameId || null;
 
-            for (const template of selected) {
+            if (mainCharId) {
+                const Character = mongoose.model('Character');
+                const char = await Character.findById(mainCharId).select('name game_id').lean();
+                if (char) {
+                    mainCharName = (char as any).name;
+                    gameId = gameId || (char as any).game_id;
+                }
+            }
+
+            // 3. Build mission list: 2 general + 1 character-specific (if available)
+            const shuffled = [...this.missionTemplates].sort(() => 0.5 - Math.random());
+            const generalMissions = shuffled.slice(0, mainCharName ? 2 : 3);
+
+            const templates = [...generalMissions];
+            if (mainCharName) {
+                templates.push({
+                    title: `${mainCharName.toUpperCase()}_MASTERY`,
+                    goal: `Focus on ${mainCharName}'s core game plan: pick their most threatening move and land it 5 times in actual matches. Study the spacing that makes it safe.`,
+                    reward: 200,
+                });
+            }
+
+            for (const template of templates) {
                 const mission = await Mission.create({
                     title: template.title,
                     description: template.goal,
@@ -69,7 +96,6 @@ export class TrainingService {
                     difficulty: 'MEDIUM',
                     reward: { xp: template.reward }
                 });
-
                 await UserMission.create({
                     user: userId,
                     mission: mission._id,

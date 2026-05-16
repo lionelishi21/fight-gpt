@@ -68,4 +68,24 @@ export class LobbyService {
     public async updateActiveCount(lobbyId: string, increment: number): Promise<void> {
         await Lobby.findByIdAndUpdate(lobbyId, { $inc: { active_users: increment } });
     }
+
+    /**
+     * Seed default lobbies for all active games if none exist.
+     * Called once at server startup.
+     */
+    public async seedDefaultLobbies(): Promise<void> {
+        try {
+            const { Game } = await import('../models/Game');
+            const games = await Game.find({ is_active: true }).lean();
+            for (const game of games) {
+                await this.ensureLobby(
+                    (game as any).game_id,
+                    `${(game as any).name} Tactical Hub`
+                );
+            }
+            Logger.info(`[LobbyService] Default lobbies seeded for ${games.length} games`);
+        } catch (e) {
+            Logger.error('[LobbyService] Failed to seed default lobbies', e);
+        }
+    }
 }
