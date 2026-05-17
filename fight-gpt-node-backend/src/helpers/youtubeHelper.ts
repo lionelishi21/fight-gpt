@@ -35,15 +35,24 @@ export function normalizeYoutubeUrl(url: string): string {
 }
 
 /**
- * Checks if a title indicates low-quality or non-match content
+ * Checks if a title indicates low-quality or non-match content.
+ * Returns true if the video should be SKIPPED (not gameplay).
  */
 export function isBadVideoTitle(title: string): boolean {
   const lower = title.toLowerCase();
   const badKeywords = [
-    'compilation', 'highlights', 'best of', 'top 10', 'top 5', 
+    // Non-gameplay formats
+    'compilation', 'highlights', 'best of', 'top 10', 'top 5',
     'funny moments', 'vlog', 'setup', 'tutorial', 'combo guide',
     'how to play', 'tier list', 'teaser', 'trailer', 'reaction',
-    'guide', 'tips', 'tricks', 'how to'
+    'guide', 'tips', 'tricks', 'how to',
+    // Talk/discussion/IRL content
+    'podcast', 'interview', 'stream highlights', 'irl', 'talk show',
+    'commentary', 'discussion', 'q&a', 'q & a', 'collab', 'just chatting',
+    'wedding', 'birthday', 'unboxing', 'cooking', 'travel', 'news',
+    // Low-signal video types
+    'montage', 'funniest', 'rage', 'fails', 'moments', 'review',
+    'ranked climb', 'season recap', 'retrospective',
   ];
   return badKeywords.some(kw => lower.includes(kw));
 }

@@ -2,6 +2,7 @@ import { ICharacterEncyclopediaRepository } from '../repositories/CharacterEncyc
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
 import { IMission } from '../models/Mission';
 import Mission from '../models/Mission';
+import UserMission from '../models/UserMission';
 import User from '../models/User';
 import { Character } from '../models/Character';
 
@@ -29,7 +30,17 @@ export class MissionDetailService {
      * Get detailed training content for a mission
      */
     public async getMissionDetails(missionId: string, userId: string): Promise<MissionDetails> {
-        const mission = await Mission.findById(missionId);
+        // missionId may be a UserMission._id (what the frontend passes from the list).
+        // Try that first, then fall back to a direct Mission lookup.
+        let mission: IMission | null = null;
+
+        const userMission = await UserMission.findById(missionId).populate('mission');
+        if (userMission?.mission) {
+            mission = userMission.mission as unknown as IMission;
+        } else {
+            mission = await Mission.findById(missionId);
+        }
+
         if (!mission) throw new Error('Mission not found');
 
         const user = await User.findById(userId);

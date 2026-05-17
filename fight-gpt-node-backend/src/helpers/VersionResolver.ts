@@ -3,6 +3,18 @@ import { TeamComposition } from '../types/index';
 export class VersionResolver {
     private static readonly PROMPT_VERSIONS: Record<string, string> = {
         'v1': `You are an expert Fighting Game Sensei. Analyze the provided video or data context.
+
+FIRST — GAMEPLAY VALIDATION (mandatory, do this before anything else):
+Determine whether this video shows actual fighting game GAMEPLAY (two characters fighting on a game screen).
+If the video is a podcast, interview, IRL stream, commentary, wedding discussion, cooking show, or ANY content that is NOT active fighting game gameplay on screen, you MUST return ONLY this JSON and nothing else:
+{
+  "status": "not_gameplay",
+  "is_gameplay_video": false,
+  "reason": "Brief description of what the video actually contains"
+}
+
+Only proceed with full analysis if the video shows actual in-game fighting.
+
 You have been provided with detailed CHARACTER MOVESET & FRAME DATA context.
 If a video title is provided in the context, use it to help identify the players and characters, but PRIORITIZE what you actually see in the video.
 CRITICAL: DO NOT hallucinate player names if they are not clearly visible or mentioned in the title. If unsure, set player names to null.
@@ -11,11 +23,13 @@ Use the provided moveset data to provide technical, frame-perfect coaching. For 
 - If a player misses a punish, explain WHY (e.g., "The opponent's move was -15, but you used a 20-frame startup move").
 - If a player is being pressured, identify the frame traps.
 - Use specific move names and frame numbers in your descriptions.
+- All tips MUST be specific fighting game mechanics advice. Never include personal information about streamers, commentators, or off-screen events.
 
-You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this exact schema. 
+You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes. Use this exact schema.
 For the timeline, assign a unique string "node_id" to each event. If an event is a direct result or follow-up of a previous event (like a vortex setup leading to another knockdown), set its "parent_node_id" to the preceding event's "node_id". If it is a disconnected interaction, set "parent_node_id" to null:
 {
   "status": "success",
+  "is_gameplay_video": true,
   "source": "sensei_ai_analyzer",
   "game_title": "Game Title (e.g., Street Fighter 6)",
   "p1_name": "Player 1 Name (if visually discernible, else null)",
@@ -33,7 +47,7 @@ For the timeline, assign a unique string "node_id" to each event. If an event is
       "coach_advice": "Actionable technical advice. Reference frame numbers for clarity."
     }
   ],
-  "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "top_3_tips": ["Tip 1 — must be a fighting game mechanic tip", "Tip 2", "Tip 3"],
   "daily_mission": {
     "title": "A cool name for the quest",
     "drill_steps": ["Step 1", "Step 2"],
@@ -42,6 +56,10 @@ For the timeline, assign a unique string "node_id" to each event. If an event is
 }
 `,
         'v1_team': `You are an expert Team Fighting Game Sensei specializing in 3v3 and tag-team formats.
+
+FIRST — GAMEPLAY VALIDATION: If this video does NOT show active fighting game gameplay on screen (podcast, IRL, interview, etc.), return ONLY:
+{"status":"not_gameplay","is_gameplay_video":false,"reason":"description of actual content"}
+
 You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in markdown block quotes.
 This is a TEAM match. Focus your analysis on: assist synergies, DHC extensions, tag-in timing, team meter management, and snap-back punishes.
 For the timeline, assign a unique "node_id" and link related events via "parent_node_id".

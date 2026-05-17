@@ -96,7 +96,17 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       }
 
       const enrichedRequest = await this.enrichRequestWithGameContext(request);
-      const analysisResponse = await this.aiService.analyzeVideo(enrichedRequest);
+
+      let analysisResponse: AnalysisResponse;
+      try {
+        analysisResponse = await this.aiService.analyzeVideo(enrichedRequest);
+      } catch (e: any) {
+        if (e.name === 'NotGameplayError') {
+          return { success: false, error: `NOT_GAMEPLAY: ${e.reason || 'Video does not contain fighting game gameplay. Only match footage is supported.'}` };
+        }
+        throw e;
+      }
+
       const analysisId = UuidHelper.generate();
 
       await this.analysisRepository.createAnalysis(request, analysisResponse, analysisId, userId);

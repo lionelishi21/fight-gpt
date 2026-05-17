@@ -158,8 +158,15 @@ export class AiService extends BaseService implements IAiService {
       const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       try {
-        return JSON.parse(sanitizedJson) as AnalysisResponse;
-      } catch (e) {
+        const parsed = JSON.parse(sanitizedJson) as any;
+        // Reject non-gameplay content before it pollutes the DB
+        if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
+          const reason = parsed.reason || 'Video does not contain fighting game gameplay';
+          throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
+        }
+        return parsed as AnalysisResponse;
+      } catch (e: any) {
+        if (e.name === 'NotGameplayError') throw e;
         console.error('Failed to parse Gemini response', responseText);
         throw new Error('Invalid JSON response from Gemini API');
       }
