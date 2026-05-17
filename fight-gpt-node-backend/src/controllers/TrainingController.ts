@@ -22,6 +22,11 @@ export class TrainingController extends BaseController {
      * Get daily missions for user
      */
     public getMissions = async (req: Request, res: Response): Promise<void> => {
+        // Missions change daily — never serve a cached response
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.removeHeader('ETag');
+
         try {
             // @ts-ignore
             const userId = req.user.id;
