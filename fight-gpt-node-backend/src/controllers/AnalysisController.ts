@@ -203,6 +203,8 @@ export class AnalysisController extends BaseController implements IAnalysisContr
    * GET /api/analysis/discovery
    */
   async getDiscoveryAnalyses(req: Request, res: Response, next: NextFunction): Promise<void> {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.removeHeader('ETag');
     const requestId = this.getRequestId(req);
     const startTime = Date.now();
 

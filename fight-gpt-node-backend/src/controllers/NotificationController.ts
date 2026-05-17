@@ -8,6 +8,8 @@ export class NotificationController extends BaseController {
     }
 
     public getMyNotifications = async (req: Request, res: Response): Promise<void> => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.removeHeader('ETag');
         try {
             const userId = (req as any).user?.id || (req as any).user?._id;
             const limit = parseInt(req.query.limit as string) || 20;
@@ -19,6 +21,8 @@ export class NotificationController extends BaseController {
     };
 
     public getUnreadCount = async (req: Request, res: Response): Promise<void> => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.removeHeader('ETag');
         try {
             const userId = (req as any).user?.id || (req as any).user?._id;
             const count = await this.notificationRepository.getUnreadCount(userId);
