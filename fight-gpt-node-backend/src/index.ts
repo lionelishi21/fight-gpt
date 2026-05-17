@@ -336,20 +336,30 @@ export class App {
 
     const isDev = AppConfig.isDevelopment();
 
-    // Global limiter — in-memory, no external dependencies.
+    // Global limiter — generous for real app traffic, blocks scrapers/abuse.
+    // In-memory per-instance. At 100k users across 2 instances, each instance
+    // handles ~50k users — 10,000 req / 15 min per IP is safe for real users.
     const limiter = rateLimit({
       windowMs: AppConfig.RATE_LIMIT_WINDOW_MS,
-      max: AppConfig.RATE_LIMIT_MAX_REQUESTS,
+      max: AppConfig.RATE_LIMIT_MAX_REQUESTS || 10000,
       message: { success: false, error: 'Too many requests. Please slow down.' },
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => isDev || req.path.startsWith('/admin/') || req.path === '/auth/me',
+      skip: (req) => {
+        if (isDev) return true;
+        const p = req.path;
+        // Skip high-frequency endpoints that are safe and already no-cached
+        return p.startsWith('/admin/') ||
+               p === '/auth/me' ||
+               p === '/notifications/unread-count' ||
+               p === '/training/missions';
+      },
     });
 
-    // Auth limiter — 50 attempts per 15 min, enough for real users, blocks bots.
+    // Auth limiter — tight only on login/register to block credential stuffing
     const authLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 50,
+      max: 20,
       message: { success: false, error: 'Too many login attempts. Please wait 15 minutes.' },
       standardHeaders: true,
       legacyHeaders: false,
