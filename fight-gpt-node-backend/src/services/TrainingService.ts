@@ -49,67 +49,67 @@ export class TrainingService {
     }
 
     private async assignDailyMissionsToUser(userId: mongoose.Types.ObjectId): Promise<void> {
-        try {
-            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-            // 1. Clear today's uncompleted daily missions so we can reassign fresh ones
-            await UserMission.deleteMany({
+        // 1. Clear today's uncompleted daily missions so we can reassign fresh ones
+        await UserMission.deleteMany({
+            user: userId,
+            type: 'DAILY',
+            assignedDate: today,
+            status: { $in: ['PENDING', 'AVAILABLE'] },
+        });
+
+        // 2. Look up user's main character for character-specific missions
+        const User = mongoose.model('User');
+        const user = await User.findById(userId).select('slots activeSlotIndex').lean();
+        const slots = (user as any)?.slots || [];
+        const activeSlot = slots[(user as any)?.activeSlotIndex ?? 0];
+        const mainCharId = activeSlot?.characterId;
+        let mainCharName: string | null = null;
+        let gameId: string | null = activeSlot?.gameId || null;
+
+        if (mainCharId) {
+            const Character = mongoose.model('Character');
+            const char = await Character.findById(mainCharId).select('name game_id').lean();
+            if (char) {
+                mainCharName = (char as any).name;
+                gameId = gameId || (char as any).game_id;
+            }
+        }
+
+        // 3. Build mission list: 2 general + 1 character-specific (if available)
+        const shuffled = [...this.missionTemplates].sort(() => 0.5 - Math.random());
+        const generalMissions = shuffled.slice(0, mainCharName ? 2 : 3);
+
+        const templates = [...generalMissions];
+        if (mainCharName) {
+            templates.push({
+                title: `${mainCharName.toUpperCase()}_MASTERY`,
+                goal: `Focus on ${mainCharName}'s core game plan: pick their most threatening move and land it 5 times in actual matches. Study the spacing that makes it safe.`,
+                reward: 200,
+            });
+        }
+
+        Logger.info(`[TrainingService] Creating ${templates.length} missions for user ${userId} (char: ${mainCharName || 'none'})`);
+
+        for (const template of templates) {
+            const mission = await Mission.create({
+                title: template.title,
+                description: template.goal,
+                type: 'DRILL',
+                difficulty: 'MEDIUM',
+                reward: { xp: template.reward }
+            });
+            await UserMission.create({
                 user: userId,
+                mission: mission._id,
+                status: 'AVAILABLE',
                 type: 'DAILY',
                 assignedDate: today,
-                status: { $in: ['PENDING', 'AVAILABLE'] },
             });
-
-            // 2. Look up user's main character for character-specific missions
-            const User = mongoose.model('User');
-            const user = await User.findById(userId).select('slots activeSlotIndex').lean();
-            const slots = (user as any)?.slots || [];
-            const activeSlot = slots[(user as any)?.activeSlotIndex ?? 0];
-            const mainCharId = activeSlot?.characterId;
-            let mainCharName: string | null = null;
-            let gameId: string | null = activeSlot?.gameId || null;
-
-            if (mainCharId) {
-                const Character = mongoose.model('Character');
-                const char = await Character.findById(mainCharId).select('name game_id').lean();
-                if (char) {
-                    mainCharName = (char as any).name;
-                    gameId = gameId || (char as any).game_id;
-                }
-            }
-
-            // 3. Build mission list: 2 general + 1 character-specific (if available)
-            const shuffled = [...this.missionTemplates].sort(() => 0.5 - Math.random());
-            const generalMissions = shuffled.slice(0, mainCharName ? 2 : 3);
-
-            const templates = [...generalMissions];
-            if (mainCharName) {
-                templates.push({
-                    title: `${mainCharName.toUpperCase()}_MASTERY`,
-                    goal: `Focus on ${mainCharName}'s core game plan: pick their most threatening move and land it 5 times in actual matches. Study the spacing that makes it safe.`,
-                    reward: 200,
-                });
-            }
-
-            for (const template of templates) {
-                const mission = await Mission.create({
-                    title: template.title,
-                    description: template.goal,
-                    type: 'DRILL',         // Mission model only allows DRILL/MATCHUP/KNOWLEDGE
-                    difficulty: 'MEDIUM',
-                    reward: { xp: template.reward }
-                });
-                await UserMission.create({
-                    user: userId,
-                    mission: mission._id,
-                    status: 'AVAILABLE',
-                    type: 'DAILY',
-                    assignedDate: today,
-                });
-            }
-        } catch (e) {
-            Logger.error(`[TrainingService] Failed to assign missions to user ${userId}`, e);
         }
+
+        Logger.info(`[TrainingService] Done — ${templates.length} missions assigned to user ${userId}`);
     }
 
     /**
@@ -213,7 +213,14 @@ export class TrainingService {
 
         // Auto-assign if user has no missions for today
         if (existing.length === 0) {
-            await this.assignDailyMissionsToUser(new mongoose.Types.ObjectId(userId));
+            Logger.info(`[TrainingService] No missions found for user ${userId} on ${today} — auto-assigning`);
+            try {
+                await this.assignDailyMissionsToUser(new mongoose.Types.ObjectId(userId));
+            } catch (e: any) {
+                // Log the real error so it shows in PM2 logs
+                Logger.error(`[TrainingService] Auto-assign failed for user ${userId}: ${e?.message}`, e);
+                throw new Error(`Mission auto-assign failed: ${e?.message}`);
+            }
             return await UserMission.find({
                 user: userId,
                 assignedDate: today,
