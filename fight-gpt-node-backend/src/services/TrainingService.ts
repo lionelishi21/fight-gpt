@@ -92,7 +92,7 @@ export class TrainingService {
                 const mission = await Mission.create({
                     title: template.title,
                     description: template.goal,
-                    type: 'DAILY',
+                    type: 'DRILL',         // Mission model only allows DRILL/MATCHUP/KNOWLEDGE
                     difficulty: 'MEDIUM',
                     reward: { xp: template.reward }
                 });
