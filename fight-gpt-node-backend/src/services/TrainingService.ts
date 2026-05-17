@@ -50,11 +50,14 @@ export class TrainingService {
 
     private async assignDailyMissionsToUser(userId: mongoose.Types.ObjectId): Promise<void> {
         try {
-            // 1. Clear old uncompleted daily missions
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+            // 1. Clear today's uncompleted daily missions so we can reassign fresh ones
             await UserMission.deleteMany({
                 user: userId,
+                type: 'DAILY',
+                assignedDate: today,
                 status: { $in: ['PENDING', 'AVAILABLE'] },
-                type: 'DAILY'
             });
 
             // 2. Look up user's main character for character-specific missions
@@ -100,7 +103,8 @@ export class TrainingService {
                     user: userId,
                     mission: mission._id,
                     status: 'AVAILABLE',
-                    type: 'DAILY'
+                    type: 'DAILY',
+                    assignedDate: today,
                 });
             }
         } catch (e) {
@@ -194,24 +198,25 @@ export class TrainingService {
      * Get all active and completed missions for a user
      */
     public async getMissionsForUser(userId: string) {
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const today = new Date().toISOString().slice(0, 10);
 
         const existing = await UserMission.find({
             user: userId,
             $or: [
-                { status: { $in: ['AVAILABLE', 'PENDING'] } },
-                { status: 'COMPLETED', completedAt: { $gte: since } },
+                { assignedDate: today, status: { $in: ['AVAILABLE', 'PENDING'] } },
+                { status: 'COMPLETED', completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
             ]
         })
             .populate('mission')
             .sort({ createdAt: -1 })
             .limit(10);
 
-        // Auto-assign if the user has no active missions yet — no waiting for midnight cron
+        // Auto-assign if user has no missions for today
         if (existing.length === 0) {
             await this.assignDailyMissionsToUser(new mongoose.Types.ObjectId(userId));
             return await UserMission.find({
                 user: userId,
+                assignedDate: today,
                 status: { $in: ['AVAILABLE', 'PENDING'] },
             })
                 .populate('mission')

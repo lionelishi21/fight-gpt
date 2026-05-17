@@ -3,9 +3,11 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IUserMission extends Document {
     user: mongoose.Types.ObjectId;
     mission: mongoose.Types.ObjectId;
-    status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    status: 'AVAILABLE' | 'PENDING' | 'COMPLETED' | 'FAILED';
+    type: 'DAILY' | 'DRILL' | 'MATCHUP' | 'KNOWLEDGE';
+    assignedDate: string;        // YYYY-MM-DD — lets same mission recur on different days
     completedAt?: Date;
-    metadata?: Record<string, any>; // Store relevant data like "10/10 anti-airs"
+    metadata?: Record<string, any>;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -16,8 +18,19 @@ const UserMissionSchema: Schema = new Schema(
         mission: { type: Schema.Types.ObjectId, ref: 'Mission', required: true },
         status: {
             type: String,
-            enum: ['PENDING', 'COMPLETED', 'FAILED'],
-            default: 'PENDING',
+            enum: ['AVAILABLE', 'PENDING', 'COMPLETED', 'FAILED'],
+            default: 'AVAILABLE',
+        },
+        type: {
+            type: String,
+            enum: ['DAILY', 'DRILL', 'MATCHUP', 'KNOWLEDGE'],
+            default: 'DAILY',
+        },
+        // Date the mission was assigned (YYYY-MM-DD). Allows the same mission
+        // template to repeat on different days without hitting the unique index.
+        assignedDate: {
+            type: String,
+            default: () => new Date().toISOString().slice(0, 10),
         },
         completedAt: { type: Date },
         metadata: { type: Schema.Types.Mixed },
@@ -25,8 +38,7 @@ const UserMissionSchema: Schema = new Schema(
     { timestamps: true }
 );
 
-// Ensure a user has unique entry per mission (unless we want repeatable dailies,
-// but for now let's unique per mission ID. For dailies, we might rotate mission IDs or add a date field)
-UserMissionSchema.index({ user: 1, mission: 1 }, { unique: true });
+// Unique per user+mission+day — allows daily rotation without duplicates within a day
+UserMissionSchema.index({ user: 1, mission: 1, assignedDate: 1 }, { unique: true });
 
 export default mongoose.model<IUserMission>('UserMission', UserMissionSchema);
