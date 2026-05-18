@@ -89,21 +89,39 @@ export interface AnalysisResponse {
 }
 
 /**
- * Timeline event in analysis
+ * Timeline event in analysis — v2 schema with outcome and spacing precision
  */
 export interface TimelineEvent {
   node_id?: string;
   parent_node_id?: string | null;
   timestamp: string;
-  event_type: 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss' | 'neutral_win' | 'frame_trap' | 'whiff_punish' | 'okizeme' | 'corner_carry' | 'wake_up_option';
+  event_type:
+    | 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss' | 'neutral_win'
+    | 'frame_trap' | 'whiff_punish' | 'okizeme' | 'corner_carry' | 'wake_up_option'
+    | 'anti_air' | 'evasion' | 'spacing_error' | 'counter_hit' | 'trade';
+  actor?: 'p1' | 'p2';
+  move_used?: string;
+  move_confidence?: 'high' | 'medium' | 'low';
+  // What actually happened when the move made (or failed to make) contact
+  move_outcome?: 'whiff' | 'blocked' | 'normal_hit' | 'counter_hit' | 'punish' | 'trade';
+  // What the opponent was doing at the time
+  opponent_response?:
+    | 'standing' | 'crouching' | 'airborne' | 'backdash'
+    | 'parry' | 'perfect_parry' | 'drive_reversal' | 'whiffed_attack';
+  // Distance category between players
+  spacing?: 'throw_range' | 'close' | 'mid_range' | 'max_range' | 'out_of_range';
+  // Anti-air detection
+  is_anti_air?: boolean;
+  attack_direction?: 'upward_normal' | 'dp_motion' | 'charged_move' | 'super_art';
+  // Evasion detection — how the opponent avoided the move
+  evasion_type?:
+    | 'jump_back' | 'jump_forward' | 'neutral_jump'
+    | 'parry' | 'perfect_parry' | 'backdash' | 'drive_impact_armor' | null;
   description: string;
   coach_advice: string;
+  // Legacy fields kept for backwards compatibility
   turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
-  neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
-  spacing?: 'close' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
   frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
-  p1_state?: 'standing' | 'crouching' | 'jumping' | 'knockdown' | 'wakeup' | 'pressured' | 'attacking' | 'blocking';
-  p2_state?: 'standing' | 'crouching' | 'jumping' | 'knockdown' | 'wakeup' | 'pressured' | 'attacking' | 'blocking';
 }
 
 /**

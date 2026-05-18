@@ -109,6 +109,15 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       const analysisId = UuidHelper.generate();
 
+      // --- MOVE NAME VALIDATION ---
+      // Cross-check timeline move names against the CharacterEncyclopedia.
+      // If a move name cannot be found for that character, downgrade confidence
+      // to 'low' so the frontend can flag it. This prevents hallucinated move names
+      // (e.g. "crouching medium" being called "standing heavy") from reaching users.
+      if (analysisResponse.timeline?.length && this.characterEncyclopediaService) {
+        await this.validateMoveNames(analysisResponse, request.game_id || 'sf6');
+      }
+
       await this.analysisRepository.createAnalysis(request, analysisResponse, analysisId, userId);
 
       // --- VECTOR STORAGE & INTELLIGENCE LOOP ---
@@ -278,6 +287,68 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       return { success: true };
     } catch (error) {
       return { success: false, error: 'Failed to track click' };
+    }
+  }
+
+  /**
+   * Cross-checks every move_used in the timeline against the CharacterEncyclopedia.
+   * If a move name can't be found for that character, confidence is set to 'low'
+   * and a note is appended to the description so the user knows it's uncertain.
+   * This catches hallucinated move names without blocking the analysis.
+   */
+  private async validateMoveNames(response: AnalysisResponse, gameId: string): Promise<void> {
+    if (!response.timeline) return;
+
+    const charCache: Record<string, Set<string>> = {};
+
+    const getKnownMoves = async (charName: string): Promise<Set<string>> => {
+      const key = `${gameId}:${charName}`.toLowerCase();
+      if (charCache[key]) return charCache[key];
+      try {
+        const encRes = await this.characterEncyclopediaService.getEncyclopediaByGameAndCharacter(gameId, charName.toLowerCase().replace(/\s+/g, '_'));
+        const enc = encRes.success ? encRes.data : null;
+        const names = new Set<string>();
+        if (enc?.moveset) {
+          const all = [
+            ...(enc.moveset.normals || []),
+            ...(enc.moveset.specials || []),
+            ...(enc.moveset.supers || []),
+            ...(enc.moveset.throws || []),
+          ];
+          all.forEach(m => {
+            names.add(m.name.toLowerCase());
+            // Also add common shorthand variations
+            names.add(m.name.toLowerCase().replace(/\s+/g, ''));
+          });
+        }
+        charCache[key] = names;
+        return names;
+      } catch {
+        charCache[key] = new Set();
+        return new Set();
+      }
+    };
+
+    for (const event of response.timeline) {
+      if (!event.move_used || event.move_confidence === 'low') continue;
+      // Skip generic descriptors — they're intentionally vague
+      const genericTerms = ['a heavy', 'a medium', 'a light', 'a low', 'a special', 'a normal', 'a move', 'unknown'];
+      if (genericTerms.some(t => event.move_used!.toLowerCase().startsWith(t))) continue;
+
+      // Determine which character used the move
+      const charName = event.actor === 'p2' ? response.p2_character : response.p1_character;
+      if (!charName) continue;
+
+      const knownMoves = await getKnownMoves(charName);
+      if (knownMoves.size === 0) continue; // No encyclopedia data for this character
+
+      const moveLower = event.move_used.toLowerCase().replace(/\s+/g, '');
+      const found = [...knownMoves].some(m => m.replace(/\s+/g, '') === moveLower || m.includes(moveLower) || moveLower.includes(m));
+
+      if (!found) {
+        event.move_confidence = 'low';
+        event.description = `[Move name uncertain — "${event.move_used}" not found in ${charName}'s known moveset] ${event.description}`;
+      }
     }
   }
 
