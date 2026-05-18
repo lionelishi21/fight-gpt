@@ -5,6 +5,7 @@ import { TimelineEvent } from '../types';
 import mongoose from 'mongoose';
 import cron from 'node-cron';
 import { Logger } from '../helpers/logger';
+import { queueService } from './QueueService';
 
 export class TrainingService {
     private missionTemplates = [
@@ -270,13 +271,25 @@ export class TrainingService {
      * Submit video proof (links to a new analysis)
      */
     public async submitProof(userId: string, userMissionId: string, proofUrl: string) {
-        const userMission = await UserMission.findOne({ _id: userMissionId, user: userId });
+        const userMission = await UserMission.findOne({ _id: userMissionId, user: userId }).populate('mission');
         if (!userMission) throw new Error('Mission not found');
+        if (userMission.status === 'COMPLETED') return { success: true, message: 'Mission already completed' };
 
+        // Save proof URL and set status to PENDING (awaiting AI verification)
+        userMission.status = 'PENDING';
         userMission.metadata = { ...userMission.metadata, proofUrl };
         await userMission.save();
 
-        return { success: true, message: 'Proof submitted for tactical review' };
+        // Enqueue AI proof validation — worker will verify and flip to COMPLETED/FAILED + award XP
+        const mission = userMission.mission as any;
+        await queueService.addProofValidationJob({
+            userId,
+            missionId: mission?._id?.toString() || mission?.toString(),
+            proofUrl,
+        });
+
+        Logger.info(`[TrainingService] Proof queued for verification: mission=${userMission._id} user=${userId}`);
+        return { success: true, message: 'Proof submitted — Sensei is reviewing your footage.' };
     }
 }
 

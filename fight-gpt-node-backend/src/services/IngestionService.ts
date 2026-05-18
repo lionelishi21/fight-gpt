@@ -143,7 +143,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                         });
 
                         // Enqueue for background processing
-                        await queueService.addAnalysisJob({
+                        await queueService.addAnalysisJob({ source: 'ingestion',
                             job_id: job.job_id,
                             game_id: gameId,
                             youtube_url: url,
@@ -286,7 +286,7 @@ export class IngestionService extends BaseService implements IIngestionService {
 
         for (const job of jobs) {
             try {
-                await queueService.addAnalysisJob({
+                await queueService.addAnalysisJob({ source: 'ingestion',
                     job_id: job.job_id,
                     game_id: job.game_id,
                     youtube_url: job.youtube_url,
@@ -405,7 +405,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                         });
 
                         // Enqueue for background processing
-                        await queueService.addAnalysisJob({
+                        await queueService.addAnalysisJob({ source: 'ingestion',
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,
@@ -535,7 +535,7 @@ export class IngestionService extends BaseService implements IIngestionService {
                         });
 
                         // Enqueue for background processing
-                        await queueService.addAnalysisJob({
+                        await queueService.addAnalysisJob({ source: 'ingestion',
                             job_id: job.job_id,
                             game_id: pro.gameId,
                             youtube_url: url,

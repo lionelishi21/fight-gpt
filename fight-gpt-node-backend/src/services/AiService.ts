@@ -127,7 +127,12 @@ export class AiService extends BaseService implements IAiService {
   }
 
   private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
-    const prompt = VersionResolver.resolvePrompt('v1');
+    const prompt = VersionResolver.resolvePromptForGame(
+      request.game_id || 'sf6',
+      request.match_format || '1v1',
+      request.p1_team,
+      request.p2_team,
+    );
 
     let fullPrompt = prompt;
     if (request.ai_context) {

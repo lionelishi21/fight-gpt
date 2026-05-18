@@ -97,6 +97,20 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       const enrichedRequest = await this.enrichRequestWithGameContext(request);
 
+      // --- FEW-SHOT VECTOR INJECTION ---
+      // Retrieve the 3 most similar verified scenarios from the vector DB and
+      // inject them as examples before the video analysis. This teaches Gemini
+      // what correct outcome/spacing/move classification looks like for this game.
+      try {
+        const fewShotExamples = await this.buildFewShotContext(enrichedRequest);
+        if (fewShotExamples) {
+          enrichedRequest.ai_context = (enrichedRequest.ai_context || '') + fewShotExamples;
+        }
+      } catch (e) {
+        // Never block analysis if few-shot retrieval fails
+        console.warn('[AnalysisService] Few-shot injection failed, continuing without examples:', e instanceof Error ? e.message : e);
+      }
+
       let analysisResponse: AnalysisResponse;
       try {
         analysisResponse = await this.aiService.analyzeVideo(enrichedRequest);
@@ -288,6 +302,52 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     } catch (error) {
       return { success: false, error: 'Failed to track click' };
     }
+  }
+
+  /**
+   * Queries the vector DB for the 3 most similar verified scenarios and formats
+   * them as few-shot coaching examples to inject into the Gemini prompt.
+   * Returns null if vectorRepository is unavailable or no relevant examples exist.
+   */
+  private async buildFewShotContext(request: AnalysisRequest): Promise<string | null> {
+    if (!this.vectorRepository || !request.game_id) return null;
+
+    // Build a short text description of what we're about to analyze, then embed it
+    const queryText = [
+      request.game_id.toUpperCase(),
+      request.p1_character_id ? `P1: ${request.p1_character_id}` : '',
+      request.p2_character_id ? `P2: ${request.p2_character_id}` : '',
+      request.video_title || '',
+    ].filter(Boolean).join(' — ');
+
+    const embedding = await this.aiService.generateEmbedding(queryText);
+    if (!embedding || embedding.length === 0) return null;
+
+    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 3);
+    if (!similar || similar.length === 0) return null;
+
+    const examples = similar
+      .filter(s => s.description)
+      .map((s, i) => {
+        return [
+          `EXAMPLE ${i + 1}:`,
+          s.characters_involved?.length ? `  Characters: ${s.characters_involved.join(' vs ')}` : '',
+          s.tags?.length ? `  Event type: ${s.tags[0]}` : '',
+          s.spacing ? `  Spacing: ${s.spacing}` : '',
+          s.frame_advantage ? `  Frame state: ${s.frame_advantage}` : '',
+          `  Verified event: ${s.description}`,
+          s.context ? `  Full context: ${s.context}` : '',
+        ].filter(Boolean).join('\n');
+      });
+
+    if (examples.length === 0) return null;
+
+    return `\n\n═══ VERIFIED REFERENCE EXAMPLES FROM SIMILAR MATCHES ═══
+The following events were correctly classified by human coaches. Use them as ground truth for outcome and spacing classification in this match:
+
+${examples.join('\n\n')}
+
+═══ END EXAMPLES ═══\n`;
   }
 
   /**

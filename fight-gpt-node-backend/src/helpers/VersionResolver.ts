@@ -147,6 +147,177 @@ Use this exact schema:
   }
 }
 `,
+        // ─── TEKKEN 8 — Heat system, wall breaks, power crush ───────────────
+        'v1_tekken8': `You are an enterprise-level Tekken 8 AI Coach.
+
+GAMEPLAY VALIDATION: If video is not Tekken 8 gameplay, return {"status":"not_gameplay","is_gameplay_video":false,"reason":"..."}
+
+TEKKEN 8 SPECIFIC MECHANICS — classify these precisely:
+- HEAT SYSTEM: "heat_activated" (glowing orange aura), "heat_smash" (powered move during Heat), "heat_burst" (defensive Heat activation)
+- WALL MECHANICS: "wall_splat" (opponent hits wall, bounces), "wall_break" (opponent crashes through wall to new stage area), "wall_carry" (series of moves pushing to wall)
+- POWER CRUSH: "power_crush" (armored attack absorbs hit — character flashes while continuing the move)
+- TORNADO: "tornado" (hit that causes spinning airborne state for extended juggle)
+- SCREW: "screw_attack" (hit that causes rolling ground state)
+- RAGE: "rage_art" (super move with super armor), "rage_drive" (powered followup)
+- REVERSALS: "sidestep_win" (stepping through linear move), "sidestep_loss" (stepping into tracking move)
+
+OUTCOME DETECTION (Tekken 8):
+- "launch": move sent opponent airborne for juggle
+- "grounded": opponent hit on ground
+- "blocked": opponent blocked (Tekken shows guard impact)
+- "whiff": move missed entirely — NO guard impact, opponent continues movement
+- "parry": opponent used parry or reversal timing window
+- "power_crush_armored": move was absorbed by power crush
+
+Return the same v2 JSON schema as SF6 but with tekken8-specific event_types added:
+wall_splat | wall_break | heat_activation | heat_smash | power_crush | tornado | rage_art | sidestep | launch
+
+{
+  "status": "success",
+  "is_gameplay_video": true,
+  "source": "sensei_ai_analyzer_v2_tekken8",
+  "game_title": "Tekken 8",
+  "p1_name": null,
+  "p2_name": null,
+  "p1_character": "Character name",
+  "p2_character": "Character name",
+  "match_winner": null,
+  "timeline": [
+    {
+      "node_id": "evt-001",
+      "parent_node_id": null,
+      "timestamp": "MM:SS",
+      "event_type": "punish_missed | bad_habit | pro_move | wall_splat | wall_break | heat_activation | heat_smash | power_crush | tornado | rage_art | sidestep | launch | whiff_punish",
+      "actor": "p1 | p2",
+      "move_used": "Move name or descriptor",
+      "move_confidence": "high | medium | low",
+      "move_outcome": "whiff | blocked | normal_hit | counter_hit | launch | grounded | power_crush_armored",
+      "opponent_response": "standing | crouching | airborne | sidestep | power_crush | backdash",
+      "spacing": "throw_range | close | mid_range | max_range | out_of_range",
+      "is_anti_air": false,
+      "evasion_type": null,
+      "description": "Technical description referencing Tekken 8 mechanics",
+      "coach_advice": "Tekken-specific actionable coaching"
+    }
+  ],
+  "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "daily_mission": { "title": "Mission name", "drill_steps": ["Step 1"], "goal": "Goal" }
+}
+`,
+
+        // ─── GUILTY GEAR STRIVE — Roman Cancel, Overdrive, Burst ──────────
+        'v1_ggst': `You are an enterprise-level Guilty Gear Strive AI Coach.
+
+GAMEPLAY VALIDATION: If video is not GGST gameplay, return {"status":"not_gameplay","is_gameplay_video":false,"reason":"..."}
+
+GUILTY GEAR STRIVE MECHANICS — classify precisely:
+- ROMAN CANCEL types: "red_rc" (cancel after hitting move — red flash), "purple_rc" (cancel whiffed/neutral move — purple), "yellow_rc" (cancel during blockstun — yellow), "blue_rc" (cancel during hitstun — blue slow effect)
+- OVERDRIVE: "overdrive" (super move — Tension Gauge consumed)
+- COUNTER HIT: "ch_stagger" (counterhit causing staggers in GGST), "ground_bounce", "wall_bounce", "wall_break" (stage destruction)
+- BURST: "gold_burst" (offensive burst during combo — risks reversal), "blue_burst" (defensive burst — pushes opponent away)
+- FAULTLESS DEFENSE: "faultless_defense" (opponent used FD — blue glow, pushback, tension drain)
+- INSTANT BLOCK: "instant_block" (tight timing block — shorter blockstun)
+- PSYCH BURST: distinguish Burst types — gold is riskier
+- WALL BREAK: full wall destruction triggers cinematic transition
+
+OUTCOME DETECTION (GGST):
+- "whiff": no contact — critical to identify, GGST has many whiff-punish opportunities
+- "blocked": standard block (gray sparks)
+- "faultless_defense": opponent spent tension to FD (blue glow)
+- "instant_block": tight timing block (brighter spark)
+- "normal_hit": normal hit sparks
+- "counter_hit": CH sparks — stagger or float
+- "rc_conversion": Roman Cancel used to extend or confirm a hit
+
+{
+  "status": "success",
+  "is_gameplay_video": true,
+  "source": "sensei_ai_analyzer_v2_ggst",
+  "game_title": "Guilty Gear -Strive-",
+  "p1_name": null,
+  "p2_name": null,
+  "p1_character": "Character name",
+  "p2_character": "Character name",
+  "match_winner": null,
+  "timeline": [
+    {
+      "node_id": "evt-001",
+      "parent_node_id": null,
+      "timestamp": "MM:SS",
+      "event_type": "punish_missed | bad_habit | pro_move | roman_cancel | overdrive | burst | wall_break | counter_hit | whiff_punish | faultless_defense",
+      "actor": "p1 | p2",
+      "move_used": "Move name or descriptor",
+      "move_confidence": "high | medium | low",
+      "move_outcome": "whiff | blocked | faultless_defense | instant_block | normal_hit | counter_hit | rc_conversion",
+      "opponent_response": "standing | crouching | airborne | burst | faultless_defense | backdash",
+      "spacing": "throw_range | close | mid_range | max_range | out_of_range",
+      "is_anti_air": false,
+      "evasion_type": null,
+      "description": "Technical description with GGST-specific mechanics",
+      "coach_advice": "GGST-specific coaching with Roman Cancel and tension management"
+    }
+  ],
+  "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "daily_mission": { "title": "Mission name", "drill_steps": ["Step 1"], "goal": "Goal" }
+}
+`,
+
+        // ─── MORTAL KOMBAT 1 — Kameos, Fatal Blow, Krushing Blows ──────────
+        'v1_mk1': `You are an enterprise-level Mortal Kombat 1 AI Coach.
+
+GAMEPLAY VALIDATION: If video is not MK1 gameplay, return {"status":"not_gameplay","is_gameplay_video":false,"reason":"..."}
+
+MORTAL KOMBAT 1 MECHANICS — classify precisely:
+- KAMEO FIGHTERS: "kameo_assist" (calling the Kameo partner — distinct character appears briefly), "kameo_ender" (combo-ending Kameo move), "kameo_punish" (using Kameo to punish opponent's move)
+- FATAL BLOW: "fatal_blow" (cinematic super move, available below 30% health — slow-mo activation)
+- KRUSHING BLOW: "krushing_blow" (special condition triggered amplified attack — special camera zoom)
+- BREAKAWAY: "breakaway" (escaping juggle combo — character flashes away)
+- FLAWLESS BLOCK: "flawless_block" (precise block timing — special sound + counterattack window)
+- AMPLIFIED MOVES: "amplified_special" (enhanced special move using meter — EX equivalent)
+- GETUP OPTIONS: "getup_attack" (rising attack from knockdown), "getup_roll" (rolling away)
+
+OUTCOME DETECTION (MK1):
+- "whiff": attack missed — no hit, no block, opponent not in hitstop
+- "blocked": standard block
+- "flawless_block": tight timing block — provides immediate counterattack
+- "normal_hit": standard hit
+- "krushing_blow": special condition hit — triggers cinematic zoom
+- "fatal_blow_hit": Fatal Blow connected
+- "fatal_blow_blocked": Fatal Blow was blocked (leaves attacker safe but meter spent)
+
+{
+  "status": "success",
+  "is_gameplay_video": true,
+  "source": "sensei_ai_analyzer_v2_mk1",
+  "game_title": "Mortal Kombat 1",
+  "p1_name": null,
+  "p2_name": null,
+  "p1_character": "Character name",
+  "p2_character": "Kameo: [Kameo name] — [Character name]",
+  "match_winner": null,
+  "timeline": [
+    {
+      "node_id": "evt-001",
+      "parent_node_id": null,
+      "timestamp": "MM:SS",
+      "event_type": "punish_missed | bad_habit | pro_move | kameo_assist | kameo_punish | fatal_blow | krushing_blow | breakaway | flawless_block | whiff_punish",
+      "actor": "p1 | p2",
+      "move_used": "Move name or descriptor",
+      "move_confidence": "high | medium | low",
+      "move_outcome": "whiff | blocked | flawless_block | normal_hit | krushing_blow | fatal_blow_hit | fatal_blow_blocked",
+      "opponent_response": "standing | crouching | airborne | breakaway | flawless_block | getup_attack",
+      "spacing": "throw_range | close | mid_range | max_range | out_of_range",
+      "is_anti_air": false,
+      "evasion_type": null,
+      "description": "Technical description referencing MK1 mechanics and Kameo usage",
+      "coach_advice": "MK1-specific coaching focusing on Kameo synergy and meter management"
+    }
+  ],
+  "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "daily_mission": { "title": "Mission name", "drill_steps": ["Step 1"], "goal": "Goal" }
+}
+`,
+
         'v1_mission_proof': `You are an expert Fighting Game Sensei. Your task is to verify if the provided video proof shows the player successfully completing the mission described below.
 Look for technical accuracy in move execution, timing, and situational awareness.
 
@@ -166,47 +337,55 @@ You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in mar
 `
     };
 
-    /**
-     * Resolves the prompt template for a given version.
-     * If version is not found, returns the latest version.
-     */
     static resolvePrompt(version: string = 'v1'): string {
         return this.PROMPT_VERSIONS[version] || this.PROMPT_VERSIONS['v1'];
     }
 
     /**
-     * Resolves the correct prompt based on match format.
-     * For team games, injects the user's selected team composition into the prompt header.
+     * Selects the best prompt for the given game and match format.
+     * Game-specific prompts teach Gemini unique mechanics per title.
+     * Falls back to the generic v1 prompt if no specific variant exists.
      */
+    static resolvePromptForGame(
+        gameId: string,
+        matchFormat: '1v1' | 'team_3v3' | 'team_2v2' | 'team_tag' = '1v1',
+        p1Team?: TeamComposition,
+        p2Team?: TeamComposition
+    ): string {
+        const isTeam = matchFormat !== '1v1';
+
+        if (isTeam) {
+            // Team games use the team prompt with injected composition
+            let teamHeader = '';
+            if (p1Team) teamHeader += `\nPlayer 1 Team — Point: ${p1Team.point} | Assist 1: ${p1Team.assist1} | Assist 2: ${p1Team.assist2}`;
+            if (p2Team) teamHeader += `\nPlayer 2 Team — Point: ${p2Team.point} | Assist 1: ${p2Team.assist1} | Assist 2: ${p2Team.assist2}`;
+            const base = this.PROMPT_VERSIONS['v1_team'];
+            return teamHeader ? base.replace('This is a TEAM match.', `This is a TEAM match.${teamHeader}`) : base;
+        }
+
+        // Map game IDs to game-specific prompts
+        const GAME_PROMPT_MAP: Record<string, string> = {
+            'tekken8':  'v1_tekken8',
+            't8':       'v1_tekken8',
+            'ggst':     'v1_ggst',
+            'ggstrive': 'v1_ggst',
+            'mk1':      'v1_mk1',
+            'sf6':      'v1',
+            'sf':       'v1',
+        };
+
+        const key = GAME_PROMPT_MAP[gameId?.toLowerCase()] ?? 'v1';
+        return this.PROMPT_VERSIONS[key] || this.PROMPT_VERSIONS['v1'];
+    }
+
+    /** @deprecated use resolvePromptForGame */
     static resolvePromptForFormat(
         matchFormat: '1v1' | 'team_3v3' | 'team_2v2' | 'team_tag' = '1v1',
         p1Team?: TeamComposition,
         p2Team?: TeamComposition
     ): string {
-        const isTeamGame = matchFormat !== '1v1';
-        if (!isTeamGame) {
-            return this.PROMPT_VERSIONS['v1'];
-        }
-
-        let teamHeader = '';
-        if (p1Team) {
-            teamHeader += `\nPlayer 1 Team — Point: ${p1Team.point} | Assist 1: ${p1Team.assist1} | Assist 2: ${p1Team.assist2}`;
-        }
-        if (p2Team) {
-            teamHeader += `\nPlayer 2 Team — Point: ${p2Team.point} | Assist 1: ${p2Team.assist1} | Assist 2: ${p2Team.assist2}`;
-        }
-
-        const baseTeamPrompt = this.PROMPT_VERSIONS['v1_team'];
-        return teamHeader ? baseTeamPrompt.replace(
-            'This is a TEAM match.',
-            `This is a TEAM match.${teamHeader}`
-        ) : baseTeamPrompt;
+        return this.resolvePromptForGame('sf6', matchFormat, p1Team, p2Team);
     }
 
-    /**
-     * Returns the current active version identifier.
-     */
-    static getCurrentVersion(): string {
-        return 'v1';
-    }
+    static getCurrentVersion(): string { return 'v1'; }
 }

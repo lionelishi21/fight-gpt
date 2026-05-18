@@ -14,6 +14,8 @@ export interface AnalysisJobData {
     job_id: string;
     pro_player_id?: string;
     video_title?: string;
+    // Priority: 1 = user upload (high), 10 = background ingestion (low)
+    source?: 'user' | 'ingestion';
 }
 
 export interface ProofValidationJobData {
@@ -54,8 +56,11 @@ export class QueueService {
      * Add a video for analysis
      */
     public async addAnalysisJob(data: AnalysisJobData): Promise<void> {
+        // Priority 1 = user uploads (processed first), 10 = background ingestion (processed last)
+        const priority = data.source === 'user' ? 1 : 10;
         await this.analysisQueue.add('analyze-video', data, {
-            jobId: data.job_id, // deduplicate — same job_id is never queued twice
+            jobId: data.job_id,
+            priority,
             attempts: 3,
             backoff: {
                 type: 'exponential',
@@ -63,7 +68,7 @@ export class QueueService {
             },
             removeOnComplete: true,
         });
-        Logger.info(`[QueueService] Analysis job queued: ${data.job_id} — ${data.youtube_url}`);
+        Logger.info(`[QueueService] Analysis job queued [priority=${priority}]: ${data.job_id} — ${data.youtube_url}`);
     }
 
     /**

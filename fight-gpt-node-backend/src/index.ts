@@ -437,8 +437,11 @@ export class App {
           socket.join(`lobby_${lobbyId}`);
           socket.lobbyId = lobbyId;
           await this.lobbyService.updateActiveCount(lobbyId, 1);
+          // Broadcast updated room size to everyone in the room
+          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 1;
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
           lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
-          Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId}`);
+          Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId} (${roomSize} operators)`);
         } catch (err) {
           Logger.error('DOJO_LOBBY: join_lobby error', err);
         }
@@ -467,6 +470,8 @@ export class App {
           const { lobbyId, userId } = data;
           socket.leave(`lobby_${lobbyId}`);
           await this.lobbyService.updateActiveCount(lobbyId, -1);
+          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 0;
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
           lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
         } catch (err) {
           Logger.error('DOJO_LOBBY: leave_lobby error', err);
