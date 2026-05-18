@@ -92,9 +92,10 @@ export interface Moveset {
   specials: Move[];
   ex_moves: Move[];
   supers: Move[];
-  assists?: TeamBasedMove[]; // Team-based assists
-  dhc?: TeamBasedMove[]; // Delayed Hyper Combos
-  team_supers?: TeamBasedMove[]; // Team supers
+  throws?: Move[];           // Throw/command-grab moves (optional — not all games categorise separately)
+  assists?: TeamBasedMove[];
+  dhc?: TeamBasedMove[];
+  team_supers?: TeamBasedMove[];
 }
 
 /**

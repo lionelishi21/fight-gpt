@@ -13,7 +13,7 @@ export interface IScenario {
     // Match state context — populated by AI analysis
     turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
     neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
-    spacing?: 'close' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
+    spacing?: 'throw_range' | 'close' | 'mid_range' | 'max_range' | 'out_of_range' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
     frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
     p1_state?: string;
     p2_state?: string;

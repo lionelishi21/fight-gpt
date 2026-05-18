@@ -119,9 +119,12 @@ export interface TimelineEvent {
     | 'parry' | 'perfect_parry' | 'backdash' | 'drive_impact_armor' | null;
   description: string;
   coach_advice: string;
-  // Legacy fields kept for backwards compatibility
+  // Legacy fields — kept for existing processVectorIntelligence callers
   turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
+  neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
   frame_advantage?: 'p1_plus' | 'p2_plus' | 'even' | 'unknown';
+  p1_state?: string;
+  p2_state?: string;
 }
 
 /**
