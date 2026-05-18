@@ -1,1 +1,0 @@
-{"version":3,"file":"BaseService.d.ts","sourceRoot":"","sources":["../../src/services/BaseService.ts"],"names":[],"mappings":"AAAA;;;GAGG;AACH,MAAM,WAAW,YAAY;CAE5B;AAED;;;;GAIG;AACH,8BAAsB,WAAY,YAAW,YAAY;IACvD,SAAS,CAAC,WAAW,CAAC,KAAK,EAAE,OAAO,EAAE,SAAS,EAAE,MAAM,GAAG,KAAK;CAMhE"}

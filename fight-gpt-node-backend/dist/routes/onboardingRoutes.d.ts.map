@@ -1,1 +1,0 @@
-{"version":3,"file":"onboardingRoutes.d.ts","sourceRoot":"","sources":["../../src/routes/onboardingRoutes.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAIjC,qBAAa,gBAAgB;IACzB,OAAO,CAAC,MAAM,CAAS;IACvB,OAAO,CAAC,UAAU,CAAuB;;IAQzC,OAAO,CAAC,WAAW;IAQZ,SAAS,IAAI,MAAM;CAG7B"}
