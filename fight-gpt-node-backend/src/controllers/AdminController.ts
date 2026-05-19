@@ -52,6 +52,38 @@ export class AdminController extends BaseController {
     };
 
     /**
+     * GET /api/admin/coverage
+     * Show CharacterEncyclopedia coverage per game — how many characters have
+     * encyclopedia entries vs how many characters are seeded. Low coverage means
+     * move-name validation and few-shot context will silently degrade.
+     */
+    getEncyclopediaCoverage = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const encyclopediaRepo = new CharacterEncyclopediaRepository();
+            const games = await Game.find({ is_active: true }).lean();
+
+            const coverage = await Promise.all(games.map(async (game) => {
+                const [charCount, encCount] = await Promise.all([
+                    Character.countDocuments({ game_id: game.game_id }),
+                    encyclopediaRepo.countByGameId(game.game_id),
+                ]);
+                return {
+                    game_id: game.game_id,
+                    game_name: (game as any).name,
+                    characters: charCount,
+                    encyclopedia_entries: encCount,
+                    coverage_pct: charCount > 0 ? Math.round((encCount / charCount) * 100) : 0,
+                    status: encCount === 0 ? 'empty' : encCount < charCount ? 'partial' : 'full',
+                };
+            }));
+
+            this.sendResponse(res, { success: true, data: coverage });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Coverage check failed');
+        }
+    };
+
+    /**
      * POST /api/admin/trends/analyze
      * Trigger a manual Meta-Shift analysis check
      */

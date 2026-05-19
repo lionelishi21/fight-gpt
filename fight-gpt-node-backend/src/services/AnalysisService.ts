@@ -65,11 +65,11 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         const tier = (user.tier || 'FREE').toUpperCase();
         const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId as string, 24);
         
-        const maxFree = 1;
+        const maxFree = 3;        // 3 free analyses — enough to demonstrate value before the wall
         const maxCompetitor = 10;
         
         if (tier === 'FREE' && recentCount >= maxFree) {
-          return { success: false, error: 'FREE_TIER_LIMIT: You have used your 1 daily AI scan. Upgrade to Pro for unlimited analysis.' };
+          return { success: false, error: 'FREE_TIER_LIMIT: You have used your 3 free analyses. Upgrade to Competitor for unlimited VOD analysis.' };
         }
         if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
           return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };

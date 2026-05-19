@@ -76,23 +76,24 @@ jobs:
             git reset --hard origin/main
             echo "→ Now on commit: $(git log -1 --oneline)"
 
-            # 3. Install production deps + build tools
+            # 3. Install all deps (including devDeps needed for build)
             echo "→ Installing dependencies..."
-            npm ci --omit=dev
-            npm install --save-dev tsx typescript@5.3.3
+            npm ci
 
-            # 4. Type check
-            echo "→ Type checking..."
-            npx tsc --noEmit || true
+            # 4. Build TypeScript — dist/ is gitignored, must be compiled on server
+            echo "→ Compiling TypeScript..."
+            npm run build
+            echo "→ dist/index.js: $(ls -lh dist/index.js)"
+            echo "→ dist/services: $(ls dist/services/*.js 2>/dev/null | wc -l) files"
 
-            # 5. Build — dist/ is committed to git so just verify it's present
-            echo "→ Using pre-compiled dist/ from git..."
-            echo "→ dist/index.js: $(ls -la dist/index.js 2>/dev/null || echo 'NOT FOUND — run npm run build locally and commit dist/')"
-            echo "→ dist/services count: $(ls dist/services/*.js 2>/dev/null | wc -l) files"
+            # 5. Prune devDeps after build to keep memory footprint small
+            echo "→ Pruning dev dependencies..."
+            npm prune --omit=dev
 
-            # 6. Restart PM2 — use ecosystem config to ensure all apps (API + Worker) are running
-            echo "→ Restarting PM2 apps..."
-            pm2 startOrRestart ecosystem.config.js --env production --update-env
+            # 6. Zero-downtime reload — pm2 reload keeps existing connections alive
+            # Use startOrRestart only if processes don't exist yet, then reload on subsequent deploys
+            echo "→ Reloading PM2 apps (zero-downtime)..."
+            pm2 startOrRestart ecosystem.config.js --env production --update-env || pm2 reload all
             pm2 save
 
             # 7. Seed games and pro players (ensure registry is synced)

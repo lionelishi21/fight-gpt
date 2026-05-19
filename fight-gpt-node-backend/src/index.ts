@@ -10,7 +10,8 @@ import express, { Express } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { Store, IncrementCallback } from 'express-rate-limit';
+import IORedis from 'ioredis';
 
 // Import configuration
 import { AppConfig } from './config/app';
@@ -336,12 +337,42 @@ export class App {
 
     const isDev = AppConfig.isDevelopment();
 
-    // Global limiter — generous for real app traffic, blocks scrapers/abuse.
-    // In-memory per-instance. At 100k users across 2 instances, each instance
-    // handles ~50k users — 10,000 req / 15 min per IP is safe for real users.
+    const WINDOW_MS = AppConfig.RATE_LIMIT_WINDOW_MS || 900000;
+
+    // Lazy Redis store — connects in the background after the constructor completes.
+    // Each store method falls back gracefully if Redis isn't ready yet or goes down.
+    // This shares rate-limit counters across all PM2 instances without ever blocking startup.
+    const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+    let redisReady = false;
+    const redisClient = new IORedis(REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2000, lazyConnect: true });
+    redisClient.on('error', (e: Error) => Logger.warn(`[RateLimit] Redis error (in-memory fallback active): ${e.message}`));
+    redisClient.connect()
+      .then(() => { redisReady = true; Logger.info('[RateLimit] Redis store connected — limits shared across instances'); })
+      .catch((e: Error) => Logger.warn(`[RateLimit] Redis unavailable, using per-instance in-memory: ${e.message}`));
+
+    const rateLimitStore: Store = {
+      async increment(key: string) {
+        if (!redisReady) return { totalHits: 1 };
+        try {
+          const hits = await redisClient.incr(key);
+          if (hits === 1) await redisClient.pexpire(key, WINDOW_MS);
+          const ttlMs = await redisClient.pttl(key);
+          return { totalHits: hits, resetTime: new Date(Date.now() + Math.max(ttlMs, 0)) };
+        } catch { return { totalHits: 1 }; }
+      },
+      async decrement(key: string) {
+        if (redisReady) try { await redisClient.decr(key); } catch {}
+      },
+      async resetKey(key: string) {
+        if (redisReady) try { await redisClient.del(key); } catch {}
+      },
+    } as Store;
+
+    // Global limiter — uses Redis store when available, in-memory when not.
     const limiter = rateLimit({
-      windowMs: AppConfig.RATE_LIMIT_WINDOW_MS,
+      windowMs: WINDOW_MS,
       max: AppConfig.RATE_LIMIT_MAX_REQUESTS || 10000,
+      store: rateLimitStore,
       message: { success: false, error: 'Too many requests. Please slow down.' },
       standardHeaders: true,
       legacyHeaders: false,

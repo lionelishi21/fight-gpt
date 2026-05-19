@@ -25,6 +25,7 @@ export class AdminRoutes {
 
         // Stats & Monitoring
         this.router.get('/stats', this.adminController.getSystemStats);
+        this.router.get('/coverage', this.adminController.getEncyclopediaCoverage);
 
         // User Management
         this.router.get('/users', this.adminController.getUsers);

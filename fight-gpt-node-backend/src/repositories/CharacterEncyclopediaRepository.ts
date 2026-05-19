@@ -16,6 +16,7 @@ export interface ICharacterEncyclopediaRepository {
     version: string
   ): Promise<ICharacterEncyclopediaDocument | null>;
   findByGameId(gameId: string): Promise<ICharacterEncyclopediaDocument[]>;
+  countByGameId(gameId: string): Promise<number>;
   createEncyclopedia(data: CreateCharacterEncyclopediaRequest): Promise<ICharacterEncyclopediaDocument>;
   updateEncyclopedia(id: string, data: UpdateCharacterEncyclopediaRequest): Promise<ICharacterEncyclopediaDocument | null>;
   updateEncyclopediaByGameAndCharacter(
@@ -110,6 +111,14 @@ export class CharacterEncyclopediaRepository
       return await this.findMany({ game_id: normalizedGameId }, { sort: { character_id: 1, patch_version: -1 } });
     } catch (error) {
       throw this.handleError(error, 'findByGameId');
+    }
+  }
+
+  async countByGameId(gameId: string): Promise<number> {
+    try {
+      return await this.model.countDocuments({ game_id: gameId.toLowerCase().trim() });
+    } catch {
+      return 0;
     }
   }
 
