@@ -60,6 +60,7 @@ export class AdminRoutes {
 
         // Manual Intervention
         this.router.post('/ingestion/trigger', this.adminController.triggerManualUrl);
+        this.router.post('/ingestion/trigger-character', this.adminController.triggerCharacterIngestion);
         this.router.post('/ingestion/seed', this.adminController.seedUrls);
         this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
         this.router.post('/ingestion/bulk-queue', this.adminController.bulkQueuePending);

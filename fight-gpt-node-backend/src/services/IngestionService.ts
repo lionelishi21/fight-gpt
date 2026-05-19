@@ -13,43 +13,33 @@ import { queueService } from './QueueService';
 import { normalizeYoutubeUrl, isBadVideoTitle } from '../helpers/youtubeHelper';
 import { NotificationService } from './NotificationService';
 import { YoutubeBotBlockError } from '../helpers/youtubeDownloader';
+import mongoose from 'mongoose';
 
 const execAsync = promisify(exec);
 
-// Search queries per game — these surface tournament sets, pro player footage, high-level ranked
-const GAME_SEARCH_QUERIES: Record<string, string[]> = {
-    sf6: [
-        'SF6 tournament 2024 top 8 official',
-        'Street Fighter 6 pro player tournament grand finals',
-        'SF6 Capcom Cup match high level',
-    ],
-    tekken8: [
-        'Tekken 8 TWT 2024 top 8 tournament',
-        'Tekken 8 pro player ranked match high level',
-        'Tekken 8 EVO grand finals',
-    ],
-    ggst: [
-        'Guilty Gear Strive tournament 2024 top 8',
-        'GGST pro player ranked high level match',
-    ],
-    mk1: [
-        'Mortal Kombat 1 Final Kombat 2024 top 8',
-        'MK1 pro player tournament match',
-    ],
-    dbfz: [
-        'DBFZ World Tour 2024 top 8 tournament',
-    ],
-    mvc3: [
-        'UMVC3 tournament grand finals high level',
-        'Marvel vs Capcom 3 pro player tournament match',
-    ],
+// Game abbreviations used in YouTube search queries
+const GAME_SHORT: Record<string, string> = {
+    sf6: 'SF6', tekken8: 'Tekken 8', ggst: 'Guilty Gear Strive',
+    mk1: 'Mortal Kombat 1', dbfz: 'DBFZ', mvc3: 'UMVC3',
 };
+
+// Baseline general queries — used alongside character-specific ones for discoverability
+const GAME_BASELINE_QUERIES: Record<string, string[]> = {
+    sf6:     ['SF6 Capcom Cup 2025 top 8', 'Street Fighter 6 EVO 2025 top 8 grand finals'],
+    tekken8: ['Tekken 8 TWT 2025 top 8 grand finals', 'Tekken 8 EVO 2025 top 8'],
+    ggst:    ['Guilty Gear Strive 2025 tournament top 8', 'GGST Arc World Tour 2025'],
+    mk1:     ['Mortal Kombat 1 Final Kombat 2025 top 8', 'MK1 CEO 2025 tournament'],
+    dbfz:    ['DBFZ World Tour 2025 top 8', 'Dragon Ball FighterZ tournament 2025'],
+    mvc3:    ['UMVC3 tournament 2025 grand finals', 'UMVC3 EVO top 8'],
+};
+
+// Target scenario count before a character is considered "covered"
+const TARGET_SCENARIOS_PER_CHARACTER = 30;
 
 // Default fallback queries for any game not in the list
 const DEFAULT_QUERIES = (gameId: string) => [
-    `${gameId} fighting game tournament 2024`,
-    `${gameId} high level gameplay EVO`,
-    `${gameId} pro player ranked match`,
+    `${gameId} fighting game tournament 2025`,
+    `${gameId} high level gameplay EVO 2025`,
 ];
 
 export interface IngestionTriggerResult {
@@ -81,17 +71,83 @@ export class IngestionService extends BaseService implements IIngestionService {
     }
 
     /**
-     * Returns search queries for a game: DB-stored strategies first, hardcoded fallback.
-     * This makes queries updatable from the admin panel without a redeploy.
+     * Returns character-balanced search queries for a game.
+     *
+     * Strategy:
+     * 1. Start with baseline tournament queries (general discoverability)
+     * 2. Pull all characters for the game from the DB
+     * 3. For each character, count existing scenarios in the vector DB
+     * 4. Generate targeted queries for any character below TARGET_SCENARIOS_PER_CHARACTER
+     * 5. Prioritise the most under-represented characters (fewest scenarios first)
+     *
+     * This prevents popular characters (Ken, Ryu, Luke) from dominating the
+     * dataset while niche characters stay at 9 scenarios forever.
+     *
+     * Falls back to DB-stored strategies or hardcoded baseline if character data
+     * is unavailable.
      */
     private async getSearchQueries(gameId: string): Promise<string[]> {
+        // Admin-configured strategies take priority
         if (this.searchStrategyRepository) {
             const strategies = await this.searchStrategyRepository.findActive(gameId).catch(() => []);
             if (strategies.length > 0) {
                 return strategies.flatMap(s => s.queries);
             }
         }
-        return GAME_SEARCH_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
+
+        const baseline = GAME_BASELINE_QUERIES[gameId] || DEFAULT_QUERIES(gameId);
+        const gameShort = GAME_SHORT[gameId] || gameId.toUpperCase();
+
+        try {
+            const Character = mongoose.model('Character');
+            const Scenario = mongoose.model('Scenario');
+
+            const characters = await Character.find({ game_id: gameId })
+                .select('name character_id')
+                .lean()
+                .exec();
+
+            if (!characters.length) return baseline;
+
+            // Count scenarios per character (check both P1 and P2 slots)
+            const scenarioCounts = await Promise.all(
+                characters.map(async (char: any) => {
+                    const name = char.name || char.character_id || '';
+                    const count = await Scenario.countDocuments({
+                        game_id: gameId,
+                        characters_involved: { $regex: new RegExp(name, 'i') },
+                    }).catch(() => 0);
+                    return { name, count };
+                })
+            );
+
+            // Sort by coverage ascending — most under-represented first
+            scenarioCounts.sort((a, b) => a.count - b.count);
+
+            const needsData = scenarioCounts.filter(c => c.count < TARGET_SCENARIOS_PER_CHARACTER);
+
+            Logger.info(
+                `[IngestionService] Coverage for ${gameId}: ` +
+                `${needsData.length}/${characters.length} chars below ${TARGET_SCENARIOS_PER_CHARACTER} scenarios. ` +
+                `Lowest: ${scenarioCounts.slice(0, 3).map(c => `${c.name}(${c.count})`).join(', ')}`
+            );
+
+            // Generate targeted queries for the top 5 most under-represented characters
+            const characterQueries: string[] = [];
+            for (const char of needsData.slice(0, 5)) {
+                characterQueries.push(
+                    `${gameShort} ${char.name} ranked match high level gameplay 2025`,
+                    `${gameShort} ${char.name} tournament match pro player`,
+                );
+            }
+
+            // Interleave: baseline first for general coverage, then character-targeted
+            return [...baseline, ...characterQueries];
+
+        } catch (e) {
+            Logger.warn(`[IngestionService] Character-balance query failed, using baseline: ${e instanceof Error ? e.message : e}`);
+            return baseline;
+        }
     }
 
     /**

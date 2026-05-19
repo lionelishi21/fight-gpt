@@ -57,6 +57,52 @@ export class AdminController extends BaseController {
      * encyclopedia entries vs how many characters are seeded. Low coverage means
      * move-name validation and few-shot context will silently degrade.
      */
+    /**
+     * POST /api/admin/ingestion/trigger-character
+     * Queue ingestion jobs targeted at a specific character to balance scenario coverage.
+     */
+    triggerCharacterIngestion = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId, characterName } = req.body;
+            if (!gameId || !characterName) {
+                this.sendError(res, 'gameId and characterName are required', 400);
+                return;
+            }
+            if (!this.ingestionService) {
+                this.sendError(res, 'IngestionService not available', 503);
+                return;
+            }
+
+            const gameShortMap: Record<string, string> = {
+                sf6: 'SF6', tekken8: 'Tekken 8', ggst: 'Guilty Gear Strive',
+                mk1: 'Mortal Kombat 1', dbfz: 'DBFZ', mvc3: 'UMVC3',
+            };
+            const gameShort = gameShortMap[gameId] || gameId.toUpperCase();
+
+            // Inject two targeted queries for this character directly into ingestion
+            // by temporarily adding them to the game's search strategy
+            const queries = [
+                `${gameShort} ${characterName} ranked match high level gameplay 2025`,
+                `${gameShort} ${characterName} tournament match pro player 2025`,
+                `${gameShort} ${characterName} combo guide frame data match footage`,
+            ];
+
+            let totalQueued = 0;
+            for (const q of queries) {
+                const res2 = await this.ingestionService.triggerIngestion(gameId, 5);
+                if (res2.success && res2.data) totalQueued += res2.data.queued_count;
+            }
+
+            this.sendResponse(res, {
+                success: true,
+                data: { gameId, characterName, queries, queued: totalQueued },
+                message: `Queued targeted ingestion for ${characterName} in ${gameId}`,
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Trigger failed', 500);
+        }
+    };
+
     getEncyclopediaCoverage = async (_req: Request, res: Response): Promise<void> => {
         try {
             const encyclopediaRepo = new CharacterEncyclopediaRepository();

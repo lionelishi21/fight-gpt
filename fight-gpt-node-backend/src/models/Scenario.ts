@@ -3,14 +3,14 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IScenario {
     scenario_id: string;
     game_id: string;
-    pro_player_id?: string; // Link to the ProPlayer who performed this scenario
+    pro_player_id?: string;
     description: string;
     context: string;
     characters_involved: string[];
     embedding: number[];
     match_references: string[];
     tags: string[];
-    // Match state context — populated by AI analysis
+    // Match state context
     turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
     neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
     spacing?: 'throw_range' | 'close' | 'mid_range' | 'max_range' | 'out_of_range' | 'mid' | 'far' | 'corner_p1' | 'corner_p2';
@@ -18,6 +18,13 @@ export interface IScenario {
     p1_state?: string;
     p2_state?: string;
     timestamp?: number;
+    // Patch version context — critical for coaching accuracy
+    // Videos from older patches still contain valid mechanics (spacing, wakeup, neutral)
+    // even if specific move data changed. cross_patch_valid marks mechanics that
+    // survive patch updates (fundamentals) vs. those that may be stale (frame data).
+    patch_version?: string;          // e.g. "2.1", "1.05" — extracted from game metadata at ingest time
+    cross_patch_valid?: boolean;     // true = fundamental mechanic unlikely to change across patches
+    patch_notes_context?: string;    // brief note on what changed in this patch for these characters
     created_at?: Date;
     updated_at?: Date;
 }
@@ -39,13 +46,16 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
     },
     match_references: [{ type: String }],
     tags: [{ type: String }],
-    turn_owner:      { type: String },
-    neutral_state:   { type: String },
-    spacing:         { type: String },
-    frame_advantage: { type: String },
-    p1_state:        { type: String },
-    p2_state:        { type: String },
-    timestamp:       { type: Number },
+    turn_owner:           { type: String },
+    neutral_state:        { type: String },
+    spacing:              { type: String },
+    frame_advantage:      { type: String },
+    p1_state:             { type: String },
+    p2_state:             { type: String },
+    timestamp:            { type: Number },
+    patch_version:        { type: String, index: true },
+    cross_patch_valid:    { type: Boolean, default: false },
+    patch_notes_context:  { type: String },
 }, {
     timestamps: {
         createdAt: 'created_at',

@@ -323,18 +323,38 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     const embedding = await this.aiService.generateEmbedding(queryText);
     if (!embedding || embedding.length === 0) return null;
 
-    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 3);
+    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 6);
     if (!similar || similar.length === 0) return null;
 
-    const examples = similar
+    // Prefer current-patch or cross-patch-valid scenarios as examples.
+    // Old-patch-specific scenarios (frame data that changed) are still shown
+    // but ranked lower so the AI understands what's foundational vs patch-specific.
+    const currentPatch = await this.gameMetadataService
+      .getCurrentGameMetadataByGameId(request.game_id)
+      .then(r => r.success ? r.data?.patch_version : null)
+      .catch(() => null);
+
+    const ranked = similar.sort((a: any, b: any) => {
+      const aScore = (a.patch_version === currentPatch ? 2 : 0) + (a.cross_patch_valid ? 1 : 0);
+      const bScore = (b.patch_version === currentPatch ? 2 : 0) + (b.cross_patch_valid ? 1 : 0);
+      return bScore - aScore;
+    }).slice(0, 3);
+
+    const examples = ranked
       .filter(s => s.description)
       .map((s, i) => {
+        const patchNote = (s as any).cross_patch_valid
+          ? '  [CROSS-PATCH VALID — mechanic applies regardless of patch]'
+          : (s as any).patch_version
+            ? `  [From patch ${(s as any).patch_version} — verify if move data still applies]`
+            : '';
         return [
           `EXAMPLE ${i + 1}:`,
           s.characters_involved?.length ? `  Characters: ${s.characters_involved.join(' vs ')}` : '',
           s.tags?.length ? `  Event type: ${s.tags[0]}` : '',
           s.spacing ? `  Spacing: ${s.spacing}` : '',
           s.frame_advantage ? `  Frame state: ${s.frame_advantage}` : '',
+          patchNote,
           `  Verified event: ${s.description}`,
           s.context ? `  Full context: ${s.context}` : '',
         ].filter(Boolean).join('\n');
@@ -525,6 +545,20 @@ ${examples.join('\n\n')}
         // Save scenario ONLY IF NOVEL to avoid duplicates
         const scenarioId = UuidHelper.generate();
         if (isNovel) {
+          // Determine patch version from game metadata
+          let patchVersion: string | undefined;
+          try {
+            const meta = await this.gameMetadataService.getCurrentGameMetadataByGameId(request.game_id || '');
+            patchVersion = meta.success ? meta.data?.patch_version : undefined;
+          } catch {}
+
+          // Cross-patch validity: events that describe fundamental mechanics
+          // (spacing, wakeup, neutral positioning, anti-air timing) survive patch updates.
+          // Frame-specific data (move frame advantage, damage) may become stale.
+          const crossPatchEventTypes = ['neutral_loss', 'neutral_win', 'anti_air', 'evasion', 'spacing_error', 'bad_habit'];
+          const isCrossPatchValid = crossPatchEventTypes.includes(event.event_type) &&
+            event.move_outcome !== 'counter_hit'; // CH damage/hitstun changes per patch
+
           await this.vectorRepository.createScenario({
             scenario_id: scenarioId,
             game_id: request.game_id || 'unknown',
@@ -545,6 +579,8 @@ ${examples.join('\n\n')}
             p1_state: event.p1_state,
             p2_state: event.p2_state,
             timestamp: this.parseTimestamp(event.timestamp),
+            patch_version: patchVersion,
+            cross_patch_valid: isCrossPatchValid,
           });
           
           console.log(`[VectorIntelligence] Created new scenario: ${scenarioId}`);
