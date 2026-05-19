@@ -9,6 +9,9 @@ export interface ITheoryRepository {
     getAllCharacterTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
     getAllMatchupTheories(gameId: string): Promise<ITheoryDocumentDocument[]>;
     getTheoryById(id: string): Promise<ITheoryDocumentDocument | null>;
+    // Staging / moderation
+    findByStatus(status: string, limit?: number): Promise<ITheoryDocumentDocument[]>;
+    updateStatus(id: string, status: 'approved' | 'rejected', fullTheory?: string): Promise<ITheoryDocumentDocument | null>;
 }
 
 export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> implements ITheoryRepository {
@@ -63,6 +66,10 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
     }
 
     async getAllCharacterTheories(gameId: string): Promise<ITheoryDocumentDocument[]> {
+        // Return approved theories only; fall back to all if none approved yet
+        const approved = await this.model.find({ game_id: gameId, type: 'character', status: 'approved' })
+            .sort({ generated_at: -1 }).exec();
+        if (approved.length) return approved;
         return this.model.find({ game_id: gameId, type: 'character' }).sort({ generated_at: -1 }).exec();
     }
 
@@ -71,6 +78,29 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
     }
     
     async getTheoryById(id: string): Promise<ITheoryDocumentDocument | null> {
-        return this.model.findOne({ theory_id: id }).exec();
+        return this.model.findOne({ theory_id: id }).exec()
+            ?? this.model.findById(id).exec();
+    }
+
+    async getAllCharacterTheoriesApproved(gameId: string): Promise<ITheoryDocumentDocument[]> {
+        return this.model.find({ game_id: gameId, type: 'character', status: 'approved' })
+            .sort({ generated_at: -1 }).exec();
+    }
+
+    async findByStatus(status: string, limit = 50): Promise<ITheoryDocumentDocument[]> {
+        return this.model.find({ status })
+            .sort({ generated_at: -1 })
+            .limit(limit)
+            .exec();
+    }
+
+    async updateStatus(id: string, status: 'approved' | 'rejected', fullTheory?: string): Promise<ITheoryDocumentDocument | null> {
+        const update: any = { status };
+        if (fullTheory) update.full_theory = fullTheory;
+        return this.model.findOneAndUpdate(
+            { $or: [{ theory_id: id }, { _id: id }] },
+            { $set: update },
+            { new: true }
+        ).exec();
     }
 }

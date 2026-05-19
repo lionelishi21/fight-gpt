@@ -78,6 +78,7 @@ export class TheoryService extends BaseService implements ITheoryService {
                 is_current_patch: true,
                 generated_at: new Date(),
                 youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
+                status: 'approved',
             });
 
             // Fire notification to all users who might care
@@ -136,6 +137,7 @@ export class TheoryService extends BaseService implements ITheoryService {
                 is_current_patch: true,
                 generated_at: new Date(),
                 youtube_url: scenarios[0]?.match_references?.[0] || scenarios[0]?.youtube_url,
+                status: 'approved',
             });
 
             this.notificationService?.matchupTheory({

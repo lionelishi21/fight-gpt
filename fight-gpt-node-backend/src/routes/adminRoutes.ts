@@ -26,6 +26,9 @@ export class AdminRoutes {
         // Stats & Monitoring
         this.router.get('/stats', this.adminController.getSystemStats);
         this.router.get('/coverage', this.adminController.getEncyclopediaCoverage);
+        // Theory staging / moderation
+        this.router.get('/theory/staging', this.adminController.getStagingTheories);
+        this.router.patch('/theory/:id/status', this.adminController.updateTheoryStatus);
 
         // User Management
         this.router.get('/users', this.adminController.getUsers);

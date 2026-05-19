@@ -8,6 +8,7 @@ import { ITrendAnalysisService } from '../services/TrendAnalysisService';
 import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
+import { TheoryRepository } from '../repositories/TheoryRepository';
 import { Character } from '../models/Character';
 import { GameSearchStrategy } from '../models/GameSearchStrategy';
 import { GameOnboardingService } from '../services/GameOnboardingService';
@@ -100,6 +101,46 @@ export class AdminController extends BaseController {
             });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Trigger failed', 500);
+        }
+    };
+
+    /**
+     * GET /api/admin/theory/staging?status=pending
+     * Returns theories filtered by status for the staging/moderation queue.
+     */
+    getStagingTheories = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const status = (req.query.status as string) || 'pending';
+            const limit = parseInt(req.query.limit as string) || 100;
+            const theoryRepo = new TheoryRepository();
+            const theories = await theoryRepo.findByStatus(status, limit);
+            this.sendResponse(res, { success: true, data: theories });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch staging theories', 500);
+        }
+    };
+
+    /**
+     * PATCH /api/admin/theory/:id/status
+     * Approve or reject a theory document, optionally updating its full_theory content.
+     */
+    updateTheoryStatus = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            const { status, full_theory } = req.body;
+            if (!['approved', 'rejected'].includes(status)) {
+                this.sendError(res, 'status must be "approved" or "rejected"', 400);
+                return;
+            }
+            const theoryRepo = new TheoryRepository();
+            const updated = await theoryRepo.updateStatus(id, status, full_theory);
+            if (!updated) {
+                this.sendError(res, 'Theory not found', 404);
+                return;
+            }
+            this.sendResponse(res, { success: true, data: updated });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to update theory status', 500);
         }
     };
 
@@ -821,61 +862,6 @@ export class AdminController extends BaseController {
             });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Deep scan failed');
-        }
-    };
-
-    /**
-     * GET /api/admin/theory/staging
-     * Get all pending theories for staging
-     */
-    getStagingTheories = async (req: Request, res: Response): Promise<void> => {
-        try {
-            // Import dynamically or assume TheoryDoc is available
-            const { TheoryDoc } = require('../models/TheoryDocument');
-            const status = req.query.status as string || 'pending';
-            const limit = parseInt(req.query.limit as string) || 50;
-            
-            const theories = await TheoryDoc.find({ status })
-                .sort({ generated_at: -1 })
-                .limit(limit)
-                .lean();
-                
-            this.sendResponse(res, { success: true, data: theories });
-        } catch (error) {
-            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch staging theories');
-        }
-    };
-
-    /**
-     * PATCH /api/admin/theory/:id/status
-     * Update theory status and optional content
-     */
-    updateTheoryStatus = async (req: Request, res: Response): Promise<void> => {
-        try {
-            const { id } = req.params;
-            const { status, full_theory } = req.body;
-            
-            if (!status || !['pending', 'approved', 'rejected'].includes(status)) {
-                res.status(400).json({ success: false, error: 'Valid status is required' });
-                return;
-            }
-
-            const { TheoryDoc } = require('../models/TheoryDocument');
-            const updates: any = { status };
-            if (full_theory) {
-                updates.full_theory = full_theory;
-            }
-            
-            const theory = await TheoryDoc.findByIdAndUpdate(id, updates, { new: true });
-            
-            if (!theory) {
-                res.status(404).json({ success: false, error: 'Theory not found' });
-                return;
-            }
-            
-            this.sendResponse(res, { success: true, data: theory, message: `Theory ${status}` });
-        } catch (error) {
-            this.sendError(res, error instanceof Error ? error.message : 'Failed to update theory status');
         }
     };
 
