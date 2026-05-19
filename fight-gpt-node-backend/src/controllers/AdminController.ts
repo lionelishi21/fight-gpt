@@ -9,6 +9,7 @@ import User from '../models/User';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
 import { TheoryRepository } from '../repositories/TheoryRepository';
+import { Scenario } from '../models/Scenario';
 import { Character } from '../models/Character';
 import { GameSearchStrategy } from '../models/GameSearchStrategy';
 import { GameOnboardingService } from '../services/GameOnboardingService';
@@ -141,6 +142,88 @@ export class AdminController extends BaseController {
             this.sendResponse(res, { success: true, data: updated });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to update theory status', 500);
+        }
+    };
+
+    // ─── Scenario Vector DB Cleanup ────────────────────────────────────────────
+
+    /**
+     * Patterns that identify scenarios created from non-gameplay video content.
+     * These corrupt the vector index — every future few-shot injection gets polluted.
+     */
+    private readonly GARBAGE_SCENARIO_PATTERNS = [
+        // Streamer / IRL / personal content
+        'streamer', 'wedding', 'marriage', 'personal life', 'discussing personal',
+        'character select screen', 'talking about', 'announces', 'interview',
+        'podcast', 'just chatting', 'irl stream', 'cooking', 'unboxing',
+        // Non-match states
+        'loading screen', 'menu', 'character select', 'main menu',
+        // Non-FGC content signals
+        'youtube channel', 'subscriber', 'donation', 'sponsor',
+    ];
+
+    /**
+     * GET /api/admin/scenarios/garbage-count
+     * Count how many scenarios in the vector DB are non-gameplay content.
+     * Run this first to understand the scope before purging.
+     */
+    countGarbageScenarios = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const orConditions = this.GARBAGE_SCENARIO_PATTERNS.map(p => ({
+                $or: [
+                    { description: { $regex: p, $options: 'i' } },
+                    { context:     { $regex: p, $options: 'i' } },
+                ],
+            }));
+
+            const garbageCount = await Scenario.countDocuments({ $or: orConditions });
+            const totalCount   = await Scenario.countDocuments({});
+
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    garbage: garbageCount,
+                    total:   totalCount,
+                    clean:   totalCount - garbageCount,
+                    pct_garbage: totalCount > 0 ? `${((garbageCount / totalCount) * 100).toFixed(1)}%` : '0%',
+                    patterns_checked: this.GARBAGE_SCENARIO_PATTERNS.length,
+                },
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Count failed', 500);
+        }
+    };
+
+    /**
+     * POST /api/admin/scenarios/purge-garbage
+     * Delete all non-gameplay scenarios from the vector DB.
+     * This is DESTRUCTIVE — run countGarbageScenarios first to check scope.
+     * Safe to run multiple times (idempotent).
+     */
+    purgeGarbageScenarios = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const orConditions = this.GARBAGE_SCENARIO_PATTERNS.map(p => ({
+                $or: [
+                    { description: { $regex: p, $options: 'i' } },
+                    { context:     { $regex: p, $options: 'i' } },
+                ],
+            }));
+
+            const before = await Scenario.countDocuments({});
+            const result = await Scenario.deleteMany({ $or: orConditions });
+            const after  = await Scenario.countDocuments({});
+
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    deleted:    result.deletedCount,
+                    remaining:  after,
+                    before:     before,
+                    message: `Purged ${result.deletedCount} non-gameplay scenarios. ${after} clean scenarios remain.`,
+                },
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Purge failed', 500);
         }
     };
 

@@ -68,6 +68,10 @@ export class AdminRoutes {
         this.router.post('/ingestion/seed-and-process', this.adminController.seedAndProcess);
         this.router.post('/ingestion/bulk-queue', this.adminController.bulkQueuePending);
 
+        // Scenario Vector DB management
+        this.router.get('/scenarios/garbage-count', this.adminController.countGarbageScenarios);
+        this.router.post('/scenarios/purge-garbage', this.adminController.purgeGarbageScenarios);
+
         // Auto-Research
         this.router.post('/research/trigger', this.adminController.triggerResearch);
         this.router.post('/trends/analyze', this.adminController.triggerTrendAnalysis);
