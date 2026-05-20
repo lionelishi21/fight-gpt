@@ -78,8 +78,13 @@ export class TheoryRepository extends BaseRepository<ITheoryDocumentDocument> im
     }
     
     async getTheoryById(id: string): Promise<ITheoryDocumentDocument | null> {
-        return this.model.findOne({ theory_id: id }).exec()
-            ?? this.model.findById(id).exec();
+        const byTheoryId = await this.model.findOne({ theory_id: id }).exec();
+        if (byTheoryId) return byTheoryId;
+        try {
+            return await this.model.findById(id).exec();
+        } catch {
+            return null; // id is not a valid ObjectId
+        }
     }
 
     async getAllCharacterTheoriesApproved(gameId: string): Promise<ITheoryDocumentDocument[]> {
