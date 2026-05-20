@@ -1,150 +1,194 @@
 import { Resend } from 'resend';
 import { AppConfig } from '../config/app';
 import { Logger } from '../helpers/logger';
+import {
+    buildWelcomeEmail,           WelcomeData,
+    buildAnalysisCompleteEmail,  AnalysisCompleteData,
+    buildUpgradePromptEmail,     UpgradePromptData,
+    buildWeeklyBriefEmail,       WeeklyBriefData,
+    buildPaymentFailedEmail,     PaymentFailedData,
+    buildAdminInviteEmail,
+    buildNotificationEmail,
+    buildRivalAlertEmail,
+    buildReferralInviteEmail,
+} from './EmailTemplates';
+
+// Re-export data interfaces so callers can import from one place
+export type {
+    WelcomeData,
+    AnalysisCompleteData,
+    UpgradePromptData,
+    WeeklyBriefData,
+    PaymentFailedData,
+};
 
 export class EmailService {
     private resend: Resend | null = null;
-    private readonly fromEmail: string;
+
+    // Per-role from addresses (matching template designs)
+    private readonly FROM = {
+        intel:    'MetaPunish <intel@metapunish.com>',
+        analysis: 'MetaPunish <analysis@metapunish.com>',
+        billing:  'MetaPunish <billing@metapunish.com>',
+        meta:     'MetaPunish <meta@metapunish.com>',
+    };
 
     constructor() {
-        this.fromEmail = AppConfig.FROM_EMAIL;
         if (AppConfig.RESEND_API_KEY) {
             this.resend = new Resend(AppConfig.RESEND_API_KEY);
-            Logger.info(`[EmailService] Ready — from: ${this.fromEmail}`);
+            Logger.info('[EmailService] Ready — Resend initialised');
         } else {
             Logger.warn('[EmailService] RESEND_API_KEY not set — emails will be logged only.');
         }
     }
 
-    private async send(to: string, subject: string, html: string, attempt = 1): Promise<boolean> {
+    // ── Core send (private) ────────────────────────────────────────────────
+    private async send(
+        from: string,
+        to: string | string[],
+        subject: string,
+        html: string,
+        attempt = 1,
+    ): Promise<boolean> {
+        const recipients = Array.isArray(to) ? to : [to];
+
         if (!this.resend) {
-            Logger.info(`[EmailService] Simulation: To: ${to}, Subject: ${subject}`);
+            Logger.info(`[EmailService] Simulation — to: ${recipients.join(', ')} | subject: ${subject}`);
             return true;
         }
 
         try {
-            const { error } = await this.resend.emails.send({
-                from: this.fromEmail,
-                to,
-                subject,
-                html,
-            });
-
+            const { error } = await this.resend.emails.send({ from, to: recipients, subject, html });
             if (error) {
-                throw new Error(typeof error === 'object' && 'message' in error ? (error as any).message : String(error));
+                throw new Error(
+                    typeof error === 'object' && 'message' in error
+                        ? (error as any).message
+                        : String(error),
+                );
             }
-
+            Logger.info(`[EmailService] Sent "${subject}" → ${recipients.join(', ')}`);
             return true;
         } catch (err) {
-            const maxAttempts = 3;
-            if (attempt < maxAttempts) {
-                const delayMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s
-                Logger.warn(`[EmailService] Attempt ${attempt}/${maxAttempts} failed for "${subject}" — retrying in ${delayMs}ms`);
-                await new Promise(r => setTimeout(r, delayMs));
-                return this.send(to, subject, html, attempt + 1);
+            const max = 3;
+            if (attempt < max) {
+                const delay = 1000 * Math.pow(2, attempt - 1);
+                Logger.warn(`[EmailService] Attempt ${attempt}/${max} failed — retrying in ${delay}ms`);
+                await new Promise(r => setTimeout(r, delay));
+                return this.send(from, to, subject, html, attempt + 1);
             }
-            Logger.error(`[EmailService] All ${maxAttempts} attempts failed for "${subject}" to ${to}:`, err);
+            Logger.error(`[EmailService] All ${max} attempts failed for "${subject}":`, err);
             return false;
         }
     }
 
-    /**
-     * Welcome email for new users after onboarding
-     */
+    // ── 01 · Welcome / First Punch-in ─────────────────────────────────────
     async sendWelcomeEmail(to: string, name: string): Promise<boolean> {
-        const subject = `Welcome to the Dojo, ${name}`;
-        const html = `
-            <div style="font-family: 'Space Grotesk', sans-serif; background-color: #000; color: #fff; padding: 40px;">
-                <h1 style="color: #F43F5E; font-style: italic; text-transform: uppercase;">Uplink Established.</h1>
-                <p>Welcome, <strong>${name}</strong>. You have been successfully onboarded into the MetaPunish Intelligence Network.</p>
-                <p>Your tactical dashboard is now active. We are scouting tournaments and pro matches to provide you with the most accurate frame data and theory updates.</p>
-                <div style="border: 1px solid #F43F5E; padding: 20px; margin: 20px 0;">
-                    <h3 style="margin-top: 0;">Initial Protocols:</h3>
-                    <ul>
-                        <li>Daily Missions are assigned at 00:00 UTC.</li>
-                        <li>Pro Scout reports refresh every 6 hours.</li>
-                        <li>Character Theory updates daily at 02:00 UTC.</li>
-                    </ul>
-                </div>
-                <a href="${AppConfig.APP_URL}/dashboard" style="background-color: #F43F5E; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: bold; display: inline-block;">ENTER THE DOJO</a>
-                <p style="margin-top: 40px; font-size: 10px; color: #666;">METAPUNISH INTELLIGENCE SUITE v4.0.0</p>
-            </div>
-        `;
-        return this.send(to, subject, html);
+        return this.send(
+            this.FROM.intel,
+            to,
+            `Welcome to the fight, ${name}.`,
+            buildWelcomeEmail({ name }),
+        );
     }
 
-    /**
-     * Generic notification email
-     */
-    async sendNotificationEmail(to: string, title: string, description: string, link?: string): Promise<boolean> {
-        const subject = `[METAPUNISH] ${title}`;
-        const fullLink = link ? (link.startsWith('http') ? link : `${AppConfig.APP_URL}${link}`) : `${AppConfig.APP_URL}/dashboard`;
-        
-        const html = `
-            <div style="font-family: sans-serif; background-color: #050505; color: #eee; padding: 30px; border-left: 4px solid #F43F5E;">
-                <h2 style="color: #fff; margin-top: 0;">${title}</h2>
-                <p style="font-size: 16px; line-height: 1.5;">${description}</p>
-                <br />
-                <a href="${fullLink}" style="color: #F43F5E; font-weight: bold; text-decoration: none;">VIEW INTEL &rarr;</a>
-                <hr style="border: 0; border-top: 1px solid #222; margin: 30px 0;" />
-                <p style="font-size: 10px; color: #555;">Sent from MetaPunish Dojo. You received this because you are an active operator.</p>
-            </div>
-        `;
-        return this.send(to, subject, html);
+    // ── 02 · Analysis Complete ─────────────────────────────────────────────
+    async sendAnalysisCompleteEmail(to: string, data: AnalysisCompleteData): Promise<boolean> {
+        return this.send(
+            this.FROM.analysis,
+            to,
+            `Your ${data.characterA} vs ${data.characterB} match has been broken down`,
+            buildAnalysisCompleteEmail(data),
+        );
     }
 
-    /**
-     * High priority Rival Watch alert
-     */
-    async sendRivalWatchAlert(to: string, name: string, rivalName: string, gameName: string, link: string): Promise<boolean> {
-        const subject = `⚠️ RIVAL DETECTED: ${rivalName}`;
-        const html = `
-            <div style="font-family: sans-serif; background-color: #0a0002; color: #fff; padding: 30px; border: 2px solid #F43F5E;">
-                <h1 style="color: #F43F5E;">THREAT DETECTED</h1>
-                <p>Operator <strong>${name}</strong>, your rival <strong>${rivalName}</strong> has been spotted in ${gameName}.</p>
-                <p>New match data has been analyzed and indexed in the vector database. Review their current strategies immediately.</p>
-                <br />
-                <a href="${link}" style="background-color: #F43F5E; color: #fff; padding: 15px 30px; text-decoration: none; font-weight: bold; display: inline-block;">ANALYZE RIVAL TECH</a>
-            </div>
-        `;
-        return this.send(to, subject, html);
+    // ── 03 · Upgrade Prompt (free tier limit hit) ──────────────────────────
+    async sendUpgradePromptEmail(to: string, data: UpgradePromptData): Promise<boolean> {
+        return this.send(
+            this.FROM.billing,
+            to,
+            `You're out of free punishes — go PRO`,
+            buildUpgradePromptEmail(data),
+        );
     }
 
-    /**
-     * Admin invite email
-     */
-    async sendAdminInviteEmail(to: string, adminName: string, inviteUrl: string, promoCode?: string): Promise<boolean> {
-        const subject = `[METAPUNISH] Priority Operator Access Invited`;
-        const html = `
-            <div style="font-family: sans-serif; background-color: #000; color: #fff; padding: 40px; border: 1px solid #F43F5E;">
-                <h1 style="color: #F43F5E; text-transform: uppercase;">Operator Access Granted</h1>
-                <p>Admin <strong>${adminName}</strong> has invited you to join the MetaPunish Intelligence Suite as an Operator.</p>
-                <p>Access the tactical dashboard via the secure link below:</p>
-                <div style="margin: 30px 0;">
-                    <a href="${inviteUrl}" style="background-color: #F43F5E; color: #fff; padding: 15px 30px; text-decoration: none; font-weight: bold;">INITIALIZE UPLINK</a>
-                </div>
-                ${promoCode ? `<p style="font-size: 12px; color: #888;">Beta Access Code: <strong>${promoCode}</strong></p>` : ''}
-                <p style="font-size: 10px; color: #555; margin-top: 40px;">This link expires in 48 hours.</p>
-            </div>
-        `;
-        return this.send(to, subject, html);
+    // ── 04 · Weekly Meta Brief ─────────────────────────────────────────────
+    async sendWeeklyBriefEmail(to: string | string[], data: WeeklyBriefData): Promise<boolean> {
+        return this.send(
+            this.FROM.meta,
+            to,
+            `The ${data.gameId.toUpperCase()} meta shifted this week · Week ${data.week}`,
+            buildWeeklyBriefEmail(data),
+        );
     }
 
-    /**
-     * Referral invite email
-     */
-    async sendReferralInviteEmail(to: string, senderName: string, inviteUrl: string): Promise<boolean> {
-        const subject = `${senderName} invited you to the Dojo`;
-        const html = `
-            <div style="font-family: sans-serif; background-color: #050505; color: #eee; padding: 30px; border: 1px solid #222;">
-                <h2 style="color: #F43F5E; margin-top: 0;">JOIN THE INTELLIGENCE NETWORK</h2>
-                <p><strong>${senderName}</strong> is using MetaPunish to dominate the competitive scene and wants you to join their crew.</p>
-                <p>Get real-time frame data analysis, pro scout reports, and automated theory for your character.</p>
-                <br />
-                <a href="${inviteUrl}" style="color: #F43F5E; font-weight: bold; text-decoration: none;">ACCEPT INVITATION &rarr;</a>
-            </div>
-        `;
-        return this.send(to, subject, html);
+    // ── 05 · Payment Failed / Dunning ─────────────────────────────────────
+    async sendPaymentFailedEmail(to: string, data: PaymentFailedData): Promise<boolean> {
+        return this.send(
+            this.FROM.billing,
+            to,
+            `Your ${data.planName} access expires in 48h — update payment`,
+            buildPaymentFailedEmail(data),
+        );
+    }
+
+    // ── Admin Invite ───────────────────────────────────────────────────────
+    async sendAdminInviteEmail(
+        to: string,
+        adminName: string,
+        inviteUrl: string,
+        promoCode?: string,
+    ): Promise<boolean> {
+        return this.send(
+            this.FROM.intel,
+            to,
+            `[METAPUNISH] Priority Operator Access Invited`,
+            buildAdminInviteEmail(adminName, inviteUrl, promoCode),
+        );
+    }
+
+    // ── Generic Notification ───────────────────────────────────────────────
+    async sendNotificationEmail(
+        to: string,
+        title: string,
+        description: string,
+        link?: string,
+    ): Promise<boolean> {
+        return this.send(
+            this.FROM.intel,
+            to,
+            `[METAPUNISH] ${title}`,
+            buildNotificationEmail(title, description, link),
+        );
+    }
+
+    // ── Rival Watch Alert ──────────────────────────────────────────────────
+    async sendRivalWatchAlert(
+        to: string,
+        playerName: string,
+        rivalName: string,
+        gameName: string,
+        link: string,
+    ): Promise<boolean> {
+        return this.send(
+            this.FROM.intel,
+            to,
+            `⚠️ RIVAL DETECTED: ${rivalName}`,
+            buildRivalAlertEmail(playerName, rivalName, gameName, link),
+        );
+    }
+
+    // ── Referral Invite ────────────────────────────────────────────────────
+    async sendReferralInviteEmail(
+        to: string,
+        senderName: string,
+        inviteUrl: string,
+    ): Promise<boolean> {
+        return this.send(
+            this.FROM.intel,
+            to,
+            `${senderName} invited you to the MetaPunish Dojo`,
+            buildReferralInviteEmail(senderName, inviteUrl),
+        );
     }
 }
 
