@@ -57,7 +57,8 @@ export class AppConfig {
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
   public static get STRIPE_WEBHOOK_SECRET(): string { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
   public static get RESEND_API_KEY(): string { return process.env.RESEND_API_KEY || ''; }
-  public static get APP_URL(): string { return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; }
+  public static get FROM_EMAIL(): string { return process.env.FROM_EMAIL || 'MetaPunish <noreply@metapunish.com>'; }
+  public static get APP_URL(): string { return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://metapunish.com'; }
   public static get GOOGLE_CLOUD_PROJECT(): string { return process.env.GOOGLE_CLOUD_PROJECT || ''; }
   public static get GOOGLE_CLOUD_LOCATION(): string { return process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'; }
   public static get GOOGLE_STORAGE_BUCKET(): string { return process.env.GOOGLE_STORAGE_BUCKET || ''; }

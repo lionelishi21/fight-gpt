@@ -4,13 +4,15 @@ import { Logger } from '../helpers/logger';
 
 export class EmailService {
     private resend: Resend | null = null;
-    private fromEmail = 'MetaPunish <intelligence@fightingames.online>';
+    private readonly fromEmail: string;
 
     constructor() {
+        this.fromEmail = AppConfig.FROM_EMAIL;
         if (AppConfig.RESEND_API_KEY) {
             this.resend = new Resend(AppConfig.RESEND_API_KEY);
+            Logger.info(`[EmailService] Ready — from: ${this.fromEmail}`);
         } else {
-            Logger.warn('[EmailService] RESEND_API_KEY not set. Emails will be logged but not sent.');
+            Logger.warn('[EmailService] RESEND_API_KEY not set — emails will be logged only.');
         }
     }
 
