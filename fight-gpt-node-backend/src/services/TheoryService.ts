@@ -81,13 +81,22 @@ export class TheoryService extends BaseService implements ITheoryService {
                 status: 'approved',
             });
 
-            // Fire notification to all users who might care
+            // In-app notification
             this.notificationService?.characterTheory({
                 gameId,
                 characterId: charId,
                 title: `New character theory for ${charId}`,
                 description: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => {});
+
+            // Expo push broadcast to all users of this game
+            this.notificationService?.broadcastToGame(
+                gameId,
+                'CHARACTER_THEORY',
+                `${charId.replace(/_/g, ' ')} theory updated — ${gameId.toUpperCase()}`,
+                summary.slice(0, 100),
+                { type: 'theory', gameId, characterId: charId }
+            ).catch(() => {});
 
             return { success: true, data: saved as unknown as ITheoryDocument };
         } catch (error) {

@@ -230,6 +230,21 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           }
       }
 
+      // --- PUSH NOTIFICATION — analysis complete ---
+      if (userId && this.notificationService) {
+          const p1 = analysisResponse.p1_character || 'P1';
+          const p2 = analysisResponse.p2_character || 'P2';
+          const events = analysisResponse.timeline?.length ?? 0;
+          this.notificationService.pushToUser(
+              userId,
+              'ANALYSIS_COMPLETE',
+              `${p1} vs ${p2} — Analysis Ready`,
+              `${events} event${events !== 1 ? 's' : ''} identified in your match.`,
+              enrichedRequest.game_id || 'unknown',
+              { analysisId, type: 'analysis_complete' }
+          ).catch(() => {});
+      }
+
       return { success: true, data: responseWithId };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

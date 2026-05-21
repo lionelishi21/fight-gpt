@@ -285,4 +285,83 @@ export class NotificationService extends BaseService {
             data
         });
     }
+
+    // ── Expo Push Notifications ─────────────────────────────────────────────
+
+    /**
+     * Send a real Expo push notification to one device token.
+     * Silently swallows errors so it never blocks the main flow.
+     */
+    async sendExpoPush(
+        token: string,
+        title: string,
+        body: string,
+        data?: Record<string, any>
+    ): Promise<void> {
+        if (!token?.startsWith('ExponentPushToken')) return;
+        try {
+            await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ to: token, title, body, data, sound: 'default', priority: 'high' }),
+            });
+        } catch (err) {
+            console.warn('[NotificationService] Expo push failed:', err instanceof Error ? err.message : err);
+        }
+    }
+
+    /**
+     * Send Expo push + in-app notification to a single user.
+     */
+    async pushToUser(
+        userId: string,
+        type: NotificationType,
+        title: string,
+        body: string,
+        gameId: string,
+        data?: Record<string, any>
+    ): Promise<void> {
+        try {
+            const User = (await import('../models/User')).default;
+            const user = await User.findById(userId).select('pushTokens').lean() as any;
+            // Send to all registered devices
+            if (user?.pushTokens?.length) {
+                await Promise.all(user.pushTokens.map((t: string) => this.sendExpoPush(t, title, body, data)));
+            }
+            // Also create in-app notification
+            await this.notify(userId, type, { gameId, title, description: body, data });
+        } catch (err) {
+            console.warn('[NotificationService] pushToUser error:', err instanceof Error ? err.message : err);
+        }
+    }
+
+    /**
+     * Broadcast Expo push + in-app notification to all users of a game.
+     * Only sends to users who have a pushToken registered.
+     */
+    async broadcastToGame(
+        gameId: string,
+        type: NotificationType,
+        title: string,
+        body: string,
+        data?: Record<string, any>
+    ): Promise<void> {
+        try {
+            const User = (await import('../models/User')).default;
+            const users = await User.find({
+                pushTokens: { $exists: true, $ne: [] },
+            }).select('_id pushTokens preferences').lean() as any[];
+
+            let sent = 0;
+            for (const user of users) {
+                if (!user.pushTokens?.length) continue;
+                await Promise.all(user.pushTokens.map((t: string) => this.sendExpoPush(t, title, body, data)));
+                await this.notify(user._id, type, { gameId, title, description: body, data }).catch(() => {});
+                sent++;
+            }
+            console.info(`[NotificationService] Broadcast "${title}" to ${sent} users`);
+        } catch (err) {
+            console.warn('[NotificationService] broadcastToGame error:', err instanceof Error ? err.message : err);
+        }
+    }
 }
