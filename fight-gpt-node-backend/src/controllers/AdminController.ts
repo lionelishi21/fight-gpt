@@ -1047,10 +1047,18 @@ export class AdminController extends BaseController {
                 return;
             }
 
+            // Resolve game_id and characters from the Analysis record
+            const analysis = await Analysis.findOne({
+                $or: [{ _id: req.params.id }, { analysis_id: req.params.id }],
+            }).lean() as any;
+
             const doc = await AnalysisCorrection.create({
                 analysis_id:          req.params.id,
                 event_node_id,
                 timestamp:            timestamp || '',
+                game_id:              analysis?.game_id || 'unknown',
+                p1_character:         analysis?.analysis?.p1_character,
+                p2_character:         analysis?.analysis?.p2_character,
                 original_event_type:  original_event_type || '',
                 original_description: original_description || '',
                 original_move_used,

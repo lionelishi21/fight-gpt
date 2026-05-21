@@ -18,6 +18,7 @@ import { NotificationService } from './NotificationService';
 import { Game } from '../models/Game';
 import TrainingService from './TrainingService';
 import { Analysis } from '../models/Analysis';
+import { AnalysisCorrection } from '../models/AnalysisCorrection';
 
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
@@ -98,17 +99,25 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       const enrichedRequest = await this.enrichRequestWithGameContext(request);
 
       // --- FEW-SHOT VECTOR INJECTION ---
-      // Retrieve the 3 most similar verified scenarios from the vector DB and
-      // inject them as examples before the video analysis. This teaches Gemini
-      // what correct outcome/spacing/move classification looks like for this game.
+      // Retrieve similar verified scenarios from the vector DB as ground-truth examples.
       try {
         const fewShotExamples = await this.buildFewShotContext(enrichedRequest);
         if (fewShotExamples) {
           enrichedRequest.ai_context = (enrichedRequest.ai_context || '') + fewShotExamples;
         }
       } catch (e) {
-        // Never block analysis if few-shot retrieval fails
-        console.warn('[AnalysisService] Few-shot injection failed, continuing without examples:', e instanceof Error ? e.message : e);
+        console.warn('[AnalysisService] Few-shot injection failed:', e instanceof Error ? e.message : e);
+      }
+
+      // --- HUMAN CORRECTION INJECTION ---
+      // Inject past mistakes flagged by human coaches so the AI does not repeat them.
+      try {
+        const corrections = await this.buildCorrectionContext(enrichedRequest.game_id);
+        if (corrections) {
+          enrichedRequest.ai_context = (enrichedRequest.ai_context || '') + corrections;
+        }
+      } catch (e) {
+        console.warn('[AnalysisService] Correction injection failed:', e instanceof Error ? e.message : e);
       }
 
       let analysisResponse: AnalysisResponse;
@@ -368,6 +377,52 @@ The following events were correctly classified by human coaches. Use them as gro
 ${examples.join('\n\n')}
 
 ═══ END EXAMPLES ═══\n`;
+  }
+
+  /**
+   * Pulls recent human corrections for this game and formats them as
+   * "MISTAKES TO AVOID" injected directly before the AI analyzes the video.
+   * Both pending and applied corrections are included — every flagged mistake
+   * should immediately influence the next analysis, not just after review.
+   */
+  private async buildCorrectionContext(gameId?: string): Promise<string | null> {
+    if (!gameId) return null;
+
+    const corrections = await AnalysisCorrection.find({ game_id: gameId })
+      .sort({ created_at: -1 })
+      .limit(8)
+      .lean() as any[];
+
+    if (!corrections.length) return null;
+
+    const formatted = corrections.map((c, i) => {
+      const lines: string[] = [`CORRECTION ${i + 1} (${gameId.toUpperCase()}${c.p1_character ? ` — ${c.p1_character} vs ${c.p2_character || '?'}` : ''}):`];
+
+      // What the AI said (wrong)
+      const wrongParts: string[] = [];
+      if (c.original_event_type) wrongParts.push(`event_type="${c.original_event_type}"`);
+      if (c.original_move_used)  wrongParts.push(`move="${c.original_move_used}"`);
+      if (c.original_outcome)    wrongParts.push(`outcome="${c.original_outcome}"`);
+      lines.push(`  ❌ AI SAID: ${wrongParts.join(', ')}`);
+      if (c.original_description) lines.push(`     Description: "${c.original_description}"`);
+
+      // What is actually correct
+      lines.push(`  ✓ HUMAN CORRECTION: ${c.correction}`);
+      if (c.corrected_event_type) lines.push(`  ✓ Correct event_type: ${c.corrected_event_type}`);
+      if (c.corrected_move_used)  lines.push(`  ✓ Correct move: ${c.corrected_move_used}`);
+      if (c.corrected_outcome)    lines.push(`  ✓ Correct outcome: ${c.corrected_outcome}`);
+
+      return lines.join('\n');
+    });
+
+    return `\n\n═══ HUMAN COACH CORRECTIONS — DO NOT REPEAT THESE MISTAKES ═══
+A human expert reviewed previous AI analyses of ${gameId.toUpperCase()} matches and flagged the following errors.
+Study each one carefully. Apply the correction logic to similar situations in this video.
+
+${formatted.join('\n\n')}
+
+KEY LESSON: If you see a situation that resembles any correction above, apply the corrected logic, not the original mistaken logic.
+═══ END CORRECTIONS ═══\n`;
   }
 
   /**
