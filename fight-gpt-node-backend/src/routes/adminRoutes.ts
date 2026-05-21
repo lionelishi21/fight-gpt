@@ -93,6 +93,12 @@ export class AdminRoutes {
         // System Settings
         this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
         this.router.get('/settings/cookie/status', this.adminController.getCookieStatus);
+
+        // Analysis Corrections
+        this.router.get('/analysis/:id/corrections',         this.adminController.getAnalysisCorrections);
+        this.router.post('/analysis/:id/corrections',        this.adminController.addAnalysisCorrection);
+        this.router.get('/corrections',                      this.adminController.listAllCorrections);
+        this.router.patch('/corrections/:correctionId',      this.adminController.markCorrectionApplied);
     }
 
     public getRouter(): Router {

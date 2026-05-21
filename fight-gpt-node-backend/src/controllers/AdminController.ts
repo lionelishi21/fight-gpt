@@ -16,6 +16,8 @@ import { GameOnboardingService } from '../services/GameOnboardingService';
 import { PatchService } from '../services/PatchService';
 import { RosterSyncService } from '../services/RosterSyncService';
 import { GameScanService, DeepScanResult } from '../services/GameScanService';
+import { AnalysisCorrection } from '../models/AnalysisCorrection';
+import { Analysis } from '../models/Analysis';
 import fs from 'fs';
 import path from 'path';
 
@@ -1005,13 +1007,95 @@ export class AdminController extends BaseController {
                     size: stats.size,
                     updatedAt: stats.mtime,
                     isNetscape,
-                    message: isNetscape 
-                        ? 'Valid Netscape cookie file detected.' 
+                    message: isNetscape
+                        ? 'Valid Netscape cookie file detected.'
                         : 'File found but may not be in valid Netscape format.'
                 }
             });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Failed to check cookie status');
+        }
+    };
+
+    // ── Analysis Corrections ─────────────────────────────────────────────────
+
+    /** GET /admin/analysis/:id/corrections */
+    getAnalysisCorrections = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const corrections = await AnalysisCorrection.find({ analysis_id: req.params.id })
+                .sort({ created_at: -1 }).lean();
+            this.sendResponse(res, { success: true, data: corrections });
+        } catch (err) {
+            this.sendError(res, err instanceof Error ? err.message : 'Failed to fetch corrections');
+        }
+    };
+
+    /** POST /admin/analysis/:id/corrections */
+    addAnalysisCorrection = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const admin = (req as any).user;
+            const {
+                event_node_id, timestamp,
+                original_event_type, original_description,
+                original_move_used, original_outcome,
+                correction,
+                corrected_event_type, corrected_move_used, corrected_outcome,
+            } = req.body;
+
+            if (!event_node_id || !correction) {
+                res.status(400).json({ success: false, error: 'event_node_id and correction are required' });
+                return;
+            }
+
+            const doc = await AnalysisCorrection.create({
+                analysis_id:          req.params.id,
+                event_node_id,
+                timestamp:            timestamp || '',
+                original_event_type:  original_event_type || '',
+                original_description: original_description || '',
+                original_move_used,
+                original_outcome,
+                correction,
+                corrected_event_type,
+                corrected_move_used,
+                corrected_outcome,
+                admin_id:   admin._id,
+                admin_name: admin.name || admin.email,
+                status:     'pending',
+            });
+
+            this.sendResponse(res, { success: true, data: doc }, 201);
+        } catch (err) {
+            this.sendError(res, err instanceof Error ? err.message : 'Failed to save correction');
+        }
+    };
+
+    /** GET /admin/corrections — list all pending corrections across all analyses */
+    listAllCorrections = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { status = 'pending', limit = 50 } = req.query;
+            const corrections = await AnalysisCorrection.find({ status })
+                .sort({ created_at: -1 })
+                .limit(Number(limit))
+                .lean();
+            this.sendResponse(res, { success: true, data: corrections });
+        } catch (err) {
+            this.sendError(res, err instanceof Error ? err.message : 'Failed to list corrections');
+        }
+    };
+
+    /** PATCH /admin/corrections/:correctionId — mark applied */
+    markCorrectionApplied = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const doc = await AnalysisCorrection.findByIdAndUpdate(
+                req.params.correctionId,
+                { status: 'applied' },
+                { new: true }
+            );
+            if (!doc) { res.status(404).json({ success: false, error: 'Correction not found' }); return; }
+            this.sendResponse(res, { success: true, data: doc });
+        } catch (err) {
+            this.sendError(res, err instanceof Error ? err.message : 'Failed to update correction');
         }
     };
 }
