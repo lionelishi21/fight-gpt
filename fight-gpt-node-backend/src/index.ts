@@ -438,7 +438,7 @@ export class App {
     // Sentry error handler (must come before custom error handler)
     const { Sentry } = require('./helpers/sentry');
     if (process.env.SENTRY_DSN) {
-      this.app.use(Sentry.expressErrorHandler());
+      Sentry.setupExpressErrorHandler(this.app);
     }
 
     // Error handler (must be last)
