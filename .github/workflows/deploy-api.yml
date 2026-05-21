@@ -65,6 +65,8 @@ jobs:
             grep -q "^FROM_EMAIL=" .env || echo "FROM_EMAIL=${{ secrets.FROM_EMAIL }}" >> .env
             grep -q "^GEMINI_MODEL=" .env || echo "GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}" >> .env
             grep -q "^GEMINI_MODEL_PREMIUM=" .env || echo "GEMINI_MODEL_PREMIUM=${GEMINI_MODEL_PREMIUM:-gemini-2.5-pro}" >> .env
+            sed -i "s|^SENTRY_DSN=.*|SENTRY_DSN=${{ secrets.SENTRY_DSN }}|" .env || true
+            grep -q "^SENTRY_DSN=" .env || echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
 
             # 1. Ensure yt-dlp is installed (required for ingestion pipeline)
             echo "→ Checking yt-dlp..."
