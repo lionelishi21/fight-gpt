@@ -85,6 +85,42 @@ export class TrainingController extends BaseController {
     /**
      * Submit video proof for AI validation
      */
+    /** GET /training/missions/badge — available mission count + streak for app icon badge */
+    public getMissionBadge = async (req: Request, res: Response): Promise<void> => {
+        try {
+            // @ts-ignore
+            const userId = req.user.id;
+            const missions = await this.service.getMissionsForUser(userId);
+            const available = missions.filter((m: any) => m.status === 'AVAILABLE').length;
+
+            const User = require('mongoose').model('User');
+            const user = await User.findById(userId).select('gamification').lean();
+            const streak = (user as any)?.gamification?.missionStreak ?? 0;
+            const longest = (user as any)?.gamification?.longestStreak ?? 0;
+
+            // Badge resets at midnight UTC
+            const now = new Date();
+            const nextReset = new Date(now);
+            nextReset.setUTCHours(24, 0, 0, 0);
+            const msUntilReset = nextReset.getTime() - now.getTime();
+            const hoursUntilReset = Math.floor(msUntilReset / 3600000);
+            const minutesUntilReset = Math.floor((msUntilReset % 3600000) / 60000);
+
+            res.setHeader('Cache-Control', 'no-store');
+            this.sendResponse(res, {
+                success: true,
+                data: {
+                    availableCount: available,
+                    streak,
+                    longestStreak: longest,
+                    resetIn: `${hoursUntilReset}h ${minutesUntilReset}m`,
+                },
+            });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed', 500);
+        }
+    };
+
     public submitMissionProof = async (req: Request, res: Response): Promise<void> => {
         try {
             // @ts-ignore

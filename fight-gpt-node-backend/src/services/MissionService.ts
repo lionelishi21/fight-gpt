@@ -72,10 +72,12 @@ export class MissionService {
     if (!user) return;
 
     if (!user.gamification) {
-      user.gamification = { 
-        level: 1, 
-        xp: 0, 
-        rank: 'ROOKIE', 
+      user.gamification = {
+        level: 1,
+        xp: 0,
+        rank: 'ROOKIE',
+        missionStreak: 0,
+        longestStreak: 0,
         stats: {
           defense: 50,
           execution: 50,

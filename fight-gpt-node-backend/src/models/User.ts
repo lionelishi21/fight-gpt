@@ -49,6 +49,9 @@ export interface IUser extends Document {
         xp: number;
         level: number;
         rank: string;
+        missionStreak: number;
+        longestStreak: number;
+        lastMissionCompletedDate?: Date;
         stats: {
             defense: number;
             execution: number;
@@ -127,6 +130,9 @@ const UserSchema: Schema = new Schema(
             xp: { type: Number, default: 0 },
             level: { type: Number, default: 1 },
             rank: { type: String, default: 'Rookie' },
+            missionStreak: { type: Number, default: 0 },
+            longestStreak: { type: Number, default: 0 },
+            lastMissionCompletedDate: { type: Date },
             stats: {
                 defense: { type: Number, default: 50 },
                 execution: { type: Number, default: 50 },

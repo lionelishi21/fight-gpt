@@ -35,6 +35,8 @@ export class GamificationService {
                 xp: 0,
                 level: 1,
                 rank: 'Rookie',
+                missionStreak: 0,
+                longestStreak: 0,
                 stats: {
                     defense: 50,
                     execution: 50,

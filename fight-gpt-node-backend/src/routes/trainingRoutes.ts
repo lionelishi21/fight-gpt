@@ -15,6 +15,8 @@ export class TrainingRoutes {
     private setupRoutes(): void {
         // Protected routes
         // @ts-ignore
+        this.router.get('/missions/badge', authMiddleware, this.controller.getMissionBadge);
+        // @ts-ignore
         this.router.get('/missions', authMiddleware, this.controller.getMissions);
         // @ts-ignore
         this.router.get('/missions/:id', authMiddleware, this.controller.getMissionDetails);

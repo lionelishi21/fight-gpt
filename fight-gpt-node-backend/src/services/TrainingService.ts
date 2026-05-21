@@ -254,13 +254,35 @@ export class TrainingService {
         const User = mongoose.model('User');
         const user = await User.findById(userId);
         if (user) {
-            const currentXp = (user as any).gamification.xp || 0;
-            const newXp = currentXp + xpToAdd;
-            (user as any).gamification.xp = newXp;
-            
-            // Level up every 1000 XP
-            (user as any).gamification.level = Math.floor(newXp / 1000) + 1;
-            
+            const g = (user as any).gamification;
+            const newXp = (g.xp || 0) + xpToAdd;
+            g.xp = newXp;
+            g.level = Math.floor(newXp / 1000) + 1;
+
+            // Streak logic — increment if last completion was yesterday, reset if gap > 1 day
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const lastDate: Date | undefined = g.lastMissionCompletedDate;
+
+            if (!lastDate) {
+                g.missionStreak = 1;
+            } else {
+                const lastDay = new Date(lastDate);
+                lastDay.setHours(0, 0, 0, 0);
+                const daysDiff = Math.round((today.getTime() - lastDay.getTime()) / (24 * 60 * 60 * 1000));
+                if (daysDiff === 0) {
+                    // Already completed a mission today — streak stays
+                } else if (daysDiff === 1) {
+                    g.missionStreak = (g.missionStreak || 0) + 1;
+                } else {
+                    // Gap in streak — reset
+                    g.missionStreak = 1;
+                }
+            }
+
+            g.lastMissionCompletedDate = new Date();
+            g.longestStreak = Math.max(g.longestStreak || 0, g.missionStreak);
+
             await user.save();
         }
 
