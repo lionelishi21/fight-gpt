@@ -73,7 +73,8 @@ export class AdminRoutes {
         this.router.post('/scenarios/purge-garbage', this.adminController.purgeGarbageScenarios);
 
         // Auto-Research
-        this.router.post('/research/trigger', this.adminController.triggerResearch);
+        this.router.post('/research/trigger',  this.adminController.triggerResearch);
+        this.router.get('/research/logs',      this.adminController.getResearchLogs);
         this.router.post('/trends/analyze', this.adminController.triggerTrendAnalysis);
 
         // Search Strategy Management (DB-driven ingestion queries)

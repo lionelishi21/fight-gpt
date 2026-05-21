@@ -18,6 +18,7 @@ import { RosterSyncService } from '../services/RosterSyncService';
 import { GameScanService, DeepScanResult } from '../services/GameScanService';
 import { AnalysisCorrection } from '../models/AnalysisCorrection';
 import { Analysis } from '../models/Analysis';
+import { ResearchLog } from '../models/ResearchLog';
 import fs from 'fs';
 import path from 'path';
 
@@ -556,23 +557,61 @@ export class AdminController extends BaseController {
      * POST /api/admin/research/trigger
      * Manually run the Karpathy auto-research cycle without waiting for the 2am cron
      */
-    triggerResearch = async (_req: Request, res: Response): Promise<void> => {
+    triggerResearch = async (req: Request, res: Response): Promise<void> => {
         if (!this.autoResearchService) {
             res.status(503).json({ success: false, error: 'Auto-research service unavailable' });
             return;
         }
         try {
-            // Run in background to avoid HTTP timeout
-            this.autoResearchService.runResearchCycle().catch(err => {
+            const gameId = req.body?.game_id || 'all';
+            const startedAt = Date.now();
+
+            // Run in background, write a ResearchLog when done
+            this.autoResearchService.runResearchCycle().then(async (result: any) => {
+                await ResearchLog.create({
+                    game_id:             gameId,
+                    triggered_by:        'manual',
+                    scenarios_generated: result?.scenariosGenerated ?? 0,
+                    theories_generated:  result?.theoriesGenerated ?? 0,
+                    characters_covered:  result?.charactersCovered ?? [],
+                    videos_processed:    result?.videosProcessed ?? 0,
+                    errors:              [],
+                    duration_ms:         Date.now() - startedAt,
+                    status:              'success',
+                });
+            }).catch(async (err: any) => {
                 console.error('[AdminController] Background research cycle failed:', err);
+                await ResearchLog.create({
+                    game_id:      gameId,
+                    triggered_by: 'manual',
+                    errors:       [err?.message || String(err)],
+                    duration_ms:  Date.now() - startedAt,
+                    status:       'failed',
+                }).catch(() => {});
             });
-            
-            this.sendResponse(res, { 
-                success: true, 
-                message: 'Research cycle triggered in background. Check logs or wait for push notifications for results.' 
+
+            this.sendResponse(res, {
+                success: true,
+                message: 'Research cycle triggered in background. Results will appear in the Research Log.',
             });
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Research cycle trigger failed');
+        }
+    };
+
+    /** GET /admin/research/logs — last 20 research runs */
+    getResearchLogs = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { game_id, limit = 20 } = req.query;
+            const filter: any = {};
+            if (game_id) filter.game_id = game_id;
+            const logs = await ResearchLog.find(filter)
+                .sort({ run_at: -1 })
+                .limit(Number(limit))
+                .lean();
+            this.sendResponse(res, { success: true, data: logs });
+        } catch (err) {
+            this.sendError(res, err instanceof Error ? err.message : 'Failed to fetch research logs');
         }
     };
 

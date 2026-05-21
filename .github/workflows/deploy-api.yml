@@ -57,6 +57,14 @@ jobs:
             grep -q "^STRIPE_WEBHOOK_SECRET=" .env || echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> .env
             grep -q "^GOOGLE_CLOUD_PROJECT=" .env || echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }}" >> .env
             grep -q "^GOOGLE_STORAGE_BUCKET=" .env || echo "GOOGLE_STORAGE_BUCKET=${{ secrets.GOOGLE_STORAGE_BUCKET }}" >> .env
+            sed -i "s|^RESEND_API_KEY=.*|RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}|" .env || true
+            sed -i "s|^FROM_EMAIL=.*|FROM_EMAIL=${{ secrets.FROM_EMAIL }}|" .env || true
+            sed -i "s|^GEMINI_MODEL=.*|GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}|" .env || true
+            sed -i "s|^GEMINI_MODEL_PREMIUM=.*|GEMINI_MODEL_PREMIUM=${{ secrets.GEMINI_MODEL_PREMIUM }}|" .env || true
+            grep -q "^RESEND_API_KEY=" .env || echo "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
+            grep -q "^FROM_EMAIL=" .env || echo "FROM_EMAIL=${{ secrets.FROM_EMAIL }}" >> .env
+            grep -q "^GEMINI_MODEL=" .env || echo "GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}" >> .env
+            grep -q "^GEMINI_MODEL_PREMIUM=" .env || echo "GEMINI_MODEL_PREMIUM=${GEMINI_MODEL_PREMIUM:-gemini-2.5-pro}" >> .env
 
             # 1. Ensure yt-dlp is installed (required for ingestion pipeline)
             echo "→ Checking yt-dlp..."
