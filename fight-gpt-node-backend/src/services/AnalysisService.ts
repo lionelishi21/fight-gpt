@@ -42,7 +42,8 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     private readonly characterService?: ICharacterService,
     private readonly vectorRepository?: IVectorRepository,
     private readonly notificationService?: NotificationService,
-    private readonly rivalRepository?: IRivalRepository
+    private readonly rivalRepository?: IRivalRepository,
+    private readonly premiumAiService?: IAiService,
   ) {
     super();
   }
@@ -61,19 +62,28 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       // --- USER & AUTH CHECK ---
       const user = userId ? await User.findById(userId) : null;
       const isAdmin = user?.role === 'admin';
+      const isUserUpload = !!userId; // true = paid user upload → use premium model
 
       if (user && !isAdmin) {
         const tier = (user.tier || 'FREE').toUpperCase();
-        const recentCount = await this.analysisRepository.countRecentAnalysesByUser(userId as string, 24);
-        
-        const maxFree = 3;        // 3 free analyses — enough to demonstrate value before the wall
-        const maxCompetitor = 10;
-        
-        if (tier === 'FREE' && recentCount >= maxFree) {
-          return { success: false, error: 'FREE_TIER_LIMIT: You have used your 3 free analyses. Upgrade to Competitor for unlimited VOD analysis.' };
-        }
-        if (tier === 'COMPETITOR' && recentCount >= maxCompetitor) {
-          return { success: false, error: 'LIMIT_REACHED: You have reached your 10 daily scans limit.' };
+
+        // Monthly rolling limits (30-day window)
+        const monthlyCount = await this.analysisRepository.countRecentAnalysesByUser(userId as string, 30 * 24);
+
+        const LIMITS: Record<string, number> = {
+          FREE:       3,    // lifetime cap (3 analyses ever on free)
+          COMPETITOR: 30,   // 30 per rolling 30 days
+          PRO:        150,  // 150 per rolling 30 days
+          COMPETITOR_ANNUAL: 30,
+          PRO_ANNUAL: 150,
+        };
+
+        const limit = LIMITS[tier] ?? 3;
+        if (monthlyCount >= limit) {
+          const upgradeMsg = tier === 'FREE'
+            ? 'FREE_TIER_LIMIT: You have used your 3 free analyses. Upgrade to Competitor ($25/mo) for 30 analyses per month.'
+            : `LIMIT_REACHED: You have used ${monthlyCount}/${limit} analyses this month. Upgrade to unlock more.`;
+          return { success: false, error: upgradeMsg };
         }
       }
 
@@ -122,7 +132,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       let analysisResponse: AnalysisResponse;
       try {
-        analysisResponse = await this.aiService.analyzeVideo(enrichedRequest);
+        // User uploads get Gemini 2.5 Pro; background ingestion gets Flash
+        const activeService = (isUserUpload && this.premiumAiService) ? this.premiumAiService : this.aiService;
+        analysisResponse = await activeService.analyzeVideo(enrichedRequest);
       } catch (e: any) {
         if (e.name === 'NotGameplayError') {
           return { success: false, error: `NOT_GAMEPLAY: ${e.reason || 'Video does not contain fighting game gameplay. Only match footage is supported.'}` };

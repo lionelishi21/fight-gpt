@@ -3,6 +3,9 @@ import { body, param, ValidationChain } from 'express-validator';
 import { AnalysisController } from '../controllers/AnalysisController';
 import { validateRequest } from '../middleware/validationMiddleware';
 import { optionalAuthMiddleware } from '../middleware/auth';
+import { UserEventFlag } from '../models/UserEventFlag';
+import { Analysis } from '../models/Analysis';
+import { authMiddleware } from '../middleware/auth';
 
 /**
  * Analysis routes
@@ -79,6 +82,46 @@ export class AnalysisRoutes {
       optionalAuthMiddleware,
       (req: Request, res: Response, next: NextFunction) => this.controller.getUserDiscoveryViews(req, res, next)
     );
+
+    // User event flagging — any authenticated user can flag a wrong event
+    this.router.post('/:id/flag', authMiddleware, async (req: Request, res: Response) => {
+      try {
+        const userId = (req as any).user?._id || (req as any).user?.id;
+        const { event_node_id, timestamp, reason, note } = req.body;
+        if (!event_node_id || !reason) {
+          res.status(400).json({ success: false, error: 'event_node_id and reason are required' });
+          return;
+        }
+        const analysis = await Analysis.findOne({
+          $or: [{ _id: req.params.id }, { analysis_id: req.params.id }],
+        }).lean() as any;
+
+        await UserEventFlag.create({
+          analysis_id:  req.params.id,
+          event_node_id,
+          timestamp:    timestamp || '',
+          game_id:      analysis?.game_id || 'unknown',
+          reason,
+          note:         note?.slice(0, 500),
+          user_id:      String(userId),
+        });
+        res.json({ success: true, message: 'Flag submitted — thank you.' });
+      } catch (err: any) {
+        // Duplicate flag from same user on same event — silent success
+        if (err.code === 11000) { res.json({ success: true, message: 'Already flagged.' }); return; }
+        res.status(500).json({ success: false, error: 'Failed to submit flag' });
+      }
+    });
+
+    // Get flag count for an analysis (admin use)
+    this.router.get('/:id/flags', authMiddleware, async (req: Request, res: Response) => {
+      try {
+        const flags = await UserEventFlag.find({ analysis_id: req.params.id }).lean();
+        res.json({ success: true, data: flags });
+      } catch {
+        res.status(500).json({ success: false, error: 'Failed to fetch flags' });
+      }
+    });
   }
 
   /**

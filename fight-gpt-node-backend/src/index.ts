@@ -143,9 +143,17 @@ export class App {
     const characterEncyclopediaService = AppConfig.MONGODB_URI ? new CharacterEncyclopediaService(characterEncyclopediaRepository) : null as any;
     const emailService = new EmailService();
     const notificationService = AppConfig.MONGODB_URI ? new NotificationService(notificationRepository, emailService) : null as any;
+    // Standard model (Flash) — used for background ingestion (high volume, lower cost)
     const aiService = AppConfig.MONGODB_URI ? new AiService(
       AppConfig.GEMINI_API_KEY,
       AppConfig.GEMINI_MODEL,
+      gameMetadataService,
+      characterEncyclopediaService
+    ) : null as any;
+    // Premium model (2.5 Pro) — used for paid user uploads (higher quality, higher cost)
+    const premiumAiService = AppConfig.MONGODB_URI ? new AiService(
+      AppConfig.GEMINI_API_KEY,
+      AppConfig.GEMINI_MODEL_PREMIUM,
       gameMetadataService,
       characterEncyclopediaService
     ) : null as any;
@@ -155,10 +163,11 @@ export class App {
       aiService,
       gameMetadataService,
       characterEncyclopediaService,
-      characterService, // Pass characterService for character name lookup
+      characterService,
       vectorRepository,
       notificationService,
-      rivalRepository
+      rivalRepository,
+      premiumAiService,
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;
