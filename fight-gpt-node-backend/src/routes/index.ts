@@ -27,6 +27,7 @@ import tournamentRouter from './tournamentRoutes';
 import analyticsRouter from './analyticsRoutes';
 import scenarioRouter from './scenarioRoutes';
 import publicApiRouter from './publicApiRoutes';
+import orgRouter from './orgRoutes';
 import { AnalysisController } from '../controllers/AnalysisController';
 import { HealthController } from '../controllers/HealthController';
 import { CharacterController } from '../controllers/CharacterController';
@@ -218,6 +219,7 @@ export class Routes {
     // Analytics routes (Priority 7.3)
     this.router.use('/analytics', analyticsRouter);
     this.router.use('/', publicApiRouter);   // /api-keys + /v1/*
+    this.router.use('/org', orgRouter);      // /org/* esports org endpoints
 
     // Dojo Lobby & Theory
     if (this.lobbyRoutes) {
