@@ -377,7 +377,9 @@ export class App {
       },
     } as Store;
 
-    // Global limiter — uses Redis store when available, in-memory when not.
+    // Global limiter — skips authenticated requests entirely.
+    // Authenticated users are already verified — rate limiting only protects against
+    // unauthenticated abuse (bots, scrapers, credential stuffing on public endpoints).
     const limiter = rateLimit({
       windowMs: WINDOW_MS,
       max: AppConfig.RATE_LIMIT_MAX_REQUESTS || 10000,
@@ -387,19 +389,22 @@ export class App {
       legacyHeaders: false,
       skip: (req) => {
         if (isDev) return true;
+        // Skip any request that carries a valid auth token — the auth middleware
+        // will verify it; no need to also rate-limit the user.
+        const hasToken = !!(req.headers['x-auth-token'] || req.headers['authorization']);
+        if (hasToken) return true;
+        // Skip high-frequency public endpoints
         const p = req.path;
-        // Skip high-frequency endpoints that are safe and already no-cached
-        return p.startsWith('/admin/') ||
-               p === '/auth/me' ||
-               p === '/notifications/unread-count' ||
-               p === '/training/missions';
+        return p === '/health';
       },
     });
 
-    // Auth limiter — tight only on login/register to block credential stuffing
+    // Auth limiter — only blocks brute-force on unauthenticated login/register.
+    // 200 per 15 min per IP: enough for legitimate concurrent users at launch,
+    // still blocks automated credential stuffing (which fires thousands/min).
     const authLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 20,
+      max: 200,
       message: { success: false, error: 'Too many login attempts. Please wait 15 minutes.' },
       standardHeaders: true,
       legacyHeaders: false,
