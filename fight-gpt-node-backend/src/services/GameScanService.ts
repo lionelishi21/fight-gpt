@@ -201,9 +201,15 @@ Rules:
             generationConfig: { responseMimeType: 'application/json' },
         });
 
-        for (const char of characters) {
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+        for (let ci = 0; ci < characters.length; ci++) {
+            const char = characters[ci];
             const charId = char.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-            Logger.info(`[GameScan] Deep scanning ${char.name}...`);
+            Logger.info(`[GameScan] Deep scanning ${char.name} (${ci + 1}/${characters.length})...`);
+
+            // 2s between calls to stay within Gemini RPM quota
+            if (ci > 0) await sleep(2000);
 
             const prompt = `You are a competitive fighting game frame data expert for ${gameName} (patch ${patchVersion}).
 
@@ -251,7 +257,21 @@ Rules:
 - Use accurate frame data from patch ${patchVersion}`;
 
             try {
-                const geminiResult = await model.generateContent(prompt);
+                // Retry up to 3 times on rate limit (429) with exponential backoff
+                let geminiResult: any;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        geminiResult = await model.generateContent(prompt);
+                        break;
+                    } catch (e: any) {
+                        const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('quota');
+                        if (is429 && attempt < 3) {
+                            const wait = attempt * 10000; // 10s, 20s
+                            Logger.warn(`[GameScan] Rate limited on ${char.name} attempt ${attempt} — retrying in ${wait / 1000}s`);
+                            await sleep(wait);
+                        } else throw e;
+                    }
+                }
                 const raw = geminiResult.response.text().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
                 const parsed = JSON.parse(raw);
 
