@@ -11,6 +11,9 @@ import {
     buildNotificationEmail,
     buildRivalAlertEmail,
     buildReferralInviteEmail,
+    buildDripDay1Email,
+    buildDripDay3Email,
+    buildDripDay7Email,
 } from './EmailTemplates';
 
 // Re-export data interfaces so callers can import from one place
@@ -188,6 +191,26 @@ export class EmailService {
             to,
             `${senderName} invited you to the MetaPunish Dojo`,
             buildReferralInviteEmail(senderName, inviteUrl),
+        );
+    }
+
+    // ── Onboarding Drip ────────────────────────────────────────────────────
+    async sendDripEmail(to: string, name: string, day: 1 | 3 | 7): Promise<boolean> {
+        const builders: Record<number, () => string> = {
+            1: () => buildDripDay1Email(name),
+            3: () => buildDripDay3Email(name),
+            7: () => buildDripDay7Email(name),
+        };
+        const subjects: Record<number, string> = {
+            1: `${name}, your first analysis is one paste away`,
+            3: `The meta shifted this week — here's what changed`,
+            7: `One week in — unlock your training plan`,
+        };
+        return this.send(
+            this.FROM.intel,
+            to,
+            subjects[day],
+            builders[day](),
         );
     }
 }

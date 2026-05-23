@@ -61,6 +61,7 @@ export interface IUser extends Document {
         };
         heatmap: { date: Date; value: number }[];
     };
+    drip_sent: number;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -126,6 +127,7 @@ const UserSchema: Schema = new Schema(
         referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
         referralCount: { type: Number, default: 0 },
         referralCredits: { type: Number, default: 0 },
+        drip_sent: { type: Number, default: 0 },
         gamification: {
             xp: { type: Number, default: 0 },
             level: { type: Number, default: 1 },

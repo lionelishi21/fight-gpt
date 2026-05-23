@@ -64,6 +64,7 @@ import { PaymentService } from './services/PaymentService';
 import { RosterSyncService } from './services/RosterSyncService';
 import { ScraperService } from './services/ScraperService';
 import { EmailService } from './services/EmailService';
+import { DripService } from './services/DripService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -570,6 +571,9 @@ export class App {
       if (this.trainingService) {
         this.trainingService.startScheduler();
       }
+
+      // Start onboarding drip email scheduler (every 4 hours)
+      new DripService().startScheduler();
 
       // Seed default lobbies for active games (non-blocking)
       this.lobbyService.seedDefaultLobbies().catch(() => {});

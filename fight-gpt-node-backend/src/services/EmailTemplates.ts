@@ -779,3 +779,137 @@ export function buildReferralInviteEmail(senderName: string, inviteUrl: string):
   `;
   return base('intel@metapunish.com', 'CREW INVITATION · JOIN THE NETWORK', `${senderName} invited you to MetaPunish.`, body);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// DRIP — DAY 1: First Analysis Waiting
+// ════════════════════════════════════════════════════════════════════════════
+export function buildDripDay1Email(name: string): string {
+  const dashUrl = `${APP()}/dashboard/matches`;
+  const body = `
+    <tr>
+      <td style="padding:40px 28px 32px;background:#050505;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:${C.mono};font-size:10px;color:${C.cyan};letter-spacing:0.3em;text-transform:uppercase;margin-bottom:16px;">
+          ● DAY 1 &nbsp;·&nbsp; FIRST MISSION BRIEFING
+        </div>
+        <div class="hero-text" style="font-family:${C.mono};font-size:36px;font-weight:bold;line-height:1;color:${C.text};text-transform:uppercase;margin-bottom:20px;">
+          YOUR FIRST<br/><span style="color:${C.cyan};">ANALYSIS</span><br/>IS WAITING.
+        </div>
+        <p style="font-family:${C.mono};font-size:13px;color:${C.sub};line-height:1.6;max-width:460px;margin:0 0 28px;">
+          Hey ${name} — most players sign up and never run their first analysis. Don't be that player.<br/><br/>
+          Paste any YouTube match URL and get frame-by-frame AI coaching in under 2 minutes. It's free to start.
+        </p>
+        ${btn('ANALYZE A MATCH NOW', dashUrl, C.cyan)}
+      </td>
+    </tr>
+    <tr><td height="24">&nbsp;</td></tr>
+    ${panel('WHAT THE AI DETECTS', `
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${[
+          ['Punish Windows', 'Every unsafe move your opponent throws — and whether you punished it.'],
+          ['Whiff Punishes', 'Neutral reads and footsie opportunities you might have missed.'],
+          ['Damage Breakdown', 'Combo routes taken vs. optimal — see what damage you left on the table.'],
+        ].map(([title, desc]) => `
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #111;">
+              <div style="font-family:${C.mono};font-size:11px;font-weight:bold;color:${C.text};">${title}</div>
+              <div style="font-family:${C.mono};font-size:11px;color:${C.muted};margin-top:2px;">${desc}</div>
+            </td>
+          </tr>`).join('')}
+      </table>
+    `, C.cyan)}
+    <tr><td height="8">&nbsp;</td></tr>
+  `;
+  return base('MetaPunish Coach', 'DAY 1 · YOUR FIRST ANALYSIS IS WAITING', `${name}, your first AI match breakdown is one paste away.`, body);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DRIP — DAY 3: Meta Brief Teaser
+// ════════════════════════════════════════════════════════════════════════════
+export function buildDripDay3Email(name: string): string {
+  const metaUrl = `${APP()}/dashboard/meta`;
+  const body = `
+    <tr>
+      <td style="padding:40px 28px 32px;background:#050505;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:${C.mono};font-size:10px;color:${C.yellow};letter-spacing:0.3em;text-transform:uppercase;margin-bottom:16px;">
+          ● DAY 3 &nbsp;·&nbsp; META INTELLIGENCE UPDATE
+        </div>
+        <div class="hero-text" style="font-family:${C.mono};font-size:36px;font-weight:bold;line-height:1;color:${C.text};text-transform:uppercase;margin-bottom:20px;">
+          THE META<br/><span style="color:${C.yellow};">SHIFTED</span><br/>THIS WEEK.
+        </div>
+        <p style="font-family:${C.mono};font-size:13px;color:${C.sub};line-height:1.6;max-width:460px;margin:0 0 28px;">
+          ${name} — our AI ingested tournament footage from the last 7 days and the tier list moved.<br/><br/>
+          Top players are adapting their gameplan. Here's what we're tracking in the meta right now.
+        </p>
+        ${btn('VIEW META INTELLIGENCE', metaUrl, C.yellow)}
+      </td>
+    </tr>
+    <tr><td height="24">&nbsp;</td></tr>
+    ${panel('WHAT METAPUNISH TRACKS', `
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${stat('S→A', 'Tier Shifts', C.yellow)}${stat('12+', 'VODs Ingested', C.accent)}${stat('Live', 'Meta Feed', C.green)}
+          </table>
+        </td></tr>
+        <tr><td height="16">&nbsp;</td></tr>
+        <tr><td style="font-family:${C.mono};font-size:11px;color:${C.muted};line-height:1.7;">
+          Character win rates from tournament data · Post-patch adjustments · Dominant strategies
+          · Matchup shifts · Frame data corrections after balance patches.
+        </td></tr>
+      </table>
+    `, C.yellow)}
+    <tr><td height="8">&nbsp;</td></tr>
+  `;
+  return base('MetaPunish Intel', 'DAY 3 · META INTELLIGENCE BRIEF', `${name}, the meta shifted. See what changed.`, body);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DRIP — DAY 7: Training Plan + Upgrade Push
+// ════════════════════════════════════════════════════════════════════════════
+export function buildDripDay7Email(name: string): string {
+  const upgradeUrl = `${APP()}/#pricing`;
+  const dashUrl   = `${APP()}/dashboard`;
+  const body = `
+    <tr>
+      <td style="padding:40px 28px 32px;background:#050505;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:${C.mono};font-size:10px;color:${C.accent};letter-spacing:0.3em;text-transform:uppercase;margin-bottom:16px;">
+          ● DAY 7 &nbsp;·&nbsp; WEEKLY TRAINING PLAN UNLOCKED
+        </div>
+        <div class="hero-text" style="font-family:${C.mono};font-size:36px;font-weight:bold;line-height:1;color:${C.text};text-transform:uppercase;margin-bottom:20px;">
+          ONE WEEK IN.<br/><span style="color:${C.accent};">ARE YOU</span><br/>IMPROVING?
+        </div>
+        <p style="font-family:${C.mono};font-size:13px;color:${C.sub};line-height:1.6;max-width:460px;margin:0 0 28px;">
+          ${name} — the players improving fastest on MetaPunish are running at least 3 analyses per week and checking daily missions.<br/><br/>
+          Upgrade to <strong style="color:${C.text};">Competitor ($25/mo)</strong> and unlock your personalized training plan — AI missions built from your match data.
+        </p>
+        ${btn('UNLOCK TRAINING PLAN', upgradeUrl)}
+      </td>
+    </tr>
+    <tr><td height="24">&nbsp;</td></tr>
+    ${panel('COMPETITOR PLAN — WHAT YOU UNLOCK', `
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${[
+          'Unlimited VOD analysis',
+          'AI Coach + daily missions',
+          'Full character theory library (all games)',
+          'Post-patch meta brief emails every week',
+          'Community dojo lobby access',
+          'Rival watch alerts',
+        ].map((f, i) => `
+          <tr>
+            <td width="20" valign="top" style="font-family:${C.mono};font-size:9px;color:${C.accent};padding:5px 0;">0${i+1}</td>
+            <td style="font-family:${C.mono};font-size:12px;color:${C.sub};padding:5px 0;border-bottom:1px solid #111;">${f}</td>
+          </tr>`).join('')}
+      </table>
+    `)}
+    <tr><td height="16">&nbsp;</td></tr>
+    <tr>
+      <td style="padding:0 28px 24px;text-align:center;">
+        <a href="${dashUrl}" style="font-family:${C.mono};font-size:10px;color:${C.muted};text-decoration:none;letter-spacing:0.15em;">
+          Stay on free tier →
+        </a>
+      </td>
+    </tr>
+  `;
+  return base('MetaPunish Coach', 'DAY 7 · YOUR TRAINING PLAN IS READY', `${name}, unlock your personalized improvement plan.`, body);
+}
