@@ -216,7 +216,21 @@ export class TheoryService extends BaseService implements ITheoryService {
 
     // --- Private helpers ---
 
+    private async generateEmbedding(text: string): Promise<number[]> {
+        const embedModel = this.genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
+        const result = await embedModel.embedContent(text);
+        return result.embedding.values;
+    }
+
     private async getScenariosForCharacter(gameId: string, characterId: string): Promise<any[]> {
+        try {
+            const query = `${characterId} competitive match scenarios neutral game pressure oki mixup ${gameId}`;
+            const embedding = await this.generateEmbedding(query);
+            const results = await this.vectorRepository.findSimilarScenarios(embedding, gameId, 30);
+            if (results.length > 0) return results;
+        } catch (_e) {
+            // fall through to direct query
+        }
         return (this.vectorRepository as any).model
             .find({ game_id: gameId, characters_involved: characterId }, { embedding: 0 })
             .lean()
@@ -224,6 +238,18 @@ export class TheoryService extends BaseService implements ITheoryService {
     }
 
     private async getScenariosForMatchup(gameId: string, charA: string, charB: string): Promise<any[]> {
+        try {
+            const query = `${charA} vs ${charB} matchup high level competitive scenarios ${gameId}`;
+            const embedding = await this.generateEmbedding(query);
+            const candidates = await this.vectorRepository.findSimilarScenarios(embedding, gameId, 50);
+            const filtered = candidates.filter((s: any) => {
+                const chars: string[] = s.characters_involved || [];
+                return chars.includes(charA) || chars.includes(charB);
+            });
+            if (filtered.length >= 3) return filtered;
+        } catch (_e) {
+            // fall through to direct query
+        }
         return (this.vectorRepository as any).model
             .find({
                 game_id: gameId,
@@ -253,8 +279,11 @@ export class TheoryService extends BaseService implements ITheoryService {
             : 'No match data yet.';
 
         const model = this.genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
-            generationConfig: { responseMimeType: 'application/json' },
+            model: 'gemini-3.5-flash',
+            generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: 8192,
+            },
         });
 
         const hasScenarios = scenarios.length > 0;
@@ -300,7 +329,8 @@ Return ONLY valid JSON:
 
         try {
             const result = await model.generateContent(prompt);
-            const text = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const rawText = result.response.text();
+            const text = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             const parsed = JSON.parse(text);
             return {
                 title: parsed.title || `${characterId} Strategy: ${skillLevel}`,
@@ -312,16 +342,9 @@ Return ONLY valid JSON:
                 counterplay: parsed.counterplay || ['Respect their wake-up options'],
                 vortexGraph: parsed.vortex_graph || { nodes: [], edges: [] }
             };
-        } catch {
-            return {
-                title: `${characterId} Theory (${gameId})`,
-                summary: `Theory generated from ${scenarios.length} scenarios.`,
-                fullTheory: `Analysis based on ${scenarios.length} recorded match scenarios for ${characterId} in ${gameId}.`,
-                strengths: ['Adaptive playstyle'],
-                weaknesses: ['Requires match knowledge'],
-                winConditions: ['Efficient meter usage'],
-                counterplay: ['Maintain spacing'],
-            };
+        } catch (e) {
+            console.error(`[TheoryService] synthesiseCharacterTheory failed for ${characterId} (${gameId}):`, e instanceof Error ? e.message : e);
+            throw e;
         }
     }
 
@@ -340,8 +363,11 @@ Return ONLY valid JSON:
             : 'No matchup data yet.';
 
         const model = this.genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
-            generationConfig: { responseMimeType: 'application/json' },
+            model: 'gemini-3.5-flash',
+            generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: 8192,
+            },
         });
 
         const hasScenarios = scenarios.length > 0;
@@ -379,7 +405,8 @@ Return ONLY valid JSON:
 
         try {
             const result = await model.generateContent(prompt);
-            const text = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const rawText = result.response.text();
+            const text = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             const parsed = JSON.parse(text);
             return {
                 title: parsed.title || `${charA} vs ${charB}: ${skillLevel} Guide`,
@@ -390,16 +417,9 @@ Return ONLY valid JSON:
                 winConditions: parsed.win_conditions || ['Maintain mid-range dominance', 'Capitalize on drive gauge'],
                 counterplay: parsed.counterplay || ['Wait for an opening during their transition'],
             };
-        } catch {
-            return {
-                title: `${charA} vs ${charB} (${gameId})`,
-                summary: `Matchup theory from ${scenarios.length} scenarios.`,
-                fullTheory: `Analysis based on ${scenarios.length} recorded ${charA} vs ${charB} scenarios in ${gameId}.`,
-                strengths: ['Standard advantage'],
-                weaknesses: ['Generic disadvantage'],
-                winConditions: ['Focus on fundamentals'],
-                counterplay: ['Stay patient'],
-            };
+        } catch (e) {
+            console.error(`[TheoryService] synthesiseMatchupTheory failed for ${charA} vs ${charB} (${gameId}):`, e instanceof Error ? e.message : e);
+            throw e;
         }
     }
 }

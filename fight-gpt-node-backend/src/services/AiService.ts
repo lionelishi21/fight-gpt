@@ -7,6 +7,7 @@ import { ICharacterEncyclopediaService } from './CharacterEncyclopediaService';
 import { IGameMetadata, GameRule, GameRule as CharacterGameRule } from '../types/gameMetadata';
 import { VersionResolver } from '../helpers/VersionResolver';
 import { AppConfig } from '../config/app';
+import { IVectorRepository } from '../repositories/VectorRepository';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -35,13 +36,15 @@ export class AiService extends BaseService implements IAiService {
   private modelName: string;
   private readonly gameMetadataService: IGameMetadataService;
   private readonly characterEncyclopediaService: ICharacterEncyclopediaService;
+  private readonly vectorRepository?: IVectorRepository;
   private storage: Storage;
 
   constructor(
     apiKey: string,
     modelName: string,
     gameMetadataService: IGameMetadataService,
-    characterEncyclopediaService: ICharacterEncyclopediaService
+    characterEncyclopediaService: ICharacterEncyclopediaService,
+    vectorRepository?: IVectorRepository
   ) {
     super();
     this.modelName = modelName;
@@ -59,6 +62,7 @@ export class AiService extends BaseService implements IAiService {
 
     this.gameMetadataService = gameMetadataService;
     this.characterEncyclopediaService = characterEncyclopediaService;
+    this.vectorRepository = vectorRepository;
   }
 
   /**
@@ -135,6 +139,14 @@ export class AiService extends BaseService implements IAiService {
     );
 
     let fullPrompt = prompt;
+
+    // Inject top-3 similar pro-match scenarios as few-shot examples before the main prompt.
+    // This grounds Gemini in real match data from the vector DB instead of generic training knowledge.
+    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
+    if (fewShotBlock) {
+      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
+    }
+
     if (request.ai_context) {
       fullPrompt += `\n\nContext:\n${request.ai_context}`;
     }
@@ -180,6 +192,39 @@ export class AiService extends BaseService implements IAiService {
     }
   }
 
+  private async buildFewShotBlock(request: AnalysisRequest): Promise<string> {
+    if (!this.vectorRepository) return '';
+
+    const gameId = request.game_id || 'sf6';
+    const teamChars = (t?: { point: string; assist1: string; assist2: string }) =>
+      t ? [t.point, t.assist1, t.assist2].filter(Boolean) : [];
+    const characters = [
+      ...teamChars(request.p1_team),
+      ...teamChars(request.p2_team),
+      request.p1_character_id,
+      request.p2_character_id,
+    ].filter((c): c is string => Boolean(c));
+
+    const contextText = characters.length
+      ? `${gameId} match: ${characters.join(' vs ')}`
+      : `${gameId} high level tournament match`;
+
+    const embedding = await this.generateEmbedding(contextText);
+    const scenarios = await this.vectorRepository.findSimilarScenarios(embedding, gameId, 3);
+
+    if (!scenarios.length) return '';
+
+    const examples = scenarios
+      .map((s, i) => {
+        const chars = s.characters_involved?.join(' vs ') || 'unknown';
+        const tags = s.tags?.join(', ') || '';
+        return `Example ${i + 1} [${chars}${tags ? ` | ${tags}` : ''}]:\n  Context: ${s.context}\n  Description: ${s.description}`;
+      })
+      .join('\n\n');
+
+    return `REFERENCE SCENARIOS FROM PRO MATCH DATABASE (use these as calibration examples for analysis quality and terminology):\n\n${examples}\n\n---`;
+  }
+
   /**
    * Verify mission proof video
    */
@@ -192,10 +237,18 @@ export class AiService extends BaseService implements IAiService {
         .replace('{{description}}', missionData.description)
         .replace('{{criteria}}', JSON.stringify(missionData.criteria || 'Standard execution.'));
 
-      const contentParts: any[] = [
-        { text: `Proof Video: ${videoUrl}` },
-        { text: prompt }
-      ];
+      const contentParts: any[] = [];
+
+      // Pass the proof video to Gemini for real visual analysis — same as generateAnalysis.
+      // Passing the URL as plain text means Gemini never watches the footage.
+      if (videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
+        contentParts.push({ fileData: { fileUri: videoUrl } });
+      } else if (videoUrl) {
+        // Non-YouTube URL — pass as text fallback (screenshot links, GCP storage, etc.)
+        contentParts.push({ text: `Proof footage: ${videoUrl}` });
+      }
+
+      contentParts.push({ text: prompt });
 
       const result = await this.model.generateContent({
           contents: [{ role: 'user', parts: contentParts }]

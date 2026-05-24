@@ -1,418 +1,183 @@
 /**
- * Tekken 8 Seeder
- * Seeds the database with Tekken 8 game and base roster characters
+ * Tekken 8 Seeder (v2)
+ * Upgrades existing T8 data to add aliases, encyclopedia stubs, and search strategies.
+ * Uses upsert for all operations — safe to re-run.
  */
 
-import dotenv from "dotenv";
-import { Database } from "../config/database";
-import { Game } from "../models/Game";
-import { Character } from "../models/Character";
-import { Logger } from "../helpers/logger";
-
+import dotenv from 'dotenv';
 dotenv.config();
 
-const TEKKEN8_GAME = {
-    game_id: "tekken8",
-    name: "Tekken 8",
-    full_name: "Tekken 8",
-    publisher: "Bandai Namco",
-    developer: "Bandai Namco Studios",
-    release_date: new Date("2024-01-26"),
-    genre: "Fighting",
-    platform: ["PS5", "Xbox Series X", "PC"],
-    icon_url: "https://example.com/icons/tekken8.png",
-    banner_url: "https://example.com/banners/tekken8.jpg",
-    description: "Tekken 8 is the latest installment in the legendary Tekken series, featuring the new Heat system and aggressive combat philosophy.",
+import { Database } from '../config/database';
+import { Game } from '../models/Game';
+import { Character } from '../models/Character';
+import { CharacterEncyclopedia } from '../models/CharacterEncyclopedia';
+import { GameSearchStrategy } from '../models/GameSearchStrategy';
+import { IngestionService } from '../services/IngestionService';
+import { IngestionRepository } from '../repositories/IngestionRepository';
+import { GameSearchStrategyRepository } from '../repositories/GameSearchStrategyRepository';
+import { Logger } from '../helpers/logger';
+
+const VERSION = '1.07';
+
+const GAME = {
+    game_id: 'tekken8',
+    name: 'Tekken 8',
+    full_name: 'Tekken 8',
+    publisher: 'Bandai Namco',
+    developer: 'Bandai Namco Studios',
+    release_date: new Date('2024-01-26'),
+    genre: 'Fighting',
+    platform: ['PS5', 'Xbox Series X', 'PC'],
     is_active: true,
-    supported_characters_count: 32,
-    latest_version: "1.05",
+    latest_version: VERSION,
 };
 
-const TEKKEN8_CHARACTERS = [
-    {
-        game_id: "tekken8", name: "Jin Kazama", version: "1.05", is_current: true,
-        archetype: "All-Rounder", difficulty: 2,
-        description: "Jin Kazama wields both Mishima Style Fighting Karate and Traditional Karate, making him the most balanced character in T8.",
-        stats: { walk_speed: 4.8, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.3 },
-        moves: [
-            { name: "Jab", input: "1", damage: 7, startup: 10, on_block: -1, on_hit: 8, move_type: "normal" as const },
-            { name: "Demon Paw", input: "ws+2", damage: 28, startup: 16, on_block: -13, on_hit: 99, move_type: "special" as const },
-            { name: "Heat Engage", input: "f+3", damage: 22, startup: 17, on_block: -3, on_hit: 10, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Kazuya Mishima", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 5,
-        description: "Kazuya is the most technically demanding character in T8 — EWGF execution separates all skill levels.",
-        stats: { walk_speed: 4.5, dash_frames: 16, jump_speed: 4.8, air_dash: false, backdash_frames: 19, throw_range: 1.2 },
-        moves: [
-            { name: "EWGF", input: "f,N,d/f+2", damage: 30, startup: 13, on_block: 12, on_hit: 99, move_type: "special" as const },
-            { name: "Hellsweep", input: "f,N,d/f+4", damage: 18, startup: 20, on_block: -13, on_hit: 98, move_type: "special" as const },
-            { name: "Devil Fist", input: "f+2", damage: 22, startup: 18, on_block: -9, on_hit: 5, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Paul Phoenix", version: "1.05", is_current: true,
-        archetype: "Hard-Hitter", difficulty: 1,
-        description: "Paul Phoenix has the highest single-hit damage in Tekken 8 with his Deathfist.",
-        stats: { walk_speed: 4.3, dash_frames: 15, jump_speed: 5.0, air_dash: false, backdash_frames: 20, throw_range: 1.2 },
-        moves: [
-            { name: "Deathfist", input: "qcf+2", damage: 38, startup: 21, on_block: -13, on_hit: 98, move_type: "special" as const },
-            { name: "Jab String", input: "1,2", damage: 16, startup: 10, on_block: -1, on_hit: 8, move_type: "normal" as const },
-            { name: "Phoenix Smasher", input: "qcb+2", damage: 22, startup: 19, on_block: -14, on_hit: 5, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Nina Williams", version: "1.05", is_current: true,
-        archetype: "Rushdown", difficulty: 4,
-        description: "Nina Williams has the deepest throw mixup game in Tekken 8, with 11+ throw branches.",
-        stats: { walk_speed: 5.0, dash_frames: 13, jump_speed: 4.9, air_dash: false, backdash_frames: 17, throw_range: 1.3 },
-        moves: [
-            { name: "b+1", input: "b+1", damage: 14, startup: 14, on_block: -2, on_hit: 8, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "1+3 Throw", input: "1+3", damage: 35, startup: 12, on_block: -99, on_hit: 98, move_type: "throw" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Sergei Dragunov", version: "1.05", is_current: true,
-        archetype: "All-Rounder", difficulty: 3,
-        description: "Dragunov has the highest consistent damage in Tekken 8 and an elite punish game.",
-        stats: { walk_speed: 4.7, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.3 },
-        moves: [
-            { name: "f+2", input: "f+2", damage: 18, startup: 17, on_block: -12, on_hit: 96, move_type: "normal" as const },
-            { name: "b+3 Tornado", input: "b+3", damage: 24, startup: 19, on_block: -14, on_hit: 97, move_type: "special" as const },
-            { name: "1,2,3", input: "1,2,3", damage: 30, startup: 10, on_block: -3, on_hit: 12, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Hwoarang", version: "1.05", is_current: true,
-        archetype: "Rushdown", difficulty: 5,
-        description: "Hwoarang transitions between four stances using overwhelming kick combinations.",
-        stats: { walk_speed: 4.9, dash_frames: 13, jump_speed: 5.2, air_dash: false, backdash_frames: 16, throw_range: 1.1 },
-        moves: [
-            { name: "Flamingo b+3", input: "b+3 (Flamingo)", damage: 26, startup: 17, on_block: -12, on_hit: 99, move_type: "special" as const },
-            { name: "RFF f+4,4", input: "f+4,4 (RFF)", damage: 28, startup: 18, on_block: -9, on_hit: 98, move_type: "special" as const },
-            { name: "Jab to RFF", input: "1,3", damage: 18, startup: 10, on_block: -2, on_hit: 15, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Reina", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 4,
-        description: "Reina combines Mishima wavedash fundamentals with unique Sentai and Raijin stances.",
-        stats: { walk_speed: 4.8, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 17, throw_range: 1.2 },
-        moves: [
-            { name: "Sentai 1+2", input: "1+2 (Sentai)", damage: 24, startup: 16, on_block: -6, on_hit: 12, move_type: "special" as const },
-            { name: "Raijin f+1+2", input: "f+1+2 (Raijin)", damage: 20, startup: 15, on_block: -4, on_hit: 8, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "King", version: "1.05", is_current: true,
-        archetype: "Grappler", difficulty: 2,
-        description: "King is the premiere grappler in Tekken 8, with multi-chain throws and massive damage.",
-        stats: { walk_speed: 4.4, dash_frames: 15, jump_speed: 4.8, air_dash: false, backdash_frames: 19, throw_range: 1.5 },
-        moves: [
-            { name: "Giant Swing", input: "qcb+1", damage: 50, startup: 12, on_block: -99, on_hit: 98, move_type: "throw" as const },
-            { name: "Shining Wizard", input: "1+3 or 2+4 (chain)", damage: 55, startup: 12, on_block: -99, on_hit: 98, move_type: "throw" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 18, startup: 16, on_block: -12, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Jack-8", version: "1.05", is_current: true,
-        archetype: "Powerhouse", difficulty: 2,
-        description: "Jack-8 delivers massive wall damage with his slow but devastating power moves.",
-        stats: { walk_speed: 3.8, dash_frames: 18, jump_speed: 4.5, air_dash: false, backdash_frames: 22, throw_range: 1.4 },
-        moves: [
-            { name: "Power Hammer", input: "d/b+2", damage: 35, startup: 20, on_block: -14, on_hit: 98, move_type: "special" as const },
-            { name: "Gatling Gun", input: "d/f+1,2", damage: 22, startup: 16, on_block: -4, on_hit: 10, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 20, startup: 17, on_block: -14, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Steve Fox", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 4,
-        description: "Steve Fox has no kicks — his entire game relies on precise punch combinations and stance mix.",
-        stats: { walk_speed: 5.0, dash_frames: 12, jump_speed: 5.1, air_dash: false, backdash_frames: 16, throw_range: 1.2 },
-        moves: [
-            { name: "Flicker b+1", input: "b+1 (Flicker)", damage: 22, startup: 14, on_block: -4, on_hit: 12, move_type: "special" as const },
-            { name: "Ducking 2", input: "2 (Ducking)", damage: 24, startup: 16, on_block: -10, on_hit: 99, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Lars Alexandersson", version: "1.05", is_current: true,
-        archetype: "Rushdown", difficulty: 3,
-        description: "Lars combines chain throw setups with a flexible stance for aggressive corner carry.",
-        stats: { walk_speed: 4.7, dash_frames: 13, jump_speed: 5.1, air_dash: false, backdash_frames: 17, throw_range: 1.2 },
-        moves: [
-            { name: "Dynamic Entry", input: "f,f+3", damage: 24, startup: 19, on_block: -5, on_hit: 12, move_type: "special" as const },
-            { name: "Leaping Slash", input: "b+1", damage: 16, startup: 14, on_block: -6, on_hit: 10, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Asuka Kazama", version: "1.05", is_current: true,
-        archetype: "Counter-Hit", difficulty: 2,
-        description: "Asuka excels at shutting down aggressive opponents with her Parry and counter tools.",
-        stats: { walk_speed: 4.6, dash_frames: 15, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "Parry", input: "b+1+2", damage: 0, startup: 3, on_block: 0, on_hit: 20, move_type: "special" as const },
-            { name: "b+2", input: "b+2", damage: 20, startup: 16, on_block: -2, on_hit: 10, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Lili", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 3,
-        description: "Lili de Rochefort combines elegant ballet-inspired movement with tricky mix-up pressure from Sudden Cross stance.",
-        stats: { walk_speed: 4.9, dash_frames: 13, jump_speed: 5.3, air_dash: false, backdash_frames: 16, throw_range: 1.1 },
-        moves: [
-            { name: "Sudden Cross b+3", input: "b+3", damage: 22, startup: 16, on_block: -4, on_hit: 14, move_type: "special" as const },
-            { name: "Divine Step 4", input: "4 (Divine Step)", damage: 28, startup: 20, on_block: -12, on_hit: 98, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Yoshimitsu", version: "1.05", is_current: true,
-        archetype: "Trickster", difficulty: 5,
-        description: "Yoshimitsu is the most unorthodox character in Tekken 8 — stances, sword cancels, and mind games define his playstyle.",
-        stats: { walk_speed: 4.6, dash_frames: 15, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "Manji Dragonfly", input: "1+2 (stance)", damage: 0, startup: 5, on_block: 0, on_hit: 0, move_type: "special" as const },
-            { name: "Sword Stab", input: "d+1+2", damage: 30, startup: 22, on_block: -14, on_hit: 96, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Jun Kazama", version: "1.05", is_current: true,
-        archetype: "Counter-Hit", difficulty: 3,
-        description: "Jun Kazama returns with powerful Amnesia reversals and a fluid combo game anchored by her f,n,d,d/f motion.",
-        stats: { walk_speed: 4.8, dash_frames: 14, jump_speed: 5.1, air_dash: false, backdash_frames: 17, throw_range: 1.2 },
-        moves: [
-            { name: "Amnesia", input: "b+1+2", damage: 0, startup: 3, on_block: 0, on_hit: 25, move_type: "special" as const },
-            { name: "f,n,d,d/f+2", input: "f,n,d,d/f+2", damage: 28, startup: 15, on_block: 8, on_hit: 99, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Ling Xiaoyu", version: "1.05", is_current: true,
-        archetype: "Evasive", difficulty: 4,
-        description: "Xiaoyu's Phoenix and AOP stances give her the best evasive options in the game, making her dangerous on whiff punish.",
-        stats: { walk_speed: 5.2, dash_frames: 12, jump_speed: 5.4, air_dash: false, backdash_frames: 14, throw_range: 1.0 },
-        moves: [
-            { name: "Phoenix f+1+2", input: "f+1+2 (Phoenix)", damage: 26, startup: 18, on_block: -6, on_hit: 14, move_type: "special" as const },
-            { name: "AOP 1+2", input: "1+2 (AOP)", damage: 20, startup: 16, on_block: -4, on_hit: 10, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Marshall Law", version: "1.05", is_current: true,
-        archetype: "Rushdown", difficulty: 3,
-        description: "Marshall Law is the archetypal rushdown character — Dragon Sign and fast lows make him a constant offensive threat.",
-        stats: { walk_speed: 4.9, dash_frames: 13, jump_speed: 5.2, air_dash: false, backdash_frames: 16, throw_range: 1.1 },
-        moves: [
-            { name: "Dragon Sign b+1+2", input: "b+1+2", damage: 0, startup: 5, on_block: 0, on_hit: 0, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "Junkyard Kick", input: "b+3,4", damage: 34, startup: 18, on_block: -14, on_hit: 98, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Bryan Fury", version: "1.05", is_current: true,
-        archetype: "Hard-Hitter", difficulty: 2,
-        description: "Bryan Fury is the strongest wall-carry character in Tekken 8. His Snake Edge low and Jet Upper define his threat.",
-        stats: { walk_speed: 4.5, dash_frames: 15, jump_speed: 4.9, air_dash: false, backdash_frames: 19, throw_range: 1.3 },
-        moves: [
-            { name: "Jet Upper", input: "u/f+2", damage: 25, startup: 18, on_block: -14, on_hit: 99, move_type: "special" as const },
-            { name: "Snake Edge", input: "d/b+3", damage: 20, startup: 21, on_block: -22, on_hit: 96, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 18, startup: 16, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Claudio Serafino", version: "1.05", is_current: true,
-        archetype: "Zoner", difficulty: 2,
-        description: "Claudio is the safest poking character in Tekken 8 — Starburst mode gives him massive plus frames and wall pressure.",
-        stats: { walk_speed: 4.6, dash_frames: 15, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "Starburst 1+2", input: "1+2 (Starburst)", damage: 30, startup: 20, on_block: -4, on_hit: 99, move_type: "special" as const },
-            { name: "b+1", input: "b+1", damage: 18, startup: 14, on_block: -1, on_hit: 9, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Lee Chaolan", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 4,
-        description: "Lee Chaolan demands precise just-frame inputs to unlock his Mist Step and infinite pressure sequences.",
-        stats: { walk_speed: 5.0, dash_frames: 13, jump_speed: 5.1, air_dash: false, backdash_frames: 16, throw_range: 1.1 },
-        moves: [
-            { name: "Mist Step 3", input: "f,n+3 (Mist)", damage: 22, startup: 16, on_block: -4, on_hit: 14, move_type: "special" as const },
-            { name: "Acid Storm", input: "d/b+2", damage: 20, startup: 14, on_block: -2, on_hit: 99, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Azucena", version: "1.05", is_current: true,
-        archetype: "Evasive", difficulty: 3,
-        description: "Azucena is a new character in Tekken 8 built around Libertador stance — unpredictable movement meets offensive mix-ups.",
-        stats: { walk_speed: 5.1, dash_frames: 12, jump_speed: 5.3, air_dash: false, backdash_frames: 15, throw_range: 1.1 },
-        moves: [
-            { name: "Libertador b+1+2", input: "b+1+2", damage: 0, startup: 5, on_block: 0, on_hit: 0, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "LIB 1+2", input: "1+2 (LIB)", damage: 24, startup: 18, on_block: -8, on_hit: 12, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Raven", version: "1.05", is_current: true,
-        archetype: "Evasive", difficulty: 3,
-        description: "Raven uses teleports and shadow clones to control space — his back-turned mixups create constant fear.",
-        stats: { walk_speed: 4.8, dash_frames: 13, jump_speed: 5.1, air_dash: false, backdash_frames: 17, throw_range: 1.2 },
-        moves: [
-            { name: "Teleport", input: "b,b+1+2", damage: 0, startup: 1, on_block: 0, on_hit: 0, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "BT d+3", input: "d+3 (BT)", damage: 22, startup: 20, on_block: -14, on_hit: 97, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Leo Kliesen", version: "1.05", is_current: true,
-        archetype: "All-Rounder", difficulty: 2,
-        description: "Leo is a well-rounded character with strong mids, a powerful wall game, and consistent damage routes.",
-        stats: { walk_speed: 4.7, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "b+1,2", input: "b+1,2", damage: 28, startup: 14, on_block: -3, on_hit: 12, move_type: "normal" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "KNK f+1", input: "f+1 (KNK)", damage: 20, startup: 16, on_block: -5, on_hit: 10, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Alisa Bosconovitch", version: "1.05", is_current: true,
-        archetype: "Zoner", difficulty: 3,
-        description: "Alisa uses chainsaw attachments and rocket-boot pressure to control space at mid-to-long range.",
-        stats: { walk_speed: 4.6, dash_frames: 14, jump_speed: 5.2, air_dash: false, backdash_frames: 17, throw_range: 1.1 },
-        moves: [
-            { name: "Chainsaw 1", input: "1 (Chainsaw)", damage: 24, startup: 17, on_block: -6, on_hit: 12, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "Boot f+4", input: "f+4", damage: 22, startup: 18, on_block: -8, on_hit: 14, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Leroy Smith", version: "1.05", is_current: true,
-        archetype: "Counter-Hit", difficulty: 2,
-        description: "Leroy Smith uses Wing Chun to stuff aggressive opponents — his parries and cane pokes punish rushdown hard.",
-        stats: { walk_speed: 4.5, dash_frames: 15, jump_speed: 4.9, air_dash: false, backdash_frames: 19, throw_range: 1.3 },
-        moves: [
-            { name: "Cane d/f+1", input: "d/f+1", damage: 15, startup: 13, on_block: 0, on_hit: 8, move_type: "normal" as const },
-            { name: "Parry 1+2", input: "1+2", damage: 0, startup: 3, on_block: 0, on_hit: 20, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 16, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Zafina", version: "1.05", is_current: true,
-        archetype: "Trickster", difficulty: 4,
-        description: "Zafina's three stances — Tarantula, Mantis, and Scarecrow — create the most unique evasion toolkit in T8.",
-        stats: { walk_speed: 4.7, dash_frames: 14, jump_speed: 5.1, air_dash: false, backdash_frames: 17, throw_range: 1.1 },
-        moves: [
-            { name: "Tarantula 3", input: "3 (TRT)", damage: 22, startup: 17, on_block: -5, on_hit: 12, move_type: "special" as const },
-            { name: "Mantis 1+2", input: "1+2 (MNT)", damage: 26, startup: 19, on_block: -8, on_hit: 99, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Devil Jin", version: "1.05", is_current: true,
-        archetype: "Technical", difficulty: 5,
-        description: "Devil Jin combines Mishima fundamentals with flight mode and laser attacks — the highest skill ceiling in Tekken 8.",
-        stats: { walk_speed: 4.7, dash_frames: 15, jump_speed: 5.0, air_dash: true, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "EWGF", input: "f,N,d/f+2", damage: 32, startup: 13, on_block: 12, on_hit: 99, move_type: "special" as const },
-            { name: "Laser Cannon", input: "3+4", damage: 20, startup: 24, on_block: -4, on_hit: 10, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Eddy Gordo", version: "1.05", is_current: true,
-        archetype: "Evasive", difficulty: 2,
-        description: "Eddy Gordo's Capoeira allows him to attack from Ginga (swaying) stance, making his lows and mids hard to react to.",
-        stats: { walk_speed: 5.0, dash_frames: 13, jump_speed: 5.3, air_dash: false, backdash_frames: 15, throw_range: 1.1 },
-        moves: [
-            { name: "Ginga 3", input: "3 (GNG)", damage: 24, startup: 18, on_block: -6, on_hit: 14, move_type: "special" as const },
-            { name: "Cartwheel", input: "b+3", damage: 20, startup: 16, on_block: -4, on_hit: 12, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 14, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Victor Chevalier", version: "1.05", is_current: true,
-        archetype: "Rushdown", difficulty: 3,
-        description: "Victor Chevalier is a new character who uses a sword and pistol to control all ranges with style.",
-        stats: { walk_speed: 4.8, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 17, throw_range: 1.2 },
-        moves: [
-            { name: "Sword Slash f+2", input: "f+2", damage: 20, startup: 16, on_block: -4, on_hit: 10, move_type: "normal" as const },
-            { name: "Pistol Shot", input: "d/f+1+2", damage: 18, startup: 20, on_block: -2, on_hit: 12, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Shaheen", version: "1.05", is_current: true,
-        archetype: "All-Rounder", difficulty: 2,
-        description: "Shaheen is a clean, fundamental character with great punishes, reliable mids, and strong wall pressure.",
-        stats: { walk_speed: 4.7, dash_frames: 14, jump_speed: 5.0, air_dash: false, backdash_frames: 18, throw_range: 1.2 },
-        moves: [
-            { name: "d/f+2", input: "d/f+2", damage: 16, startup: 15, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "b+3", input: "b+3", damage: 22, startup: 17, on_block: -5, on_hit: 14, move_type: "normal" as const },
-            { name: "f+1+2", input: "f+1+2", damage: 24, startup: 19, on_block: -8, on_hit: 99, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Feng Wei", version: "1.05", is_current: true,
-        archetype: "All-Rounder", difficulty: 2,
-        description: "Feng Wei is a high-damage brawler whose evasive b+3+4 shoulder makes him hard to challenge at mid-range.",
-        stats: { walk_speed: 4.6, dash_frames: 15, jump_speed: 4.9, air_dash: false, backdash_frames: 18, throw_range: 1.3 },
-        moves: [
-            { name: "Evasive Shoulder b+3+4", input: "b+3+4", damage: 0, startup: 6, on_block: 0, on_hit: 0, move_type: "special" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 18, startup: 16, on_block: -13, on_hit: 99, move_type: "normal" as const },
-            { name: "f+1+2", input: "f+1+2", damage: 26, startup: 18, on_block: -6, on_hit: 12, move_type: "special" as const },
-        ],
-    },
-    {
-        game_id: "tekken8", name: "Panda", version: "1.05", is_current: true,
-        archetype: "Grappler", difficulty: 2,
-        description: "Panda shares Kuma's moveset but with distinct personality — a powerful grappler with deceptive reach and massive throw damage.",
-        stats: { walk_speed: 3.9, dash_frames: 17, jump_speed: 4.6, air_dash: false, backdash_frames: 21, throw_range: 1.6 },
-        moves: [
-            { name: "Bear Tackle", input: "qcf+1+2", damage: 45, startup: 12, on_block: -99, on_hit: 98, move_type: "throw" as const },
-            { name: "d/f+2", input: "d/f+2", damage: 20, startup: 18, on_block: -14, on_hit: 99, move_type: "normal" as const },
-            { name: "b+1+2", input: "b+1+2", damage: 28, startup: 20, on_block: -10, on_hit: 12, move_type: "special" as const },
-        ],
-    },
+const SEARCH_QUERIES = [
+    'Tekken 8 EVO 2024 top 8',
+    'Tekken 8 CEO 2024 grand finals',
+    'Tekken 8 high level ranked match 2024',
+    'Tekken 8 Heat system combo guide 2024',
+    'Tekken 8 tournament grand finals 2024',
+    'Tekken 8 patch notes breakdown 2024',
+    'Tekken 8 season 2 gameplay',
+];
+
+// name → [aliases], archetype, difficulty, description
+const CHARACTERS: Array<{
+    name: string;
+    aliases: string[];
+    archetype: string;
+    difficulty: number;
+    description: string;
+}> = [
+    { name: 'Jin Kazama',          aliases: ['jin', 'jin_kazama'],                        archetype: 'All-Rounder',  difficulty: 2, description: 'Jin wields both Mishima Karate and Traditional Karate — the most balanced character in T8.' },
+    { name: 'Kazuya Mishima',      aliases: ['kazuya', 'kazuya_mishima'],                 archetype: 'Technical',    difficulty: 5, description: 'EWGF execution is the ceiling — Kazuya rewards mastery like no other character in T8.' },
+    { name: 'Paul Phoenix',        aliases: ['paul', 'paul_phoenix'],                     archetype: 'Hard-Hitter',  difficulty: 1, description: 'Highest single-hit damage in Tekken 8. Deathfist punishes everything.' },
+    { name: 'Nina Williams',       aliases: ['nina', 'nina_williams'],                    archetype: 'Rushdown',     difficulty: 4, description: 'Deepest throw mixup game in T8 with 11+ throw branches.' },
+    { name: 'Sergei Dragunov',     aliases: ['dragunov', 'sergei', 'sergei_dragunov'],    archetype: 'All-Rounder',  difficulty: 3, description: 'Highest consistent damage in T8 with an elite punish game.' },
+    { name: 'Hwoarang',            aliases: ['hwoarang'],                                 archetype: 'Rushdown',     difficulty: 5, description: 'Transitions between four stances using overwhelming kick combinations.' },
+    { name: 'Reina',               aliases: ['reina'],                                    archetype: 'Technical',    difficulty: 4, description: 'Mishima wavedash fundamentals combined with unique Sentai and Raijin stances.' },
+    { name: 'King',                aliases: ['king'],                                     archetype: 'Grappler',     difficulty: 2, description: 'Premier grappler in T8 — multi-chain throws and massive damage on hit.' },
+    { name: 'Jack-8',              aliases: ['jack8', 'jack_8'],                          archetype: 'Powerhouse',   difficulty: 2, description: 'Massive wall damage with slow but devastating power moves.' },
+    { name: 'Steve Fox',           aliases: ['steve', 'steve_fox'],                       archetype: 'Technical',    difficulty: 4, description: 'No kicks — entire game relies on precise punch combinations and stance mix.' },
+    { name: 'Lars Alexandersson',  aliases: ['lars', 'lars_alexandersson'],               archetype: 'Rushdown',     difficulty: 3, description: 'Chain throw setups with a flexible stance for aggressive corner carry.' },
+    { name: 'Asuka Kazama',        aliases: ['asuka', 'asuka_kazama'],                    archetype: 'Counter-Hit',  difficulty: 2, description: 'Shuts down aggression with Parry and counter tools.' },
+    { name: 'Lili',                aliases: ['lili', 'lili_de_rochefort'],                archetype: 'Technical',    difficulty: 3, description: 'Ballet-inspired movement with tricky mix-up pressure from Sudden Cross stance.' },
+    { name: 'Yoshimitsu',          aliases: ['yoshimitsu', 'yoshi'],                      archetype: 'Trickster',    difficulty: 5, description: 'Stances, sword cancels, and mind games — the most unorthodox character in T8.' },
+    { name: 'Jun Kazama',          aliases: ['jun', 'jun_kazama'],                        archetype: 'Counter-Hit',  difficulty: 3, description: 'Powerful Amnesia reversals and a fluid combo game anchored by her qcf motion.' },
+    { name: 'Ling Xiaoyu',         aliases: ['xiaoyu', 'xiao', 'ling_xiaoyu'],           archetype: 'Evasive',      difficulty: 4, description: 'Phoenix and AOP stances give the best evasive options in T8.' },
+    { name: 'Marshall Law',        aliases: ['law', 'marshall_law'],                      archetype: 'Rushdown',     difficulty: 3, description: 'Dragon Sign and fast lows make him a constant offensive threat.' },
+    { name: 'Bryan Fury',          aliases: ['bryan', 'bryan_fury'],                      archetype: 'Hard-Hitter',  difficulty: 2, description: 'Strongest wall-carry in T8. Snake Edge low and Jet Upper define his threat.' },
+    { name: 'Claudio Serafino',    aliases: ['claudio', 'claudio_serafino'],              archetype: 'Zoner',        difficulty: 2, description: 'Safest poke game in T8 — Starburst mode gives massive plus frames.' },
+    { name: 'Lee Chaolan',         aliases: ['lee', 'lee_chaolan', 'violet'],             archetype: 'Technical',    difficulty: 4, description: 'Precise just-frame inputs unlock Mist Step and infinite pressure sequences.' },
+    { name: 'Azucena',             aliases: ['azucena'],                                  archetype: 'Evasive',      difficulty: 3, description: 'Libertador stance creates unpredictable movement meets offensive mix-ups.' },
+    { name: 'Raven',               aliases: ['raven'],                                    archetype: 'Evasive',      difficulty: 3, description: 'Teleports and shadow clones control space — back-turned mixups create constant fear.' },
+    { name: 'Leo Kliesen',         aliases: ['leo', 'leo_kliesen'],                       archetype: 'All-Rounder',  difficulty: 2, description: 'Well-rounded with strong mids, powerful wall game, and consistent damage routes.' },
+    { name: 'Alisa Bosconovitch',  aliases: ['alisa', 'alisa_bosconovitch'],              archetype: 'Zoner',        difficulty: 3, description: 'Chainsaw attachments and rocket-boot pressure to control space at mid-to-long range.' },
+    { name: 'Leroy Smith',         aliases: ['leroy', 'leroy_smith'],                     archetype: 'Counter-Hit',  difficulty: 2, description: 'Wing Chun parries and cane pokes punish rushdown characters hard.' },
+    { name: 'Zafina',              aliases: ['zafina'],                                   archetype: 'Trickster',    difficulty: 4, description: 'Tarantula, Mantis, and Scarecrow stances create the most unique evasion toolkit in T8.' },
+    { name: 'Devil Jin',           aliases: ['devil_jin', 'dvj'],                         archetype: 'Technical',    difficulty: 5, description: 'Mishima fundamentals plus flight mode and laser attacks — highest skill ceiling in T8.' },
+    { name: 'Eddy Gordo',          aliases: ['eddy', 'eddy_gordo'],                       archetype: 'Evasive',      difficulty: 2, description: "Capoeira Ginga stance makes his lows and mids hard to react to." },
+    { name: 'Victor Chevalier',    aliases: ['victor', 'victor_chevalier'],               archetype: 'Rushdown',     difficulty: 3, description: 'Sword and pistol control all ranges — new character with high style.' },
+    { name: 'Shaheen',             aliases: ['shaheen'],                                  archetype: 'All-Rounder',  difficulty: 2, description: 'Clean, fundamental character with great punishes and strong wall pressure.' },
+    { name: 'Feng Wei',            aliases: ['feng', 'feng_wei'],                         archetype: 'All-Rounder',  difficulty: 2, description: 'Evasive b+3+4 shoulder makes him hard to challenge at mid-range.' },
+    { name: 'Panda',               aliases: ['panda'],                                    archetype: 'Grappler',     difficulty: 2, description: 'Powerful grappler with deceptive reach and massive throw damage.' },
+    // Season 1 DLC
+    { name: 'Lidia Sobieska',      aliases: ['lidia', 'lidia_sobieska'],                  archetype: 'Technical',    difficulty: 4, description: 'Polish Karate practitioner with powerful stance transitions and crushing lows.' },
+    { name: 'Heihachi Mishima',    aliases: ['heihachi', 'heihachi_mishima'],              archetype: 'Technical',    difficulty: 4, description: 'The patriarch returns — Mishima Karate at its most powerful form.' },
+    { name: 'Clive Rosfield',      aliases: ['clive', 'clive_rosfield'],                  archetype: 'Rushdown',     difficulty: 3, description: 'Final Fantasy XVI guest — uses fire magic and Ifrit summon pressure.' },
 ];
 
 async function seedTekken8() {
     try {
         await Database.connect();
-        Logger.info("Seeding Tekken 8...");
+        Logger.info('[SeedTekken8] Connected to MongoDB');
 
-        // Upsert game
-        await Game.findOneAndUpdate(
-            { game_id: "tekken8" },
-            TEKKEN8_GAME,
-            { upsert: true, new: true }
-        );
-        Logger.info("Game upserted: Tekken 8");
+        // 1. Upsert game record with updated version
+        await Game.findOneAndUpdate({ game_id: 'tekken8' }, GAME, { upsert: true, new: true });
+        Logger.info('[SeedTekken8] Game upserted');
 
-        // Upsert characters
-        let count = 0;
-        for (const char of TEKKEN8_CHARACTERS) {
+        // 2. Patch existing characters: add aliases + upsert encyclopedia stubs
+        let charsPatched = 0;
+        let encCreated = 0;
+
+        for (const char of CHARACTERS) {
+            const slug = char.name.toLowerCase().replace(/\s+/g, '_');
+
+            // Add aliases to existing character (or create if missing)
             await Character.findOneAndUpdate(
-                { game_id: "tekken8", name: char.name },
-                char,
+                { game_id: 'tekken8', name: char.name },
+                {
+                    $set: {
+                        aliases: char.aliases,
+                        archetype: char.archetype,
+                        difficulty: char.difficulty,
+                        description: char.description,
+                        version: VERSION,
+                        is_current: true,
+                    },
+                    $setOnInsert: {
+                        game_id: 'tekken8',
+                        name: char.name,
+                        stats: { walk_speed: 0, dash_frames: 0, jump_speed: 0, air_dash: false, backdash_frames: 0, throw_range: 0 },
+                        moves: [],
+                        status: 'released',
+                    },
+                },
                 { upsert: true, new: true }
             );
-            count++;
-            Logger.info(`  Character: ${char.name}`);
+            charsPatched++;
+
+            // Create encyclopedia stub only if not already present
+            const existingEnc = await CharacterEncyclopedia.findOne({ game_id: 'tekken8', character_id: slug });
+            if (!existingEnc) {
+                await CharacterEncyclopedia.create({
+                    game_id: 'tekken8',
+                    character_id: slug,
+                    character_name: char.name,
+                    patch_version: VERSION,
+                    is_current_patch: true,
+                    moveset: { normals: [], specials: [], ex_moves: [], supers: [] },
+                    game_rules: [],
+                    videos: [],
+                });
+                encCreated++;
+            }
         }
 
-        Logger.info(`Tekken 8 seed complete — ${count} characters.`);
+        Logger.info(`[SeedTekken8] Characters patched: ${charsPatched}, encyclopedia stubs created: ${encCreated}`);
+
+        // 3. Add search strategies if none exist for this game
+        const existingStrategy = await GameSearchStrategy.findOne({ game_id: 'tekken8', is_active: true });
+        if (!existingStrategy) {
+            await GameSearchStrategy.create({
+                game_id: 'tekken8',
+                queries: SEARCH_QUERIES,
+                patch_version: VERSION,
+                is_active: true,
+                priority: 0,
+            });
+            Logger.info('[SeedTekken8] Search strategy created');
+        } else {
+            Logger.info('[SeedTekken8] Search strategy already exists — skipped');
+        }
+
+        // 4. Queue initial ingestion
+        try {
+            const ingestionRepo = new IngestionRepository();
+            const searchStrategyRepo = new GameSearchStrategyRepository();
+            const ingestionService = new IngestionService(ingestionRepo, {} as any, undefined, searchStrategyRepo);
+            await ingestionService.triggerIngestion('tekken8', 20);
+            Logger.info('[SeedTekken8] Ingestion queued');
+        } catch (e) {
+            Logger.warn(`[SeedTekken8] Ingestion queue failed (non-fatal): ${e instanceof Error ? e.message : e}`);
+        }
+
+        Logger.info('[SeedTekken8] Done');
         await Database.disconnect();
         process.exit(0);
     } catch (error) {
-        Logger.error("Seed failed", error);
+        Logger.error('[SeedTekken8] Failed', error);
         process.exit(1);
     }
 }

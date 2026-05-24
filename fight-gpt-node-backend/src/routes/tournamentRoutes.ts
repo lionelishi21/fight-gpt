@@ -1,8 +1,19 @@
 import { Router } from 'express';
-import { getUpcomingTournaments } from '../controllers/tournamentController';
+import { TournamentController } from '../controllers/tournamentController';
+import { authMiddleware, adminMiddleware } from '../middleware/auth';
 
-const router = Router();
+export function createTournamentRouter(controller: TournamentController): Router {
+    const router = Router();
 
-router.get('/', getUpcomingTournaments);
+    // Public
+    router.get('/',           controller.getUpcoming);
+    router.get('/completed',  controller.getCompleted);
+    router.get('/:id',        controller.getResults);
 
-export default router;
+    // Admin — sync & ingest
+    router.post('/sync',             authMiddleware, adminMiddleware, controller.syncFromStartGg);
+    router.post('/:id/sync-results', authMiddleware, adminMiddleware, controller.syncResults);
+    router.post('/:id/queue-vods',   authMiddleware, adminMiddleware, controller.queueVods);
+
+    return router;
+}

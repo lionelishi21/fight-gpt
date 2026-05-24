@@ -51,6 +51,7 @@ export interface IngestionTriggerResult {
 
 export interface IIngestionService {
     triggerIngestion(gameId: string, maxVideos?: number): Promise<ApiResponse<IngestionTriggerResult>>;
+    triggerWithQuery(gameId: string, query: string, maxVideos?: number): Promise<ApiResponse<IngestionTriggerResult>>;
     processQueue(gameId?: string, batchSize?: number): Promise<ApiResponse<{ processed: number; failed: number }>>;
     startScheduler(intervalMs?: number): void;
     stopScheduler(): void;
@@ -226,6 +227,62 @@ export class IngestionService extends BaseService implements IIngestionService {
             data: result,
             message: `Elite ingestion triggered for ${gameId}: ${result.queued_count} queued, ${result.skipped_count} skipped`,
         };
+    }
+
+    /**
+     * Trigger ingestion with a specific custom query (e.g. a tournament name).
+     * Used by TournamentService to queue tournament VODs by name instead of
+     * the game's default character-balanced search strategy.
+     */
+    async triggerWithQuery(
+        gameId: string,
+        query: string,
+        maxVideos: number = 5
+    ): Promise<ApiResponse<IngestionTriggerResult>> {
+        const result: IngestionTriggerResult = {
+            game_id: gameId,
+            queued_count: 0,
+            skipped_count: 0,
+            errors: [],
+        };
+
+        try {
+            const searchResults = await this.searchYouTube(query, maxVideos);
+            for (const res of searchResults) {
+                try {
+                    const url = normalizeYoutubeUrl(res.url);
+                    if (isBadVideoTitle(res.title)) { result.skipped_count++; continue; }
+                    const existing = await this.ingestionRepository.findByUrl(url);
+                    if (existing) { result.skipped_count++; continue; }
+
+                    const job = await this.ingestionRepository.createJob({
+                        job_id: UuidHelper.generate(),
+                        game_id: gameId,
+                        youtube_url: url,
+                        search_query: query,
+                        source: 'scheduled',
+                        status: 'pending',
+                        retry_count: 0,
+                        video_title: res.title,
+                    });
+
+                    await queueService.addAnalysisJob({
+                        source: 'ingestion',
+                        job_id: job.job_id,
+                        game_id: gameId,
+                        youtube_url: url,
+                        video_title: res.title,
+                    });
+
+                    result.queued_count++;
+                } catch { result.skipped_count++; }
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Search failed';
+            result.errors.push(`Query "${query}": ${msg}`);
+        }
+
+        return { success: true, data: result, message: `Queued ${result.queued_count} VODs for: ${query}` };
     }
 
     /**
@@ -626,8 +683,8 @@ export class IngestionService extends BaseService implements IIngestionService {
             return this.searchViaYouTubeApi(query, maxResults, apiKey);
         }
 
-        Logger.error('[IngestionService] YOUTUBE_API_KEY is missing. YouTube search is disabled.');
-        return [];
+        // Throw so the caller's errors[] array captures this and the API response reflects it
+        throw new Error('YOUTUBE_API_KEY is not set — add it to server .env and GitHub Secrets');
     }
 
     /**

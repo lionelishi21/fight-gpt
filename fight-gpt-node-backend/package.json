@@ -14,6 +14,8 @@
     "type-check": "tsc --noEmit",
     "seed:sf6": "tsx src/seeders/seedSF6.ts",
     "seed:tekken8": "tsx src/seeders/seedTekken8.ts",
+    "seed:ggst": "tsx src/seeders/seedGGST.ts",
+    "seed:mk1": "tsx src/seeders/seedMK1.ts",
     "seed:game-metadata": "tsx src/seeders/seedGameMetadata.ts",
     "seed:character-encyclopedia": "tsx src/seeders/seedCharacterEncyclopedia.ts",
     "validate:seeder": "tsx src/seeders/validateSeeder.ts",

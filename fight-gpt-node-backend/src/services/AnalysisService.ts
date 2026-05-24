@@ -52,6 +52,8 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     if (!val || typeof val !== 'string') return null;
     const low = val.toLowerCase().trim();
     if (low === 'undefined' || low === 'null' || low === 'unknown' || low === 'p1' || low === 'p2') return null;
+    // Reject file paths and URLs that Gemini sometimes returns instead of character names
+    if (low.includes('/') || low.includes('\\') || low.includes('http') || /\.(mp4|mov|webm|avi|mkv|jpg|png)/.test(low)) return null;
     return low.replace(/\s+/g, '_');
   }
 

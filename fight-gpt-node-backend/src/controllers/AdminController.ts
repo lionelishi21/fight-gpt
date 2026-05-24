@@ -257,6 +257,79 @@ export class AdminController extends BaseController {
     };
 
     /**
+     * GET /api/admin/coverage/:gameId
+     * Per-character breakdown: encyclopedia entry present + scenario count in vector DB.
+     * Sorted by scenario count ascending so the most under-represented characters appear first.
+     */
+    getCharacterCoverage = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { gameId } = req.params;
+            const encyclopediaRepo = new CharacterEncyclopediaRepository();
+
+            const [characters, encEntries] = await Promise.all([
+                Character.find({ game_id: gameId }).select('character_id name').lean(),
+                encyclopediaRepo.findMany({ game_id: gameId.toLowerCase() }),
+            ]);
+
+            if (!characters.length) {
+                this.sendError(res, `No characters found for game "${gameId}"`, 404);
+                return;
+            }
+
+            const encSet = new Set(encEntries.map((e: any) => e.character_id?.toLowerCase()));
+
+            // Count scenarios per character in one aggregation (avoids N queries)
+            const scenarioCounts: { _id: string; count: number }[] = await Scenario.aggregate([
+                { $match: { game_id: gameId } },
+                { $unwind: '$characters_involved' },
+                { $group: { _id: { $toLower: '$characters_involved' }, count: { $sum: 1 } } },
+            ]);
+            const scenarioMap = new Map(scenarioCounts.map(s => [s._id, s.count]));
+
+            const rows = characters.map((char: any) => {
+                const charId = (char.character_id || '').toLowerCase();
+                const scenarios = scenarioMap.get(charId) || 0;
+                const hasEncyclopedia = encSet.has(charId);
+                let status: string;
+                if (!hasEncyclopedia && scenarios === 0) status = 'critical';
+                else if (!hasEncyclopedia) status = 'no_encyclopedia';
+                else if (scenarios < 10) status = 'low_scenarios';
+                else if (scenarios < 30) status = 'partial';
+                else status = 'good';
+
+                return {
+                    character_id: charId,
+                    name: char.name || char.character_id,
+                    has_encyclopedia: hasEncyclopedia,
+                    scenarios,
+                    status,
+                };
+            });
+
+            // Worst coverage first
+            rows.sort((a, b) => {
+                const statusOrder = { critical: 0, no_encyclopedia: 1, low_scenarios: 2, partial: 3, good: 4 };
+                return (statusOrder[a.status as keyof typeof statusOrder] ?? 5) -
+                       (statusOrder[b.status as keyof typeof statusOrder] ?? 5) ||
+                       a.scenarios - b.scenarios;
+            });
+
+            const summary = {
+                total: rows.length,
+                critical: rows.filter(r => r.status === 'critical').length,
+                no_encyclopedia: rows.filter(r => r.status === 'no_encyclopedia').length,
+                low_scenarios: rows.filter(r => r.status === 'low_scenarios').length,
+                partial: rows.filter(r => r.status === 'partial').length,
+                good: rows.filter(r => r.status === 'good').length,
+            };
+
+            this.sendResponse(res, { success: true, data: { game_id: gameId, summary, characters: rows } });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Character coverage check failed');
+        }
+    };
+
+    /**
      * POST /api/admin/trends/analyze
      * Trigger a manual Meta-Shift analysis check
      */

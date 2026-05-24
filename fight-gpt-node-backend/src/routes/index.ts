@@ -23,7 +23,7 @@ import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
 import matchRouter from './matchRoutes';
-import tournamentRouter from './tournamentRoutes';
+import { createTournamentRouter } from './tournamentRoutes';
 import analyticsRouter from './analyticsRoutes';
 import scenarioRouter from './scenarioRoutes';
 import publicApiRouter from './publicApiRoutes';
@@ -42,6 +42,7 @@ import { RivalController } from '../controllers/RivalController';
 import { UserController } from '../controllers/UserController';
 import { PaymentController } from '../controllers/PaymentController';
 import { EngagementController } from '../controllers/EngagementController';
+import { TournamentController } from '../controllers/tournamentController';
 
 /**
  * Routes configuration
@@ -70,6 +71,7 @@ export class Routes {
   private adminRoutes: AdminRoutes | null;
   private paymentRoutes: PaymentRoutes;
   private engagementRoutes: EngagementRoutes;
+  private tournamentRouter: ReturnType<typeof createTournamentRouter> | null;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -87,6 +89,7 @@ export class Routes {
     adminController?: AdminController | null,
     paymentController?: PaymentController | null,
     engagementController?: EngagementController | null,
+    tournamentController?: TournamentController | null,
   ) {
     this.router = Router();
     this.analysisRoutes = analysisController ? new AnalysisRoutes(analysisController) : null as any;
@@ -110,6 +113,7 @@ export class Routes {
     this.adminRoutes = adminController ? new AdminRoutes(adminController) : null;
     this.paymentRoutes = new PaymentRoutes(paymentController!);
     this.engagementRoutes = new EngagementRoutes(engagementController!);
+    this.tournamentRouter = tournamentController ? createTournamentRouter(tournamentController) : null;
     this.setupRoutes();
   }
 
@@ -211,7 +215,7 @@ export class Routes {
     this.router.use('/matches', matchRouter);
 
     // Tournament routes
-    this.router.use('/tournaments', tournamentRouter);
+    if (this.tournamentRouter) this.router.use('/tournaments', this.tournamentRouter);
 
     // Scenario explorer routes (authenticated)
     this.router.use('/scenarios', scenarioRouter);

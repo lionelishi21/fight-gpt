@@ -216,6 +216,33 @@ async function runWorker() {
 
         Logger.info('Worker is listening for jobs on "proof-validation-queue"');
 
+        // If all BullMQ retries are exhausted, flip the mission to FAILED so it never
+        // stays PENDING forever and notify the user.
+        proofWorker.on('failed', async (job, err) => {
+            if (!job) return;
+            const { userId, missionId } = job.data;
+            try {
+                const userMission = await UserMission.findOne({ user: userId, mission: missionId });
+                if (userMission && userMission.status === 'PENDING') {
+                    userMission.status = 'FAILED';
+                    userMission.metadata = {
+                        ...userMission.metadata,
+                        ai_feedback: 'Verification could not be completed. Please re-submit your proof.',
+                    };
+                    await userMission.save();
+                    await notificationService.sendPushToUser(
+                        userId,
+                        'MISSION VERIFICATION FAILED',
+                        'We were unable to verify your submission. Please try again.',
+                        { type: 'mission_failed', missionId }
+                    );
+                    Logger.warn(`[Worker] Mission ${missionId} marked FAILED after all retries exhausted for User ${userId}`);
+                }
+            } catch (e) {
+                Logger.error(`[Worker] Failed-handler error for mission ${missionId}: ${e instanceof Error ? e.message : e}`);
+            }
+        });
+
         // Graceful shutdown
         process.on('SIGTERM', async () => {
             Logger.info('Worker shutting down...');

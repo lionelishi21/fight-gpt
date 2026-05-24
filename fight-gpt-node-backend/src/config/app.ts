@@ -53,9 +53,10 @@ export class AppConfig {
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
-  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.0-flash'; }
-  public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-2.5-pro'; }
+  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-3.5-flash'; }
+  public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-3.5-flash'; }
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
+  public static get START_GG_TOKEN(): string { return process.env.START_GG_TOKEN || ''; }
   public static get STRIPE_WEBHOOK_SECRET(): string { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
   public static get RESEND_API_KEY(): string { return process.env.RESEND_API_KEY || ''; }
   public static get FROM_EMAIL(): string { return process.env.FROM_EMAIL || 'MetaPunish <noreply@metapunish.com>'; }

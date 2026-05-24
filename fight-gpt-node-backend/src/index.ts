@@ -40,6 +40,7 @@ import { RivalController } from './controllers/RivalController';
 import { UserController } from './controllers/UserController';
 import { AdminController } from './controllers/AdminController';
 import { PaymentController } from './controllers/PaymentController';
+import { TournamentController } from './controllers/tournamentController';
 
 // Import services
 import { AnalysisService } from './services/AnalysisService';
@@ -52,6 +53,7 @@ import { ChatService } from './services/ChatService';
 import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
+import { TournamentService } from './services/TournamentService';
 import { LobbyService } from './services/LobbyService';
 import { NotificationService } from './services/NotificationService';
 import { AutoResearchService } from './services/AutoResearchService';
@@ -80,6 +82,7 @@ import { TheoryRepository } from './repositories/TheoryRepository';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
 import { GameSearchStrategyRepository } from './repositories/GameSearchStrategyRepository';
+import { TournamentRepository } from './repositories/TournamentRepository';
 
 // Import middleware
 import { errorMiddleware } from './middleware/errorMiddleware';
@@ -149,14 +152,16 @@ export class App {
       AppConfig.GEMINI_API_KEY,
       AppConfig.GEMINI_MODEL,
       gameMetadataService,
-      characterEncyclopediaService
+      characterEncyclopediaService,
+      vectorRepository
     ) : null as any;
     // Premium model (2.5 Pro) — used for paid user uploads (higher quality, higher cost)
     const premiumAiService = AppConfig.MONGODB_URI ? new AiService(
       AppConfig.GEMINI_API_KEY,
       AppConfig.GEMINI_MODEL_PREMIUM,
       gameMetadataService,
-      characterEncyclopediaService
+      characterEncyclopediaService,
+      vectorRepository
     ) : null as any;
     const characterService = AppConfig.MONGODB_URI ? new CharacterService(characterRepository, gameRepository) : null as any;
     const analysisService = AppConfig.MONGODB_URI ? new AnalysisService(
@@ -241,6 +246,14 @@ export class App {
     const engagementController = new EngagementController(engagementService);
     const engagementRoutes = new EngagementRoutes(engagementController);
 
+    const tournamentRepository = AppConfig.MONGODB_URI ? new TournamentRepository() : null as any;
+    const tournamentService = AppConfig.MONGODB_URI ? new TournamentService(
+      tournamentRepository,
+      this.ingestionService || undefined,
+      AppConfig.START_GG_TOKEN,
+    ) : null as any;
+    const tournamentController = AppConfig.MONGODB_URI ? new TournamentController(tournamentService) : null;
+
     this.routes = new Routes(
       analysisController,
       healthController,
@@ -256,7 +269,8 @@ export class App {
       userController,
       adminController,
       paymentController,
-      engagementController
+      engagementController,
+      tournamentController,
     );
     
 

@@ -427,8 +427,12 @@ You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in mar
             'sf':       'v1',
         };
 
-        const key = GAME_PROMPT_MAP[gameId?.toLowerCase()] ?? 'v1';
-        return this.PROMPT_VERSIONS[key] || this.PROMPT_VERSIONS['v1'];
+        const normalizedId = gameId?.toLowerCase()?.trim() ?? '';
+        const key = GAME_PROMPT_MAP[normalizedId];
+        if (!key) {
+            console.warn(`[VersionResolver] Unknown gameId "${gameId}" — defaulting to SF6 prompt. Add it to GAME_PROMPT_MAP if this is a new game.`);
+        }
+        return this.PROMPT_VERSIONS[key ?? 'v1'] || this.PROMPT_VERSIONS['v1'];
     }
 
     /** @deprecated use resolvePromptForGame */

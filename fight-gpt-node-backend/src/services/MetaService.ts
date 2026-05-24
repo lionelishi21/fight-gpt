@@ -241,7 +241,7 @@ export class MetaService extends BaseService implements IMetaService {
                 `Scenario ${i + 1}: ${s.description}\nAdvice: ${s.context}\nCharacters: ${(s.characters_involved || []).join(' vs ')}`
             ).join('\n\n');
 
-            const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = this.genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
             const prompt = `You are a fighting game meta analyst. Based on the following match scenarios from real gameplay data, answer this question concisely and specifically:
 
 Question: ${query}
@@ -420,7 +420,7 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
                 `${c.character_name} (win rate: ${c.win_rate}%, usage: ${c.usage_count})`
             ).join(', ');
 
-            const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = this.genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
             const prompt = `You are a professional fighting game meta analyst. Based on ${scenarios.length} analyzed matches for ${gameId}, write a concise 2-3 paragraph meta report covering:
 
 1. The current top tier characters and why they dominate

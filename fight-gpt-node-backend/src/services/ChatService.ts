@@ -160,7 +160,7 @@ Help players improve their skills, understand game mechanics, learn characters, 
       };
 
       // Try primary model, fall back on 503/overload
-      const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash'];
       let lastError: Error | null = null;
 
       const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
