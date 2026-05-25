@@ -54,6 +54,7 @@ export interface SmartChatResponse extends ChatResponse {
 export class ChatService extends BaseService implements IChatService {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
+  private premiumModel: GenerativeModel;
   private readonly systemPrompt: string;
 
   constructor() {
@@ -65,9 +66,12 @@ export class ChatService extends BaseService implements IChatService {
 
     this.genAI = new GoogleGenerativeAI(AppConfig.GEMINI_API_KEY);
 
-    // Primary model from env — falls back through the list on 503/overload
     const modelName = AppConfig.GEMINI_MODEL || 'gemini-2.5-flash';
     this.model = this.genAI.getGenerativeModel({ model: modelName });
+
+    // Premium model (Gemini Pro) — used for paid users
+    const premiumModelName = AppConfig.GEMINI_MODEL_PREMIUM || 'gemini-1.5-pro';
+    this.premiumModel = this.genAI.getGenerativeModel({ model: premiumModelName });
 
     // Custom system prompt specialized for fighting games
     this.systemPrompt = `You are Fight GPT, an expert AI assistant specialized exclusively in fighting games. Your knowledge includes:
@@ -129,10 +133,8 @@ Help players improve their skills, understand game mechanics, learn characters, 
   /**
    * Send a message to Vertex AI with gaming context
    */
-  async sendMessage(message: string, conversationHistory: ChatMessage[] = []): Promise<ChatResponse> {
+  async sendMessage(message: string, conversationHistory: ChatMessage[] = [], isPremium = false): Promise<ChatResponse> {
     try {
-      // Validate that message is about gaming
-      // Build conversation history for context
       const historyItems = [
         {
           role: 'user',
@@ -159,11 +161,11 @@ Help players improve their skills, understand game mechanics, learn characters, 
         maxOutputTokens: 8192,
       };
 
-      // Try primary model, fall back on 503/overload
-      const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash'];
+      const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash'];
       let lastError: Error | null = null;
 
-      const modelsToTry = [this.model, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
+      const primaryModel = isPremium ? this.premiumModel : this.model;
+      const modelsToTry = [primaryModel, ...FALLBACK_MODELS.map(m => this.genAI.getGenerativeModel({ model: m }))];
 
       for (const modelInstance of modelsToTry) {
         try {
@@ -248,8 +250,10 @@ Help players improve their skills, understand game mechanics, learn characters, 
 
       // Have analysis — inject into context
       const playerContext = `\n\n[PLAYER INTEL — ${mentionedRival.name}]\nCharacter: ${analysis.character}\nGame: ${analysis.gameId}\nAnalysis ID: ${analysis.analysisId}\nUse this data to answer questions about how to counter this player specifically.`;
-      return this.sendMessage(message + playerContext, history);
+      return this.sendMessage(message + playerContext, history, true);
     }
+
+    const isPremium = ctx.planType === 'premium';
 
     // No player — build a context prefix about what game/character to focus on
     let contextPrefix = '';
@@ -266,7 +270,7 @@ Help players improve their skills, understand game mechanics, learn characters, 
     }
 
     const enrichedMessage = contextPrefix ? contextPrefix + message : message;
-    const response = await this.sendMessage(enrichedMessage, history);
+    const response = await this.sendMessage(enrichedMessage, history, isPremium);
     return { ...response, detectedEntities };
   }
 

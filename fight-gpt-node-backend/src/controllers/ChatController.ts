@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './BaseController';
-import { ChatService, ChatMessage, UserChatContext } from '../services/ChatService';
+import { ChatService, ChatMessage, UserChatContext, SmartChatResponse } from '../services/ChatService';
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
 import { IRivalRepository } from '../repositories/RivalRepository';
 import { IGameRepository } from '../repositories/GameRepository';
@@ -60,7 +60,7 @@ export class ChatController extends BaseController {
       const conversationHistory: ChatMessage[] = history || [];
       const userId = (req as any).user?.id;
 
-      let response;
+      let response: SmartChatResponse;
       let ctx: UserChatContext | undefined;
 
       // If authenticated and repos available, use contextual chat
@@ -98,7 +98,7 @@ export class ChatController extends BaseController {
           response = await this.chatService.sendContextualMessage(message.trim(), conversationHistory, ctx);
         } catch (ctxErr) {
           console.error('[ChatController] Context fetch failed, falling back:', ctxErr);
-          response = await this.chatService.sendMessage(message.trim(), conversationHistory);
+          response = await this.chatService.sendMessage(message.trim(), conversationHistory, ctx?.planType === 'premium');
         }
       } else {
         response = await this.chatService.sendMessage(message.trim(), conversationHistory);

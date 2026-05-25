@@ -128,12 +128,33 @@ jobs:
             ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || true
             echo "→ PM2 full list:"
             pm2 list 2>/dev/null || true
-            echo "→ PM2 logs (last 20 lines):"
-            timeout 5 pm2 logs fightgpt-api --lines 20 --nostream 2>/dev/null || pm2 logs --lines 20 --nostream 2>/dev/null | tail -20 || true
+            echo "→ API logs (last 20 lines):"
+            timeout 5 pm2 logs fightgpt-api --lines 20 --nostream 2>/dev/null || true
+            echo "→ Worker logs (last 20 lines):"
+            timeout 5 pm2 logs fightgpt-worker --lines 20 --nostream 2>/dev/null || true
             echo "→ Health check on 3000..."
             curl -sf http://localhost:3000/api/health && echo "✅ UP on 3000" || echo "❌ 3000 failed"
             echo "→ Health check on 3010..."
             curl -sf http://localhost:3010/api/health && echo "✅ UP on 3010" || echo "❌ 3010 failed"
+
+            # Worker status check — fail deploy if worker is not online
+            echo "→ Checking worker status..."
+            WORKER_STATUS=$(pm2 jlist 2>/dev/null | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const p=JSON.parse(d).find(x=>x.name==='fightgpt-worker'); console.log(p?.pm2_env?.status||'missing')" 2>/dev/null || echo "unknown")
+            if [ "$WORKER_STATUS" = "online" ]; then
+              echo "✅ Worker is online"
+            else
+              echo "❌ Worker status: $WORKER_STATUS — attempting manual start..."
+              pm2 start ecosystem.config.js --only fightgpt-worker --env production --update-env
+              pm2 save
+            fi
+
+            # 10. Re-queue any pending ingestion jobs so the freshly-started worker picks them up
+            echo "→ Re-queuing pending ingestion jobs..."
+            PORT_NUM=$(grep '^PORT=' .env 2>/dev/null | cut -d= -f2 || echo "3010")
+            curl -sf -X POST "http://localhost:${PORT_NUM}/api/admin/ingestion/bulk-queue" \
+              -H "x-admin-secret: $(grep '^ADMIN_API_SECRET=' .env | cut -d= -f2)" \
+              && echo "✅ Pending jobs queued" || echo "⚠️  bulk-queue skipped (no pending jobs or endpoint unavailable)"
+
             echo "✅ Deploy complete"
 
       - name: Notify success
