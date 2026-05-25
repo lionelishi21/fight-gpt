@@ -56,6 +56,8 @@ export class AppConfig {
   public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-3.5-flash'; }
   public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-1.5-pro'; }
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
+  public static get STRIPE_PRO_PRICE_ID(): string { return process.env.STRIPE_PRO_PRICE_ID || ''; }
+  public static get STRIPE_COMPETITOR_PRICE_ID(): string { return process.env.STRIPE_COMPETITOR_PRICE_ID || ''; }
   public static get START_GG_TOKEN(): string { return process.env.START_GG_TOKEN || ''; }
   public static get STRIPE_WEBHOOK_SECRET(): string { return process.env.STRIPE_WEBHOOK_SECRET || ''; }
   public static get RESEND_API_KEY(): string { return process.env.RESEND_API_KEY || ''; }

@@ -6,7 +6,7 @@ import { BaseService } from './BaseService';
 import { Logger } from '../helpers/logger';
 
 export interface IPaymentService {
-    createCheckoutSession(userId: string, priceId: string): Promise<ApiResponse<{ url: string }>>;
+    createCheckoutSession(userId: string, priceId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>>;
     handleWebhook(payload: any, sig: string): Promise<ApiResponse<boolean>>;
 }
 
@@ -20,27 +20,20 @@ export class PaymentService extends BaseService implements IPaymentService {
         });
     }
 
-    async createCheckoutSession(userId: string, priceId: string): Promise<ApiResponse<{ url: string }>> {
+    async createCheckoutSession(userId: string, priceId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>> {
         try {
             const user = await User.findById(userId);
             if (!user) return { success: false, error: 'User not found' };
 
             const session = await this.stripe.checkout.sessions.create({
                 payment_method_types: ['card'],
-                line_items: [
-                    {
-                        price: priceId,
-                        quantity: 1,
-                    },
-                ],
+                line_items: [{ price: priceId, quantity: 1 }],
                 mode: 'subscription',
                 customer_email: user.email,
                 client_reference_id: userId,
                 success_url: `${AppConfig.APP_URL}/dashboard?payment=success`,
                 cancel_url: `${AppConfig.APP_URL}/dashboard?payment=cancelled`,
-                metadata: {
-                    userId: userId,
-                },
+                metadata: { userId, plan },
             });
 
             return { success: true, data: { url: session.url as string } };
@@ -69,14 +62,16 @@ export class PaymentService extends BaseService implements IPaymentService {
                 case 'checkout.session.completed': {
                     const session = event.data.object as any;
                     const userId = session.client_reference_id || session.metadata?.userId;
+                    const plan = session.metadata?.plan;
+                    const tier = plan === 'competitor' ? 'COMPETITOR' : 'PRO';
 
                     if (userId) {
                         await User.findByIdAndUpdate(userId, {
-                            tier: 'PRO',
+                            tier,
                             stripeCustomerId: session.customer as string,
                             stripeSubscriptionId: session.subscription as string,
                         });
-                        Logger.info(`User ${userId} upgraded to PRO via Stripe`);
+                        Logger.info(`User ${userId} upgraded to ${tier} via Stripe`);
                     }
                     break;
                 }

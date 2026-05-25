@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { IPaymentService } from '../services/PaymentService';
 import { BaseController } from './BaseController';
 import { Logger } from '../helpers/logger';
+import { AppConfig } from '../config/app';
 
 export class PaymentController extends BaseController {
     constructor(private readonly paymentService: IPaymentService) {
@@ -13,20 +14,24 @@ export class PaymentController extends BaseController {
      */
     createSession = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { priceId } = req.body;
+            const { plan } = req.body as { plan?: 'competitor' | 'pro' };
             const userId = (req as any).user?.id;
-
-            if (!priceId) {
-                this.sendError(res, 'priceId is required', 400);
-                return;
-            }
 
             if (!userId) {
                 this.sendError(res, 'Authentication required', 401);
                 return;
             }
 
-            const result = await this.paymentService.createCheckoutSession(userId, priceId);
+            const priceId = plan === 'competitor'
+                ? AppConfig.STRIPE_COMPETITOR_PRICE_ID
+                : AppConfig.STRIPE_PRO_PRICE_ID;
+
+            if (!priceId) {
+                this.sendError(res, `No Stripe price configured for plan: ${plan || 'pro'}`, 400);
+                return;
+            }
+
+            const result = await this.paymentService.createCheckoutSession(userId, priceId, plan || 'pro');
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
