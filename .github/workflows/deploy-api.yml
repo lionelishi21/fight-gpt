@@ -74,19 +74,7 @@ jobs:
             sed -i "s|^SENTRY_DSN=.*|SENTRY_DSN=${{ secrets.SENTRY_DSN }}|" .env || true
             grep -q "^SENTRY_DSN=" .env || echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
 
-            # 1. Ensure yt-dlp is installed (required for ingestion pipeline)
-            echo "→ Checking yt-dlp..."
-            if ! command -v yt-dlp &>/dev/null; then
-              echo "→ Installing yt-dlp..."
-              curl -sSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-              chmod a+rx /usr/local/bin/yt-dlp
-              echo "✅ yt-dlp installed: $(yt-dlp --version)"
-            else
-              echo "✅ yt-dlp already installed: $(yt-dlp --version)"
-              yt-dlp -U || true
-            fi
-
-            # 2. Pull latest code — hard reset to origin/main to handle local modifications
+            # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
             git fetch origin
             git reset --hard origin/main

@@ -336,16 +336,6 @@ export class IngestionService extends BaseService implements IIngestionService {
                     const msg = e instanceof Error ? e.message : 'Unknown error';
                     const shouldRetry = job.retry_count < 2;
 
-                    if (e && (e as Error).name === 'YoutubeBotBlockError') {
-                        Logger.error(`[IngestionService] YouTube bot block detected for job ${job.job_id}`);
-                        if (this.notificationService) {
-                            await this.notificationService.systemAlert(
-                                'YouTube Bot Block Detected',
-                                'yt-dlp was blocked by YouTube. Video ingestion has failed. Please update the cookies.txt file via the admin dashboard.'
-                            );
-                        }
-                    }
-
                     await this.ingestionRepository.updateJobStatus(
                         job.job_id,
                         shouldRetry ? 'pending' : 'failed',
