@@ -8,6 +8,41 @@ import { emailService } from '../services/EmailService';
 import { NotificationRepository } from '../repositories/NotificationRepository';
 import { NotificationService } from '../services/NotificationService';
 
+const DISPOSABLE_DOMAINS = new Set([
+    'mailinator.com', 'guerrillamail.com', 'temp-mail.org', 'throwam.com',
+    'yopmail.com', 'tempmail.com', 'fakeinbox.com', 'sharklasers.com',
+    'spam4.me', 'trashmail.com', 'trashmail.at', 'trashmail.me',
+    'dispostable.com', 'maildrop.cc', 'getairmail.com', 'filzmail.com',
+    '10minutemail.com', 'tempr.email', 'discard.email', 'mailnull.com',
+    'spamgourmet.com', 'spamherelots.com', 'mytrashmail.com', 'mt2015.com',
+]);
+
+function normalizeGmail(email: string): string | null {
+    const [local, domain] = email.toLowerCase().split('@');
+    if (domain !== 'gmail.com') return null;
+    return local.replace(/\./g, '').split('+')[0] + '@gmail.com';
+}
+
+function isBotEmail(email: string): boolean {
+    const lower = email.toLowerCase().trim();
+    const atIdx = lower.lastIndexOf('@');
+    if (atIdx < 1) return true;
+    const local = lower.slice(0, atIdx);
+    const domain = lower.slice(atIdx + 1);
+
+    if (DISPOSABLE_DOMAINS.has(domain)) return true;
+
+    // Dotted-Gmail abuse: bots create fake-unique addresses using dots + digits
+    if (domain === 'gmail.com') {
+        const dots = (local.match(/\./g) || []).length;
+        const digits = (local.match(/\d/g) || []).length;
+        if (dots >= 3) return true;
+        if (dots >= 2 && digits >= 2) return true;
+    }
+
+    return false;
+}
+
 export class AuthController extends BaseController {
     /**
      * Register a new user
@@ -16,8 +51,25 @@ export class AuthController extends BaseController {
         try {
             const { name, email, password, location, inviteToken, referralCode } = req.body;
 
-            // Check if user already exists
-            const existingUser = await User.findOne({ email });
+            if (!name || !email || !password) {
+                this.sendError(res, 'Name, email and password are required', 400);
+                return;
+            }
+
+            const emailLower = email.toLowerCase().trim();
+
+            // Reject bot/disposable emails
+            if (isBotEmail(emailLower)) {
+                this.sendError(res, 'Registration not allowed with this email address', 403);
+                return;
+            }
+
+            // Check if user already exists — also match normalized Gmail to block dot-trick duplicates
+            const normalizedGmail = normalizeGmail(emailLower);
+            const emailQuery = normalizedGmail
+                ? { $or: [{ email: emailLower }, { email: normalizedGmail }] }
+                : { email: emailLower };
+            const existingUser = await User.findOne(emailQuery);
             if (existingUser) {
                 this.sendError(res, 'User already exists', 400);
                 return;

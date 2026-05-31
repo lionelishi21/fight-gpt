@@ -1,6 +1,17 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { AuthController } from '../controllers/AuthController';
 import { authMiddleware } from '../middleware/auth';
+
+// Tight limit for registration — 5 signups per hour per IP
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Too many registration attempts. Try again in an hour.' },
+    skip: () => process.env.NODE_ENV === 'development',
+});
 
 export class AuthRoutes {
     private router: Router;
@@ -14,7 +25,7 @@ export class AuthRoutes {
 
     private setupRoutes(): void {
         // Public routes
-        this.router.post('/register', this.authController.register);
+        this.router.post('/register', registerLimiter, this.authController.register);
         this.router.post('/login', this.authController.login);
 
         // Protected routes

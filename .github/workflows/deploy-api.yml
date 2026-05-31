@@ -138,7 +138,7 @@ jobs:
 
             # 10. Re-queue any pending ingestion jobs so the freshly-started worker picks them up
             echo "→ Re-queuing pending ingestion jobs..."
-            PORT_NUM=$(grep '^PORT=' .env 2>/dev/null | cut -d= -f2 || echo "3010")
+            PORT_NUM=$(grep '^PORT=' .env 2>/dev/null | cut -d= -f2 || echo "3000")
             curl -sf -X POST "http://localhost:${PORT_NUM}/api/admin/ingestion/bulk-queue" \
               -H "x-admin-secret: $(grep '^ADMIN_API_SECRET=' .env | cut -d= -f2)" \
               && echo "✅ Pending jobs queued" || echo "⚠️  bulk-queue skipped (no pending jobs or endpoint unavailable)"
