@@ -91,8 +91,12 @@ export class AutoResearchService {
                             if (result.success && result.data) {
                                 characterGenerated++;
                             }
-                        } catch (err) {
+                        } catch (err: any) {
                             console.error(`[AutoResearch] Failed ${level} character theory ${charId}:`, err);
+                            if (err?.message?.includes('429 Too Many Requests') || err?.status === 429) {
+                                console.error('[AutoResearch] API Quota exceeded. Aborting cycle.');
+                                throw err;
+                            }
                         }
                     }
                 }
@@ -134,8 +138,12 @@ export class AutoResearchService {
                                 if (result.success && result.data) {
                                     matchupGenerated++;
                                 }
-                            } catch (err) {
+                            } catch (err: any) {
                                 console.error(`[AutoResearch] Failed ${level} matchup ${charA} vs ${charB}:`, err);
+                                if (err?.message?.includes('429 Too Many Requests') || err?.status === 429) {
+                                    console.error('[AutoResearch] API Quota exceeded. Aborting cycle.');
+                                    throw err;
+                                }
                             }
                         }
                     }

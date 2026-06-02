@@ -24,6 +24,6 @@ const schema = new Schema<IResearchLog>({
     errors:              [{ type: String }],
     duration_ms:         { type: Number, default: 0 },
     status:              { type: String, enum: ['success', 'partial', 'failed'], default: 'success' },
-}, { timestamps: false });
+}, { timestamps: false, suppressReservedKeysWarning: true });
 
 export const ResearchLog = mongoose.model<IResearchLog>('ResearchLog', schema);

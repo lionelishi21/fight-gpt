@@ -3,7 +3,7 @@ import { IScenarioDocument, Scenario } from '../models/Scenario';
 
 export interface IVectorRepository {
     createScenario(data: Partial<IScenarioDocument>): Promise<IScenarioDocument>;
-    findSimilarScenarios(vector: number[], gameId: string, limit?: number): Promise<IScenarioDocument[]>;
+    findSimilarScenarios(vector: number[], gameId: string, limit?: number, characters?: string[]): Promise<IScenarioDocument[]>;
     addMatchReference(scenarioId: string, analysisId: string): Promise<void>;
 }
 
@@ -23,8 +23,14 @@ export class VectorRepository extends BaseRepository<IScenarioDocument> implemen
      * 
      * Pre-requisite: An Atlas Vector Search index needs to be created on the `Scenario` collection.
      */
-    public async findSimilarScenarios(vector: number[], gameId: string, limit: number = 5): Promise<IScenarioDocument[]> {
+    public async findSimilarScenarios(vector: number[], gameId: string, limit: number = 5, characters?: string[]): Promise<IScenarioDocument[]> {
         try {
+            const filter: any = { game_id: gameId };
+            if (characters && characters.length > 0) {
+                // Use $in to match scenarios involving either of the specified characters
+                filter.characters_involved = { $in: characters };
+            }
+
             // Uses MongoDB Atlas `$vectorSearch` operator (Requires MongoDB v6.0.11+ / Atlas)
             return await this.model.aggregate([
                 {
@@ -34,9 +40,7 @@ export class VectorRepository extends BaseRepository<IScenarioDocument> implemen
                         queryVector: vector,
                         numCandidates: limit * 10, // Recommended 10x the limit
                         limit: limit,
-                        filter: {
-                            game_id: gameId // Pre-filtering by game
-                        }
+                        filter: filter
                     }
                 },
                 {

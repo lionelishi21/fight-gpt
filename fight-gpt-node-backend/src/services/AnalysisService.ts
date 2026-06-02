@@ -361,7 +361,8 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     const embedding = await this.aiService.generateEmbedding(queryText);
     if (!embedding || embedding.length === 0) return null;
 
-    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 6);
+    const characters = [request.p1_character_id, request.p2_character_id].filter(Boolean) as string[];
+    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 6, characters);
     if (!similar || similar.length === 0) return null;
 
     // Prefer current-patch or cross-patch-valid scenarios as examples.

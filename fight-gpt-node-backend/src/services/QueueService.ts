@@ -91,6 +91,22 @@ export class QueueService {
     }
 
     /**
+     * Pause the analysis queue (e.g., when API quota is exhausted)
+     */
+    public async pauseQueue(): Promise<void> {
+        await this.analysisQueue.pause();
+        Logger.warn('[QueueService] Analysis queue paused (Circuit Breaker triggered).');
+    }
+
+    /**
+     * Resume the analysis queue
+     */
+    public async resumeQueue(): Promise<void> {
+        await this.analysisQueue.resume();
+        Logger.info('[QueueService] Analysis queue resumed.');
+    }
+
+    /**
      * Check if the worker process is alive by reading its heartbeat key from Redis.
      * The worker writes 'metapunish:worker:heartbeat' every 30s with a 60s TTL.
      * This approach works on any Redis version (no 6.2+ requirement).

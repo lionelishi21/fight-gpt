@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 import { BaseService } from './BaseService';
 import { ITheoryRepository } from '../repositories/TheoryRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
@@ -278,10 +278,52 @@ export class TheoryService extends BaseService implements ITheoryService {
             ).join('\n')
             : 'No match data yet.';
 
+        const schema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                title: { type: SchemaType.STRING },
+                summary: { type: SchemaType.STRING },
+                full_theory: { type: SchemaType.STRING },
+                key_strengths: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                key_weaknesses: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                win_conditions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                counterplay: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                vortex_graph: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        nodes: {
+                            type: SchemaType.ARRAY,
+                            items: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    id: { type: SchemaType.STRING },
+                                    label: { type: SchemaType.STRING },
+                                    description: { type: SchemaType.STRING },
+                                    type: { type: SchemaType.STRING }
+                                }
+                            }
+                        },
+                        edges: {
+                            type: SchemaType.ARRAY,
+                            items: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    source: { type: SchemaType.STRING },
+                                    target: { type: SchemaType.STRING },
+                                    label: { type: SchemaType.STRING }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
         const model = this.genAI.getGenerativeModel({
             model: 'gemini-3.5-flash',
             generationConfig: {
                 responseMimeType: 'application/json',
+                responseSchema: schema,
                 maxOutputTokens: 8192,
             },
         });
@@ -330,7 +372,7 @@ Return ONLY valid JSON:
         try {
             const result = await model.generateContent(prompt);
             const rawText = result.response.text();
-            const text = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const text = rawText || '{}';
             const parsed = JSON.parse(text);
             return {
                 title: parsed.title || `${characterId} Strategy: ${skillLevel}`,
@@ -362,10 +404,24 @@ Return ONLY valid JSON:
             ).join('\n')
             : 'No matchup data yet.';
 
+        const schema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                title: { type: SchemaType.STRING },
+                summary: { type: SchemaType.STRING },
+                full_theory: { type: SchemaType.STRING },
+                key_strengths: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                key_weaknesses: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                win_conditions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                counterplay: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+            }
+        };
+
         const model = this.genAI.getGenerativeModel({
             model: 'gemini-3.5-flash',
             generationConfig: {
                 responseMimeType: 'application/json',
+                responseSchema: schema,
                 maxOutputTokens: 8192,
             },
         });
@@ -406,7 +462,7 @@ Return ONLY valid JSON:
         try {
             const result = await model.generateContent(prompt);
             const rawText = result.response.text();
-            const text = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const text = rawText || '{}';
             const parsed = JSON.parse(text);
             return {
                 title: parsed.title || `${charA} vs ${charB}: ${skillLevel} Guide`,

@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google/generative-ai';
+import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
 import { AnalysisRequest, AnalysisResponse } from '../types';
 import { BaseService } from './BaseService';
@@ -170,12 +171,74 @@ export class AiService extends BaseService implements IAiService {
 
     contentParts.push({ text: fullPrompt });
 
+    const analysisResponseSchema: Schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        is_gameplay_video: { type: SchemaType.BOOLEAN },
+        status: { type: SchemaType.STRING },
+        reason: { type: SchemaType.STRING },
+        game_title: { type: SchemaType.STRING },
+        match_format: { type: SchemaType.STRING },
+        p1_character: { type: SchemaType.STRING },
+        p2_character: { type: SchemaType.STRING },
+        p1_name: { type: SchemaType.STRING },
+        p2_name: { type: SchemaType.STRING },
+        match_winner: { type: SchemaType.STRING },
+        timeline: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              timestamp: { type: SchemaType.STRING },
+              event_type: { type: SchemaType.STRING },
+              actor: { type: SchemaType.STRING },
+              move_used: { type: SchemaType.STRING },
+              move_confidence: { type: SchemaType.STRING },
+              move_outcome: { type: SchemaType.STRING },
+              opponent_response: { type: SchemaType.STRING },
+              spacing: { type: SchemaType.STRING },
+              is_anti_air: { type: SchemaType.BOOLEAN },
+              attack_direction: { type: SchemaType.STRING },
+              evasion_type: { type: SchemaType.STRING },
+              description: { type: SchemaType.STRING },
+              coach_advice: { type: SchemaType.STRING },
+              turn_owner: { type: SchemaType.STRING },
+              neutral_state: { type: SchemaType.STRING },
+              frame_advantage: { type: SchemaType.STRING },
+              p1_state: { type: SchemaType.STRING },
+              p2_state: { type: SchemaType.STRING }
+            }
+          }
+        },
+        top_3_tips: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING }
+        },
+        daily_mission: {
+          type: SchemaType.OBJECT,
+          properties: {
+            title: { type: SchemaType.STRING },
+            drill_steps: {
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING }
+            },
+            goal: { type: SchemaType.STRING }
+          }
+        }
+      }
+    };
+
     try {
-      const result = await this.model.generateContent({ contents: [{ role: 'user', parts: contentParts }] });
-      const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const sanitizedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const result = await this.model.generateContent({ 
+        contents: [{ role: 'user', parts: contentParts }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: analysisResponseSchema
+        }
+      });
+      const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       try {
-        const parsed = JSON.parse(sanitizedJson) as any;
+        const parsed = JSON.parse(responseText) as any;
         // Reject non-gameplay content before it pollutes the DB
         if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
           const reason = parsed.reason || 'Video does not contain fighting game gameplay';
@@ -188,6 +251,10 @@ export class AiService extends BaseService implements IAiService {
         throw new Error('Invalid JSON response from Gemini API');
       }
     } catch (e: any) {
+      if (e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits'))) {
+        console.error('[AiService] Circuit Breaker triggered: Quota exceeded. Pausing analysis queue.');
+        queueService.pauseQueue().catch(err => console.error('Failed to pause queue', err));
+      }
       throw this.handleError(e, 'generateAnalysis');
     }
   }
