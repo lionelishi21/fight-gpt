@@ -73,6 +73,8 @@ jobs:
             grep -q "^DISCORD_BOT_TOKEN=" .env || echo "DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}" >> .env
             sed -i "s|^SENTRY_DSN=.*|SENTRY_DSN=${{ secrets.SENTRY_DSN }}|" .env || true
             grep -q "^SENTRY_DSN=" .env || echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
+            sed -i "s|^GROK_API_KEY=.*|GROK_API_KEY=${{ secrets.GROK_API_KEY }}|" .env || true
+            grep -q "^GROK_API_KEY=" .env || echo "GROK_API_KEY=${{ secrets.GROK_API_KEY }}" >> .env
 
             # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
