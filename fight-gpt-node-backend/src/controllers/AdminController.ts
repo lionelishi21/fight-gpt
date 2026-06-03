@@ -19,6 +19,7 @@ import { GameScanService, DeepScanResult } from '../services/GameScanService';
 import { AnalysisCorrection } from '../models/AnalysisCorrection';
 import { Analysis } from '../models/Analysis';
 import { ResearchLog } from '../models/ResearchLog';
+import { SystemSettings } from '../models/SystemSettings';
 import fs from 'fs';
 import path from 'path';
 
@@ -53,6 +54,47 @@ export class AdminController extends BaseController {
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
+    /**
+     * GET /api/admin/settings
+     * Retrieve system settings (active AI provider, grok fallback status)
+     */
+    getSystemSettings = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const settings = await SystemSettings.getSettings();
+            this.sendResponse(res, { success: true, data: settings });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch settings');
+        }
+    };
+
+    /**
+     * PUT /api/admin/settings
+     * Update system settings (toggle active provider or fallback)
+     */
+    updateSystemSettings = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { active_ai_provider, grok_fallback_enabled } = req.body;
+            const settings = await SystemSettings.getSettings();
+            
+            if (active_ai_provider !== undefined) {
+                if (!['gemini', 'grok'].includes(active_ai_provider)) {
+                    this.sendError(res, 'active_ai_provider must be "gemini" or "grok"', 400);
+                    return;
+                }
+                settings.active_ai_provider = active_ai_provider;
+            }
+            
+            if (grok_fallback_enabled !== undefined) {
+                settings.grok_fallback_enabled = !!grok_fallback_enabled;
+            }
+            
+            await settings.save();
+            this.sendResponse(res, { success: true, data: settings, message: 'Settings updated successfully' });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to update settings');
         }
     };
 

@@ -93,6 +93,8 @@ export class AdminRoutes {
         this.router.delete('/invites/:token', inviteController.revokeInvite);
 
         // System Settings
+        this.router.get('/settings', this.adminController.getSystemSettings);
+        this.router.put('/settings', this.adminController.updateSystemSettings);
         this.router.post('/settings/cookie', upload.single('cookieFile'), this.adminController.uploadCookies);
         this.router.get('/settings/cookie/status', this.adminController.getCookieStatus);
 

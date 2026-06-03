@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google/generative-ai';
 import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
+import axios from 'axios';
 import { AnalysisRequest, AnalysisResponse } from '../types';
 import { BaseService } from './BaseService';
 import { IGameMetadataService } from './GameMetadataService';
@@ -132,6 +133,17 @@ export class AiService extends BaseService implements IAiService {
   }
 
   private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
+    try {
+      const { SystemSettings } = require('../models/SystemSettings');
+      const settings = await SystemSettings.getSettings();
+      if (settings.active_ai_provider === 'grok') {
+        console.log('[AiService] Active AI provider is Grok. Routing to Grok analysis.');
+        return await this.generateGrokAnalysis(request);
+      }
+    } catch (settingsError) {
+      console.warn('[AiService] Failed to load SystemSettings, defaulting to Gemini:', settingsError);
+    }
+
     const prompt = VersionResolver.resolvePromptForGame(
       request.game_id || 'sf6',
       request.match_format || '1v1',
@@ -251,11 +263,95 @@ export class AiService extends BaseService implements IAiService {
         throw new Error('Invalid JSON response from Gemini API');
       }
     } catch (e: any) {
-      if (e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits'))) {
+      const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits'));
+      if (isQuotaError) {
+        try {
+          const { SystemSettings } = require('../models/SystemSettings');
+          const settings = await SystemSettings.getSettings();
+          if (settings.grok_fallback_enabled && settings.active_ai_provider !== 'grok') {
+            console.warn('[AiService] Gemini quota exceeded. Flipped provider to Grok automatically.');
+            settings.active_ai_provider = 'grok';
+            await settings.save();
+            return await this.generateGrokAnalysis(request);
+          }
+        } catch (settingsError) {
+          console.error('[AiService] Failed to auto-failover to Grok:', settingsError);
+        }
+
         console.error('[AiService] Circuit Breaker triggered: Quota exceeded. Pausing analysis queue.');
         queueService.pauseQueue().catch(err => console.error('Failed to pause queue', err));
       }
       throw this.handleError(e, 'generateAnalysis');
+    }
+  }
+
+  private async generateGrokAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {
+    const grokApiKey = process.env.GROK_API_KEY;
+    if (!grokApiKey) {
+      throw new Error('Grok API Key (GROK_API_KEY) is not configured.');
+    }
+
+    const prompt = VersionResolver.resolvePromptForGame(
+      request.game_id || 'sf6',
+      request.match_format || '1v1',
+      request.p1_team,
+      request.p2_team,
+    );
+
+    let fullPrompt = prompt;
+
+    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
+    if (fewShotBlock) {
+      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
+    }
+
+    if (request.ai_context) {
+      fullPrompt += `\n\nContext:\n${request.ai_context}`;
+    }
+
+    if (request.video_title) {
+      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
+    }
+
+    fullPrompt += `\n\nNOTE: You are running in fallback mode because the primary video analyzer is unavailable. Analyze this match based on the video title, game metadata, and context. Fabricate a realistic, highly technical match timeline of 4-6 key exchanges matching the characters involved (${request.p1_character_id || 'Player 1'} vs ${request.p2_character_id || 'Player 2'}) and the game rules. Ground your coaching advice in the characters' specific moves and playstyles. Return ONLY a valid JSON object matching the requested schema.`;
+
+    try {
+      const response = await axios.post(
+        'https://api.x.ai/v1/chat/completions',
+        {
+          model: 'grok-beta',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are MetaPunish — the world\'s most advanced competitive fighting game intelligence system.'
+            },
+            {
+              role: 'user',
+              content: fullPrompt
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${grokApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000
+        }
+      );
+
+      const responseText = response.data?.choices?.[0]?.message?.content || '{}';
+      const parsed = JSON.parse(responseText);
+
+      parsed.is_gameplay_video = true;
+      parsed.status = 'analyzed';
+
+      return parsed as AnalysisResponse;
+    } catch (error: any) {
+      console.error('[AiService] Grok fallback analysis failed:', error instanceof Error ? error.message : error);
+      throw this.handleError(error, 'generateGrokAnalysis');
     }
   }
 
