@@ -76,12 +76,12 @@ export class AdminController extends BaseController {
      */
     updateSystemSettings = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { active_ai_provider, grok_fallback_enabled } = req.body;
+            const { active_ai_provider, grok_fallback_enabled, bedrock_fallback_enabled } = req.body;
             const settings = await SystemSettings.getSettings();
             
             if (active_ai_provider !== undefined) {
-                if (!['gemini', 'grok'].includes(active_ai_provider)) {
-                    this.sendError(res, 'active_ai_provider must be "gemini" or "grok"', 400);
+                if (!['gemini', 'grok', 'bedrock'].includes(active_ai_provider)) {
+                    this.sendError(res, 'active_ai_provider must be "gemini", "grok", or "bedrock"', 400);
                     return;
                 }
                 settings.active_ai_provider = active_ai_provider;
@@ -89,6 +89,10 @@ export class AdminController extends BaseController {
             
             if (grok_fallback_enabled !== undefined) {
                 settings.grok_fallback_enabled = !!grok_fallback_enabled;
+            }
+
+            if (bedrock_fallback_enabled !== undefined) {
+                settings.bedrock_fallback_enabled = !!bedrock_fallback_enabled;
             }
             
             await settings.save();

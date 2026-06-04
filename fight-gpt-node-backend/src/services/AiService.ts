@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google
 import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
 import axios from 'axios';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { AnalysisRequest, AnalysisResponse } from '../types';
 import { BaseService } from './BaseService';
 import { IGameMetadataService } from './GameMetadataService';
@@ -136,6 +137,10 @@ export class AiService extends BaseService implements IAiService {
     try {
       const { SystemSettings } = require('../models/SystemSettings');
       const settings = await SystemSettings.getSettings();
+      if (settings.active_ai_provider === 'bedrock') {
+        console.log('[AiService] Active AI provider is Bedrock. Routing to Bedrock analysis.');
+        return await this.generateBedrockAnalysis(request);
+      }
       if (settings.active_ai_provider === 'grok') {
         console.log('[AiService] Active AI provider is Grok. Routing to Grok analysis.');
         return await this.generateGrokAnalysis(request);
@@ -268,6 +273,14 @@ export class AiService extends BaseService implements IAiService {
         try {
           const { SystemSettings } = require('../models/SystemSettings');
           const settings = await SystemSettings.getSettings();
+          
+          if (settings.bedrock_fallback_enabled && settings.active_ai_provider !== 'bedrock') {
+            console.warn('[AiService] Gemini quota exceeded. Flipped provider to Bedrock automatically.');
+            settings.active_ai_provider = 'bedrock';
+            await settings.save();
+            return await this.generateBedrockAnalysis(request);
+          }
+          
           if (settings.grok_fallback_enabled && settings.active_ai_provider !== 'grok') {
             console.warn('[AiService] Gemini quota exceeded. Flipped provider to Grok automatically.');
             settings.active_ai_provider = 'grok';
@@ -275,13 +288,97 @@ export class AiService extends BaseService implements IAiService {
             return await this.generateGrokAnalysis(request);
           }
         } catch (settingsError) {
-          console.error('[AiService] Failed to auto-failover to Grok:', settingsError);
+          console.error('[AiService] Failed to auto-failover:', settingsError);
         }
 
         console.error('[AiService] Circuit Breaker triggered: Quota exceeded. Pausing analysis queue.');
         queueService.pauseQueue().catch(err => console.error('Failed to pause queue', err));
       }
       throw this.handleError(e, 'generateAnalysis');
+    }
+  }
+
+  private async generateBedrockAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const region = process.env.AWS_REGION || 'us-east-1';
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error('AWS Credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not configured.');
+    }
+
+    const client = new BedrockRuntimeClient({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    });
+
+    const prompt = VersionResolver.resolvePromptForGame(
+      request.game_id || 'sf6',
+      request.match_format || '1v1',
+      request.p1_team,
+      request.p2_team,
+    );
+
+    let fullPrompt = prompt;
+
+    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
+    if (fewShotBlock) {
+      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
+    }
+
+    if (request.ai_context) {
+      fullPrompt += `\n\nContext:\n${request.ai_context}`;
+    }
+
+    if (request.video_title) {
+      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
+    }
+
+    fullPrompt += `\n\nNOTE: You are running in fallback mode using AWS Bedrock Claude. Analyze this match based on the video title, game metadata, and context. Fabricate a realistic, highly technical match timeline of 4-6 key exchanges matching the characters involved (${request.p1_character_id || 'Player 1'} vs ${request.p2_character_id || 'Player 2'}) and the game rules. Ground your coaching advice in the characters' specific moves and playstyles. Return ONLY a valid JSON object matching the requested schema. Do not enclose the JSON in markdown blocks like \`\`\`json.`;
+
+    try {
+      const response = await client.send(
+        new InvokeModelCommand({
+          modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+          contentType: 'application/json',
+          accept: 'application/json',
+          body: JSON.stringify({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 4096,
+            system: 'You are MetaPunish — the world\'s most advanced competitive fighting game intelligence system.',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: fullPrompt,
+                  },
+                ],
+              },
+            ],
+            temperature: 0.2,
+          }),
+        })
+      );
+
+      const responseString = Buffer.from(response.body).toString('utf8');
+      const responseObj = JSON.parse(responseString);
+      const responseText = responseObj.content?.[0]?.text || '{}';
+      
+      const cleanedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleanedJson);
+
+      parsed.is_gameplay_video = true;
+      parsed.status = 'analyzed';
+
+      return parsed as AnalysisResponse;
+    } catch (error: any) {
+      console.error('[AiService] Bedrock fallback analysis failed:', error instanceof Error ? error.message : error);
+      throw this.handleError(error, 'generateBedrockAnalysis');
     }
   }
 
@@ -319,7 +416,7 @@ export class AiService extends BaseService implements IAiService {
       const response = await axios.post(
         'https://api.x.ai/v1/chat/completions',
         {
-          model: 'grok-beta',
+          model: 'grok-2',
           messages: [
             {
               role: 'system',
@@ -350,7 +447,10 @@ export class AiService extends BaseService implements IAiService {
 
       return parsed as AnalysisResponse;
     } catch (error: any) {
-      console.error('[AiService] Grok fallback analysis failed:', error instanceof Error ? error.message : error);
+      console.error('[AiService] Grok fallback analysis failed:', error.message);
+      if (error.response) {
+        console.error('[AiService] Grok Error Response:', JSON.stringify(error.response.data, null, 2));
+      }
       throw this.handleError(error, 'generateGrokAnalysis');
     }
   }

@@ -75,6 +75,12 @@ jobs:
             grep -q "^SENTRY_DSN=" .env || echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
             sed -i "s|^GROK_API_KEY=.*|GROK_API_KEY=${{ secrets.GROK_API_KEY }}|" .env || true
             grep -q "^GROK_API_KEY=" .env || echo "GROK_API_KEY=${{ secrets.GROK_API_KEY }}" >> .env
+            sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}|" .env || true
+            grep -q "^AWS_ACCESS_KEY_ID=" .env || echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+            sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}|" .env || true
+            grep -q "^AWS_SECRET_ACCESS_KEY=" .env || echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+            sed -i "s|^AWS_REGION=.*|AWS_REGION=${{ secrets.AWS_REGION }}|" .env || true
+            grep -q "^AWS_REGION=" .env || echo "AWS_REGION=${{ secrets.AWS_REGION || 'us-east-1' }}" >> .env
 
             # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
