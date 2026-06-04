@@ -20,7 +20,7 @@ import { VectorRepository } from './repositories/VectorRepository';
 import { NotificationService } from './services/NotificationService';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
-import { AnalysisJobData, ProofValidationJobData } from './services/QueueService';
+import { queueService, AnalysisJobData, ProofValidationJobData } from './services/QueueService';
 import { GamificationService } from './services/GamificationService';
 import Mission from './models/Mission';
 import UserMission from './models/UserMission';
@@ -34,6 +34,9 @@ async function runWorker() {
         
         // 1. Initialize DB
         await Database.connect();
+
+        // Auto-resume queue on worker startup to resolve past circuit-breaker pauses
+        await queueService.resumeQueue().catch(err => Logger.error('Failed to resume queue on startup', err));
         
         // 2. Initialize Repositories
         const ingestionRepo = new IngestionRepository();
