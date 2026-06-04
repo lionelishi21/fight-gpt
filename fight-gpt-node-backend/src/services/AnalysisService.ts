@@ -61,6 +61,30 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     try {
       this.validateAnalysisRequest(request);
 
+      // --- GLOBAL SYSTEM BUDGET CAP ---
+      try {
+        const { SystemSettings } = require('../models/SystemSettings');
+        const settings = await SystemSettings.getSettings();
+        const globalLimit = settings.monthly_global_limit || 1000;
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const globalCount = await Analysis.countDocuments({
+          created_at: { $gte: startOfMonth }
+        });
+
+        if (globalCount >= globalLimit) {
+          return {
+            success: false,
+            error: `SYSTEM_LIMIT_REACHED: The system has reached its monthly processing budget of ${globalLimit} videos. Please contact support.`
+          };
+        }
+      } catch (settingsError) {
+        console.warn('[AnalysisService] Failed to check monthly global limit settings:', settingsError);
+      }
+
       // --- USER & AUTH CHECK ---
       const user = userId ? await User.findById(userId) : null;
       const isAdmin = user?.role === 'admin';

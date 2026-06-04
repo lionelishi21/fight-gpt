@@ -76,7 +76,7 @@ export class AdminController extends BaseController {
      */
     updateSystemSettings = async (req: Request, res: Response): Promise<void> => {
         try {
-            const { active_ai_provider, grok_fallback_enabled, bedrock_fallback_enabled } = req.body;
+            const { active_ai_provider, grok_fallback_enabled, bedrock_fallback_enabled, monthly_global_limit } = req.body;
             const settings = await SystemSettings.getSettings();
             
             if (active_ai_provider !== undefined) {
@@ -93,6 +93,15 @@ export class AdminController extends BaseController {
 
             if (bedrock_fallback_enabled !== undefined) {
                 settings.bedrock_fallback_enabled = !!bedrock_fallback_enabled;
+            }
+
+            if (monthly_global_limit !== undefined) {
+                const limitVal = parseInt(monthly_global_limit);
+                if (isNaN(limitVal) || limitVal < 1) {
+                    this.sendError(res, 'monthly_global_limit must be a positive integer', 400);
+                    return;
+                }
+                settings.monthly_global_limit = limitVal;
             }
             
             await settings.save();

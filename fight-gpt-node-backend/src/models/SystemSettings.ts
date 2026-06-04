@@ -4,6 +4,7 @@ export interface ISystemSettings {
     active_ai_provider: 'gemini' | 'grok' | 'bedrock';
     grok_fallback_enabled: boolean;
     bedrock_fallback_enabled: boolean;
+    monthly_global_limit: number;
     created_at?: Date;
     updated_at?: Date;
 }
@@ -28,6 +29,11 @@ const SystemSettingsSchema = new Schema<ISystemSettingsDocument>({
         type: Boolean,
         default: true,
         required: true
+    },
+    monthly_global_limit: {
+        type: Number,
+        default: 1000,
+        required: true
     }
 }, {
     timestamps: {
@@ -43,7 +49,8 @@ SystemSettingsSchema.statics.getSettings = async function(): Promise<ISystemSett
         settings = await this.create({
             active_ai_provider: 'gemini',
             grok_fallback_enabled: true,
-            bedrock_fallback_enabled: true
+            bedrock_fallback_enabled: true,
+            monthly_global_limit: 1000
         });
     }
     return settings;
