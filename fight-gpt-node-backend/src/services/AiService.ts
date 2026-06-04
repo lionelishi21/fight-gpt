@@ -303,17 +303,15 @@ export class AiService extends BaseService implements IAiService {
     const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
     const region = process.env.AWS_REGION || 'us-east-1';
 
-    if (!accessKeyId || !secretAccessKey) {
-      throw new Error('AWS Credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not configured.');
-    }
-
-    const client = new BedrockRuntimeClient({
-      region,
-      credentials: {
+    const clientConfig: any = { region };
+    if (accessKeyId && secretAccessKey) {
+      clientConfig.credentials = {
         accessKeyId,
         secretAccessKey,
-      },
-    });
+      };
+    }
+
+    const client = new BedrockRuntimeClient(clientConfig);
 
     const prompt = VersionResolver.resolvePromptForGame(
       request.game_id || 'sf6',
