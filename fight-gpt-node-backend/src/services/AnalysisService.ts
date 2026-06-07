@@ -19,6 +19,8 @@ import { Game } from '../models/Game';
 import TrainingService from './TrainingService';
 import { Analysis } from '../models/Analysis';
 import { AnalysisCorrection } from '../models/AnalysisCorrection';
+import { Character } from '../models/Character';
+import { CharacterEncyclopedia } from '../models/CharacterEncyclopedia';
 
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
@@ -163,6 +165,20 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         analysisResponse = await activeService.analyzeVideo(enrichedRequest);
       } catch (e: any) {
         if (e.name === 'NotGameplayError') {
+          // Save rejected non-gameplay video to the dojo section for detected characters
+          if (e.screenData && request.youtube_url) {
+            const { p1_character, p2_character, rejection_reason } = e.screenData;
+            const charNames = [p1_character, p2_character].filter(Boolean) as string[];
+            if (charNames.length > 0) {
+              this.saveDojoVideo(
+                request.game_id || 'sf6',
+                request.youtube_url,
+                request.video_title || '',
+                charNames,
+                rejection_reason || '',
+              ).catch(err => console.warn('[AnalysisService] Dojo save failed:', err));
+            }
+          }
           return { success: false, error: `NOT_GAMEPLAY: ${e.reason || 'Video does not contain fighting game gameplay. Only match footage is supported.'}` };
         }
         throw e;
@@ -914,6 +930,67 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
       return undefined;
     } catch {
       return undefined;
+    }
+  }
+
+  /**
+   * Saves a rejected non-gameplay video to the CharacterEncyclopedia dojo section
+   * for every character detected by the Stage 1 Flash screen.
+   * Fires-and-forgets — never blocks the main analysis path.
+   */
+  private async saveDojoVideo(
+    gameId: string,
+    youtubeUrl: string,
+    videoTitle: string,
+    characterNames: string[],
+    rejectionReason: string,
+  ): Promise<void> {
+    const match = youtubeUrl.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
+    if (!match) return;
+    const youtubeId = match[1];
+
+    const reason = rejectionReason.toLowerCase();
+    const category: 'guide' | 'match' | 'combo' =
+      reason.includes('combo') ? 'combo' : 'guide';
+    const title = videoTitle || `${gameId} Training Video`;
+    const thumbnail = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+
+    for (const name of characterNames) {
+      if (!name) continue;
+
+      // Escape any regex special chars in the character name
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      const char = await Character.findOne({
+        game_id: gameId,
+        $or: [
+          { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+          { aliases: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        ],
+        is_current: true,
+      }).lean();
+
+      if (!char) {
+        console.warn(`[AnalysisService] Dojo: no character found for "${name}" in ${gameId}`);
+        continue;
+      }
+
+      const characterId = (char as any)._id.toString();
+
+      // Push to encyclopedia only if this youtube_id isn't already there
+      const updated = await CharacterEncyclopedia.updateOne(
+        {
+          game_id: gameId,
+          character_id: characterId,
+          is_current_patch: true,
+          'videos.youtube_id': { $ne: youtubeId },
+        },
+        { $push: { videos: { title, youtube_id: youtubeId, category, thumbnail } } },
+      );
+
+      if (updated.modifiedCount > 0) {
+        console.log(`[AnalysisService] Dojo: saved ${youtubeId} (${category}) for ${name} [${gameId}]`);
+      }
     }
   }
 }

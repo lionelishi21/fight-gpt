@@ -250,7 +250,7 @@ export class AiService extends BaseService implements IAiService {
       const screen = await this.screenVideo(videoUri, request);
       if (!screen.is_gameplay) {
         const reason = screen.rejection_reason || 'Video does not contain fighting game gameplay';
-        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
+        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, screenData: screen });
       }
       console.log(`[AiService] Stage1 passed: ${screen.game_detected} | ${screen.p1_character} vs ${screen.p2_character} (${screen.confidence})`);
 
