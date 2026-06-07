@@ -53,8 +53,8 @@ export class AppConfig {
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
-  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-3.5-flash'; }
-  public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-1.5-pro'; }
+  public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.5-pro'; }
+  public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-2.5-pro'; }
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
   public static get STRIPE_PRO_PRICE_ID(): string { return process.env.STRIPE_PRO_PRICE_ID || ''; }
   public static get STRIPE_COMPETITOR_PRICE_ID(): string { return process.env.STRIPE_COMPETITOR_PRICE_ID || ''; }

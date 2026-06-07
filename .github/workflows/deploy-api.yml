@@ -63,7 +63,7 @@ jobs:
             sed -i "s|^GEMINI_MODEL_PREMIUM=.*|GEMINI_MODEL_PREMIUM=${{ secrets.GEMINI_MODEL_PREMIUM }}|" .env || true
             grep -q "^RESEND_API_KEY=" .env || echo "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
             grep -q "^FROM_EMAIL=" .env || echo "FROM_EMAIL=${{ secrets.FROM_EMAIL }}" >> .env
-            grep -q "^GEMINI_MODEL=" .env || echo "GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}" >> .env
+            grep -q "^GEMINI_MODEL=" .env || echo "GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-pro}" >> .env
             grep -q "^GEMINI_MODEL_PREMIUM=" .env || echo "GEMINI_MODEL_PREMIUM=${GEMINI_MODEL_PREMIUM:-gemini-2.5-pro}" >> .env
             sed -i "s|^YOUTUBE_API_KEY=.*|YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}|" .env || true
             grep -q "^YOUTUBE_API_KEY=" .env || echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
