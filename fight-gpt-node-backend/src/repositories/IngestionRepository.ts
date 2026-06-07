@@ -39,12 +39,18 @@ export class IngestionRepository extends BaseRepository<IIngestionJobDocument> i
         status: IngestionJobStatus,
         extra?: Partial<IIngestionJobDocument>
     ): Promise<IIngestionJobDocument | null> {
-        const update: Record<string, unknown> = { status, ...extra };
+        const update: Record<string, any> = { status, ...extra };
         if (status === 'completed' || status === 'failed') {
             update.processed_at = new Date();
         }
+
+        let mongoUpdate: any = { $set: update };
+        if (status === 'completed') {
+            mongoUpdate.$unset = { error_message: 1 };
+        }
+
         return this.model
-            .findOneAndUpdate({ job_id: jobId }, { $set: update }, { new: true })
+            .findOneAndUpdate({ job_id: jobId }, mongoUpdate, { new: true })
             .exec();
     }
 

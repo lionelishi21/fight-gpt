@@ -481,7 +481,13 @@ export class AdminController extends BaseController {
                 res.status(400).json({ success: false, error: 'id is required' });
                 return;
             }
-            const result = await this.adminService.reanalyzeAnalysis(id);
+            const { p1_character_id, p2_character_id, p1_name, p2_name } = req.body;
+            const result = await this.adminService.reanalyzeAnalysis(id, {
+                p1_character_id,
+                p2_character_id,
+                p1_name,
+                p2_name,
+            });
             this.sendResponse(res, result);
         } catch (error) {
             this.sendError(res, error instanceof Error ? error.message : 'Controller failed');

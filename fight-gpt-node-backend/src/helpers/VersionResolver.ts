@@ -445,4 +445,74 @@ You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in mar
     }
 
     static getCurrentVersion(): string { return 'v1'; }
+
+    /**
+     * Returns a game-specific move notation guide appended to the main prompt.
+     * Teaches Flash the exact button/motion notation per game to reduce misidentification.
+     */
+    static getMoveNotationGuide(gameId: string): string {
+        const id = gameId?.toLowerCase()?.trim() ?? 'sf6';
+
+        const guides: Record<string, string> = {
+            sf6: `
+
+═══ SF6 MOVE NOTATION GUIDE ═══
+Buttons: LP (Light Punch), MP (Medium Punch), HP (Heavy Punch), LK (Light Kick), MK (Medium Kick), HK (Heavy Kick)
+Crouching normals prefix with "cr." (e.g. cr.MK, cr.HP). Jump normals prefix with "j." (e.g. j.HP).
+Drive System: Drive Impact = forward+HP+HK (glowing orange). Drive Parry = hold MP+MK (blue flash). Perfect Parry = precise timing (freeze frame). Drive Rush = forward forward after parry or normal. Drive Reversal = back+HP+HK in blockstun (orange armor).
+Special motions: 236 = quarter circle forward (QCF). 214 = quarter circle back (QCB). 623 = dragon punch (DP). 41236 = half circle forward. 63214 = half circle back.
+Supers: Level 1 (236236+button), Level 2 (214214+button), Level 3 (236236+PP or KK).
+DO NOT call a Drive Impact a "super". DO NOT call a Drive Parry a "block". They are DISTINCT mechanics.`,
+
+            tekken8: `
+
+═══ TEKKEN 8 MOVE NOTATION GUIDE ═══
+Buttons: 1 = Left Punch, 2 = Right Punch, 3 = Left Kick, 4 = Right Kick.
+Directional modifiers: b = back, f = forward, d = down, u = up, db = down-back, df = down-forward, ub = up-back, uf = up-forward, ws = while standing, WS = while standing (rising), BT = back turned.
+Heat System: Heat Burst = rage-like orange aura activation. Heat Smash = powered super move during Heat. Heat Engager = move that activates Heat on hit.
+Rage Art = fully invincible super (glowing red, cinematic). Power Crush = blue armor through highs and mids.
+DO NOT confuse a Power Crush (blue glow) with a Heat Burst (orange glow). DO NOT call a normal string a "combo" unless it deals multiple separate hits in one chain.`,
+
+            mk1: `
+
+═══ MK1 MOVE NOTATION GUIDE ═══
+Buttons: FP = Front Punch, BP = Back Punch, FK = Front Kick, BK = Back Kick.
+Kameo Fighter = separate assist character called with L1/LB. Kameo attacks are NOT the main character's moves — label them as "Kameo: [name]".
+Fatal Blow = desperation super (below 30% HP, cinematic, one use per match). Flawless Block = precise block on last frame (distinct visual flash).
+Breaker = defensive meter spend to escape a combo. Air kombat = air-to-air exchanges are common in MK1.
+DO NOT label a Kameo assist as the main character's move. DO NOT call a Fatal Blow a "combo ender" — it is a specific super mechanic.`,
+
+            ggst: `
+
+═══ GUILTY GEAR STRIVE MOVE NOTATION GUIDE ═══
+Buttons: P = Punch, K = Kick, S = Slash, HS = Heavy Slash, D = Dust.
+Modifiers: f.S = far Slash, c.S = close Slash, j. = jumping, 2 = crouching (2P, 2K, 2S, 2HS, 2D).
+Roman Cancel (RC): Red RC = during attack (costs 50%). Yellow RC = during hit/block. Purple RC = neutral. Blue RC = on burst. Each has distinct color flash.
+Wild Assault = orange-glowing forward momentum attack (D+S+HS in neutral). Overdrive (Super) = 236236+HS or specific motions.
+Wall Break = when corner wall shatters, awarding extra damage and stage change.
+DO NOT confuse Roman Cancel colors — each is a different mechanic. DO NOT call a Dust launcher (D button) a "jump" — it causes a specific launch animation.`,
+
+            dbfz: `
+
+═══ DRAGON BALL FIGHTERZ MOVE NOTATION GUIDE ═══
+Buttons: L = Light, M = Medium, H = Heavy, S = Special, A1 = Assist 1, A2 = Assist 2.
+Notations: 2L = crouching light, 5M = standing medium, j.H = jumping heavy, 214L = quarter circle back + L.
+Super Dash = dash forward through air (blue trail, H+S together). Vanish = teleport behind opponent (M+H, costs 1 bar).
+Dragon Rush = command throw sequence (L+M). Sparking Blast = golden aura power-up (orange flash). Level 3 Super = cinematic super move.
+Tag mechanics: Assist call costs no meter. DHC (Delayed Hyper Combo) = tag during super. Snapback = forces opponent to switch character.
+DO NOT call a Super Dash a "special move" — it is a universal mechanic. DO NOT confuse Vanish (M+H teleport) with a regular special. DO NOT mistake an assist call for a character's own move.`,
+
+            mvc3: `
+
+═══ UMVC3 MOVE NOTATION GUIDE ═══
+Buttons: L = Light, M = Medium, H = Heavy, S = Special/Exchange.
+Assist types: α (alpha) = beam/projectile type, β (beta) = anti-air type, γ (gamma) = ground type.
+Hyper Combo = super move (quarter circle + two buttons). Level 3 Hyper = cinematic super.
+DHC = Delayed Hyper Combo (combo into team super during hyper). TAC = Team Aerial Combo (air exchange with S).
+X-Factor = red power boost (one use, screen flash). Snapback = forces character switch (QCF+S).
+DO NOT call an assist a character's own move — always label as "[character] assist". DO NOT call X-Factor activation a "super".`,
+        };
+
+        return guides[id] || guides['sf6'];
+    }
 }

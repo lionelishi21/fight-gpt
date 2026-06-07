@@ -89,6 +89,17 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
       ...(userId ? { user_id: userId } : {}),
     };
 
+    // If an analysis with the same analysis_id already exists, update it instead of creating a new one
+    const existing = await this.model.findOne({ analysis_id: analysisId });
+    if (existing) {
+      const updated = await this.model.findOneAndUpdate(
+        { analysis_id: analysisId },
+        { $set: data },
+        { new: true }
+      );
+      if (updated) return updated;
+    }
+
     return this.create(data);
   }
 

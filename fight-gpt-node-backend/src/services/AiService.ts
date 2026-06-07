@@ -246,7 +246,31 @@ export class AiService extends BaseService implements IAiService {
     };
 
     try {
-      const result = await this.model.generateContent({ 
+      // ── Stage 1: Flash screen (~$0.02) — reject non-gameplay before any expensive call ──
+      const screen = await this.screenVideo(videoUri, request);
+      if (!screen.is_gameplay) {
+        const reason = screen.rejection_reason || 'Video does not contain fighting game gameplay';
+        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
+      }
+      console.log(`[AiService] Stage1 passed: ${screen.game_detected} | ${screen.p1_character} vs ${screen.p2_character} (${screen.confidence})`);
+
+      // ── Stage 2: Flash + thinking (~$0.20) — full structured analysis ──
+      let flashResult: AnalysisResponse | null = null;
+      try {
+        flashResult = await this.generateFlashThinkingAnalysis(videoUri, request, screen, analysisResponseSchema);
+        if (flashResult.timeline && flashResult.timeline.length >= 5) {
+          console.log(`[AiService] Stage2 Flash sufficient: ${flashResult.timeline.length} timeline events`);
+          return flashResult;
+        }
+        console.log(`[AiService] Stage2 Flash thin (${flashResult?.timeline?.length ?? 0} events) — escalating to Pro`);
+      } catch (flashErr: any) {
+        if (flashErr.name === 'NotGameplayError') throw flashErr;
+        console.warn('[AiService] Stage2 Flash failed, escalating to Pro:', flashErr?.message);
+      }
+
+      // ── Stage 3: Gemini Pro (~$3.50) — rare escalation for thin/failed Flash results ──
+      console.log('[AiService] Stage3 Gemini Pro running');
+      const result = await this.model.generateContent({
         contents: [{ role: 'user', parts: contentParts }],
         generationConfig: {
           responseMimeType: 'application/json',
@@ -256,7 +280,6 @@ export class AiService extends BaseService implements IAiService {
       const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       try {
         const parsed = JSON.parse(responseText) as any;
-        // Reject non-gameplay content before it pollutes the DB
         if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
           const reason = parsed.reason || 'Video does not contain fighting game gameplay';
           throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
@@ -270,23 +293,24 @@ export class AiService extends BaseService implements IAiService {
         return parsed as AnalysisResponse;
       } catch (e: any) {
         if (e.name === 'NotGameplayError') throw e;
-        console.error('Failed to parse Gemini response', responseText);
+        console.error('Failed to parse Gemini Pro response', responseText);
         throw new Error('Invalid JSON response from Gemini API');
       }
     } catch (e: any) {
+      if (e.name === 'NotGameplayError') throw e;
       const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits') || e.message.includes('403') || e.message.includes('dunning'));
       if (isQuotaError) {
         try {
           const { SystemSettings } = require('../models/SystemSettings');
           const settings = await SystemSettings.getSettings();
-          
+
           if (settings.bedrock_fallback_enabled && settings.active_ai_provider !== 'bedrock') {
             console.warn('[AiService] Gemini quota exceeded. Flipped provider to Bedrock automatically.');
             settings.active_ai_provider = 'bedrock';
             await settings.save();
             return await this.generateBedrockAnalysis(request);
           }
-          
+
           if (settings.grok_fallback_enabled && settings.active_ai_provider !== 'grok') {
             console.warn('[AiService] Gemini quota exceeded. Flipped provider to Grok automatically.');
             settings.active_ai_provider = 'grok';
@@ -302,6 +326,126 @@ export class AiService extends BaseService implements IAiService {
       }
       throw this.handleError(e, 'generateAnalysis');
     }
+  }
+
+  // ─── Stage 1: cheap Flash screen ────────────────────────────────────────────
+  // Answers: is this real gameplay? what game? what characters?
+  // Cost: ~$0.02. Rejects non-gameplay before any expensive call runs.
+  private async screenVideo(
+    videoUri: string | null,
+    request: AnalysisRequest,
+  ): Promise<{ is_gameplay: boolean; game_detected: string; p1_character: string; p2_character: string; confidence: string; rejection_reason: string }> {
+    const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const contentParts: any[] = [];
+    if (videoUri && videoUri.startsWith('gs://')) {
+      const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
+      contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
+    } else if (request.youtube_url) {
+      contentParts.push({ fileData: { fileUri: request.youtube_url } });
+    }
+
+    contentParts.push({
+      text: `You are a fighting game video classifier. Watch this video and answer ONLY these questions.
+
+Return a JSON object with exactly these fields:
+{
+  "is_gameplay": true/false,
+  "game_detected": "sf6 | tekken8 | mk1 | ggst | dbfz | mvc3 | other | unknown",
+  "p1_character": "character name or null",
+  "p2_character": "character name or null",
+  "confidence": "high | medium | low",
+  "rejection_reason": "null if gameplay, else brief reason e.g. 'patch notes video' or 'character intro montage'"
+}
+
+is_gameplay = true ONLY if:
+- Two players are actively fighting each other in a versus match
+- The match has rounds, a health bar HUD, and real competitive gameplay
+- NOT: combo tutorials, tier lists, patch notes, AI intros, story mode cutscenes, interviews, reaction videos
+
+Return ONLY the JSON. No markdown.`,
+    });
+
+    try {
+      const result = await flashModel.generateContent({
+        contents: [{ role: 'user', parts: contentParts }],
+        generationConfig: { responseMimeType: 'application/json' } as any,
+      });
+      const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch (err) {
+      console.warn('[AiService] Screen failed, defaulting to gameplay=true:', err);
+      // If screening itself fails, let the main analysis try
+      return { is_gameplay: true, game_detected: request.game_id || 'unknown', p1_character: '', p2_character: '', confidence: 'low', rejection_reason: '' };
+    }
+  }
+
+  // ─── Stage 2: Flash with thinking mode ───────────────────────────────────────
+  // Full structured analysis using Flash + 1024-token thinking budget.
+  // Produces the same schema as Pro at ~1/8th the cost.
+  private async generateFlashThinkingAnalysis(
+    videoUri: string | null,
+    request: AnalysisRequest,
+    screen: { p1_character: string; p2_character: string },
+    analysisResponseSchema: any,
+  ): Promise<AnalysisResponse> {
+    const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    // Merge screen hints into request so the prompt has character context
+    const enrichedRequest: AnalysisRequest = {
+      ...request,
+      p1_character_id: request.p1_character_id || screen.p1_character || undefined,
+      p2_character_id: request.p2_character_id || screen.p2_character || undefined,
+    };
+
+    const prompt = VersionResolver.resolvePromptForGame(
+      enrichedRequest.game_id || 'sf6',
+      enrichedRequest.match_format || '1v1',
+      enrichedRequest.p1_team,
+      enrichedRequest.p2_team,
+    );
+
+    const fewShotBlock = await this.buildFewShotBlock(enrichedRequest).catch(() => '');
+    let fullPrompt = fewShotBlock ? fewShotBlock + '\n\n' + prompt : prompt;
+
+    if (enrichedRequest.ai_context) fullPrompt += `\n\nContext:\n${enrichedRequest.ai_context}`;
+    if (enrichedRequest.video_title)  fullPrompt += `\n\nVideo Title: ${enrichedRequest.video_title}`;
+
+    // Game-specific move notation guide injected to reduce misidentification
+    fullPrompt += VersionResolver.getMoveNotationGuide(enrichedRequest.game_id || 'sf6');
+
+    const contentParts: any[] = [];
+    if (videoUri && videoUri.startsWith('gs://')) {
+      const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
+      contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
+    } else if (enrichedRequest.youtube_url) {
+      contentParts.push({ fileData: { fileUri: enrichedRequest.youtube_url } });
+    }
+    contentParts.push({ text: fullPrompt });
+
+    const result = await flashModel.generateContent({
+      contents: [{ role: 'user', parts: contentParts }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: analysisResponseSchema,
+        thinkingConfig: { thinkingBudget: 1024 },
+      } as any,
+    });
+
+    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const parsed = JSON.parse(responseText) as any;
+
+    if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
+      throw Object.assign(new Error(parsed.reason || 'Not gameplay'), { name: 'NotGameplayError' });
+    }
+
+    if (!parsed.p1_character) parsed.p1_character = enrichedRequest.p1_character_id;
+    if (!parsed.p2_character) parsed.p2_character = enrichedRequest.p2_character_id;
+    if (!parsed.p1_name)      parsed.p1_name      = enrichedRequest.p1_name;
+    if (!parsed.p2_name)      parsed.p2_name      = enrichedRequest.p2_name;
+
+    return parsed as AnalysisResponse;
   }
 
   private async generateBedrockAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {

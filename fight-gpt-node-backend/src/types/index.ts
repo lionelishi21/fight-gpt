@@ -56,6 +56,7 @@ export interface AnalysisRequest {
   video_title?: string; // Original YouTube/Video title for better AI context
   metadata?: Record<string, any>; // Flexible metadata storage
   force?: boolean; // Force re-analysis and bypass cache
+  analysis_id?: string; // Original analysis ID for overwriting on reprocess
 }
 
 /**

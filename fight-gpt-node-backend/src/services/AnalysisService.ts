@@ -113,8 +113,8 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         }
       }
 
-      // Bypass cache only if forced re-analysis is requested AND user is admin
-      const shouldForce = request.force && isAdmin;
+      // Bypass cache if forced re-analysis is requested
+      const shouldForce = !!request.force;
       const cachedAnalysis = shouldForce ? null : await this.getCachedAnalysis(request);
       if (cachedAnalysis) {
         // If this authenticated user doesn't have their own record for this analysis,
@@ -168,7 +168,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         throw e;
       }
 
-      const analysisId = UuidHelper.generate();
+      const analysisId = request.analysis_id || UuidHelper.generate();
 
       // --- MOVE NAME VALIDATION ---
       // Cross-check timeline move names against the CharacterEncyclopedia.
@@ -559,24 +559,174 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
       const gameMetadataResult = await this.gameMetadataService.getCurrentGameMetadataByGameId(request.game_id);
       const gameMetadata = gameMetadataResult.success ? gameMetadataResult.data : null;
 
+      // 1. Auto-detect character IDs and player names from the video title if they are missing
+      if (enrichedRequest.video_title) {
+        const title = enrichedRequest.video_title;
+        const vsParts = title.split(/\s+(?:vs\.?|VS\.?|-vs-)\s+/i);
+
+        // Fetch known character IDs for this game to match against
+        const encsResult = await this.characterEncyclopediaService.getEncyclopediasByGame(request.game_id);
+        const encyclopedias = encsResult.success && encsResult.data ? encsResult.data : [];
+        const knownCharacterIds = encyclopedias.map(e => e.character_id);
+
+        const cleanPlayerName = (name: string): string => {
+          let cleaned = name;
+          // If name contains a pipe, dash, colon, or slash, take the last part
+          const lastPartMatch = cleaned.split(/[|:\-/]/);
+          if (lastPartMatch.length > 1) {
+            cleaned = lastPartMatch[lastPartMatch.length - 1];
+          }
+          return cleaned
+            .replace(/\b(?:sf6|sfv|tekken\s*8?|t8|ggst|mk1|match|tournament|set|grand\s*final[s]?|winners\s*final[s]?|losers\s*final[s]?|bracket|pools)\b/gi, '')
+            .replace(/[^a-zA-Z0-9\s.()\[\]]/g, '')
+            .trim();
+        };
+
+        const matchCharacter = (input: string, charIds: string[]): string | undefined => {
+          if (!input) return undefined;
+          const normalizedInput = input.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!normalizedInput) return undefined;
+
+          // Try exact match first
+          for (const id of charIds) {
+            const normalizedId = id.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (normalizedInput === normalizedId) {
+              return id;
+            }
+          }
+
+          // Try aliases/special cases
+          for (const id of charIds) {
+            const normalizedId = id.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (normalizedId === 'chunli' && (normalizedInput.includes('chun') || normalizedInput.includes('li'))) {
+              return id;
+            }
+            if (normalizedId === 'mbison' || normalizedId === 'bison') {
+              if (normalizedInput.includes('bison') || normalizedInput.includes('mbison')) {
+                return id;
+              }
+            }
+            if (normalizedId === 'queendizzy' || normalizedId === 'dizzy') {
+              if (normalizedInput.includes('dizzy')) {
+                return id;
+              }
+            }
+            
+            if (normalizedInput.length >= 3 && (normalizedId.includes(normalizedInput) || normalizedInput.includes(normalizedId))) {
+              return id;
+            }
+          }
+          return undefined;
+        };
+
+        if (vsParts.length >= 2) {
+          const leftSide = vsParts[0].trim();
+          const rightSide = vsParts[1].trim();
+
+          const parseSide = (side: string) => {
+            let playerName: string | undefined;
+            let detectedCharName: string | undefined;
+
+            const parenMatch = side.match(/(.*?)\(([^)]+)\)(.*)/);
+            const bracketMatch = side.match(/(.*?)\[([^\]]+)\](.*)/);
+
+            if (parenMatch) {
+              playerName = cleanPlayerName(parenMatch[1] + parenMatch[3]);
+              detectedCharName = parenMatch[2].trim();
+            } else if (bracketMatch) {
+              playerName = cleanPlayerName(bracketMatch[1] + bracketMatch[3]);
+              detectedCharName = bracketMatch[2].trim();
+            } else {
+              // No parentheses or brackets. Let's see if the entire side matches a character name
+              const cleanedSide = cleanPlayerName(side);
+              const matchedChar = matchCharacter(cleanedSide, knownCharacterIds);
+              if (matchedChar) {
+                detectedCharName = cleanedSide;
+              } else {
+                playerName = cleanedSide;
+              }
+            }
+
+            // If a playerName matches a character name, clear playerName and set detectedCharName
+            if (playerName) {
+              const matchedChar = matchCharacter(playerName, knownCharacterIds);
+              if (matchedChar) {
+                detectedCharName = playerName;
+                playerName = undefined;
+              }
+            }
+
+            // Resolve character ID from detected character name
+            let characterId: string | undefined;
+            if (detectedCharName) {
+              characterId = matchCharacter(detectedCharName, knownCharacterIds);
+            }
+
+            return { playerName, characterId };
+          };
+
+          const leftResult = parseSide(leftSide);
+          const rightResult = parseSide(rightSide);
+
+          if (!enrichedRequest.p1_character_id && leftResult.characterId) {
+            enrichedRequest.p1_character_id = leftResult.characterId;
+          }
+          if (!enrichedRequest.p2_character_id && rightResult.characterId) {
+            enrichedRequest.p2_character_id = rightResult.characterId;
+          }
+          if (!enrichedRequest.p1_name && leftResult.playerName) {
+            enrichedRequest.p1_name = leftResult.playerName;
+          }
+          if (!enrichedRequest.p2_name && rightResult.playerName) {
+            enrichedRequest.p2_name = rightResult.playerName;
+          }
+        }
+
+        // Fallback: scan whole title for character names if still not found
+        if (!enrichedRequest.p1_character_id || !enrichedRequest.p2_character_id) {
+          const foundIds: string[] = [];
+          const normTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+          
+          for (const id of knownCharacterIds) {
+            const normId = id.replace(/[^a-z0-9]/g, '');
+            if (normTitle.includes(normId) && !foundIds.includes(id)) {
+              foundIds.push(id);
+            } else if (id === 'chunli' && (normTitle.includes('chun') || normTitle.includes('li')) && !foundIds.includes(id)) {
+              foundIds.push(id);
+            } else if ((id === 'bison' || id === 'mbison') && normTitle.includes('bison') && !foundIds.includes(id)) {
+              foundIds.push(id);
+            } else if ((id === 'queendizzy' || id === 'dizzy') && normTitle.includes('dizzy') && !foundIds.includes(id)) {
+              foundIds.push(id);
+            }
+          }
+
+          if (!enrichedRequest.p1_character_id && foundIds.length > 0) {
+            enrichedRequest.p1_character_id = foundIds[0];
+          }
+          if (!enrichedRequest.p2_character_id && foundIds.length > 1) {
+            enrichedRequest.p2_character_id = foundIds[1];
+          }
+        }
+      }
+
       let p1Rules = null;
       let p2Rules = null;
       let p1Enc = null;
       let p2Enc = null;
 
-      if (request.p1_character_id) {
-        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p1_character_id);
+      if (enrichedRequest.p1_character_id) {
+        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, enrichedRequest.p1_character_id);
         if (rulesRes.success) p1Rules = rulesRes.data;
         
-        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, request.p1_character_id);
+        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, enrichedRequest.p1_character_id);
         if (encRes.success) p1Enc = encRes.data;
       }
 
-      if (request.p2_character_id) {
-        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, request.p2_character_id);
+      if (enrichedRequest.p2_character_id) {
+        const rulesRes = await this.characterEncyclopediaService.getGameRules(request.game_id, enrichedRequest.p2_character_id);
         if (rulesRes.success) p2Rules = rulesRes.data;
 
-        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, request.p2_character_id);
+        const encRes = await this.characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(request.game_id, enrichedRequest.p2_character_id);
         if (encRes.success) p2Enc = encRes.data;
       }
 
