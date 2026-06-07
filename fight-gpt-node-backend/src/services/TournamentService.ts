@@ -5,6 +5,9 @@ import { IIngestionService } from './IngestionService';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { Logger } from '../helpers/logger';
 import { ApiResponse } from '../types';
+import { IngestionJob } from '../models/IngestionJob';
+import { queueService } from './QueueService';
+import { normalizeYoutubeUrl } from '../helpers/youtubeHelper';
 
 // Start.gg videogame IDs
 const STARTGG_GAME_IDS: Record<string, number> = {
@@ -26,6 +29,7 @@ export interface ITournamentService {
     syncFromStartGg(gameIds?: string[]): Promise<ApiResponse<{ synced: number; errors: string[] }>>;
     syncResults(tournamentId: string): Promise<ApiResponse<{ placements: number }>>;
     queueTournamentVods(tournamentId: string): Promise<ApiResponse<{ queued: number }>>;
+    syncStartGgVods(gameIds?: string[]): Promise<ApiResponse<{ queued: number; skipped: number; errors: string[] }>>;
 }
 
 export class TournamentService extends BaseService implements ITournamentService {
@@ -274,5 +278,170 @@ export class TournamentService extends BaseService implements ITournamentService
         await this.tournamentRepository.markVodsIngested(tournamentId, vodUrls);
         Logger.info(`[TournamentService] Queued ${totalQueued} VODs for tournament ${tournamentId}`);
         return { success: true, data: { queued: totalQueued } };
+    }
+
+    /**
+     * Query start.gg directly for completed sets that have YouTube VOD URLs attached.
+     * Creates IngestionJob records pre-labeled with player names so the AI doesn't
+     * need to guess them from the video.
+     */
+    async syncStartGgVods(
+        gameIds?: string[],
+    ): Promise<ApiResponse<{ queued: number; skipped: number; errors: string[] }>> {
+        const token = this.startGgToken || process.env.START_GG_TOKEN;
+        if (!token) return { success: false, error: 'START_GG_TOKEN not configured' };
+
+        const targetGameIds = gameIds || Object.keys(STARTGG_GAME_IDS);
+        const errors: string[] = [];
+        let queued = 0;
+        let skipped = 0;
+
+        // GraphQL query: recent completed tournaments → events → sets with VOD URLs
+        const query = `
+            query SetsWithVods($gameIds: [ID], $page: Int) {
+                tournaments(query: {
+                    filter: { videogameIds: $gameIds, past: true }
+                    sortBy: "startAt desc"
+                    page: $page
+                    perPage: 10
+                }) {
+                    nodes {
+                        name
+                        events(filter: { videogameId: $gameIds }) {
+                            id
+                            name
+                            videogame { id name }
+                            sets(
+                                page: 1
+                                perPage: 20
+                                filters: { state: 3 }
+                            ) {
+                                nodes {
+                                    fullRoundText
+                                    slots {
+                                        entrant {
+                                            name
+                                            participants {
+                                                player { gamerTag }
+                                            }
+                                        }
+                                    }
+                                    vod { url }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        for (const gameId of targetGameIds) {
+            const startGgId = STARTGG_GAME_IDS[gameId];
+            if (!startGgId) continue;
+
+            try {
+                const response = await fetch('https://api.start.gg/gql/alpha', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        query,
+                        variables: { gameIds: [startGgId], page: 1 },
+                    }),
+                });
+
+                if (!response.ok) {
+                    errors.push(`start.gg API error for ${gameId}: ${response.status}`);
+                    continue;
+                }
+
+                const json = await response.json();
+                const tournaments = json.data?.tournaments?.nodes || [];
+
+                for (const tournament of tournaments) {
+                    const tournamentName: string = tournament.name || 'Unknown Tournament';
+
+                    for (const event of (tournament.events || [])) {
+                        const detectedGameId = GAME_ID_REVERSE[event.videogame?.id] || gameId;
+
+                        for (const set of (event.sets?.nodes || [])) {
+                            const vodUrl: string | undefined = set.vod?.url;
+                            if (!vodUrl) continue;
+
+                            // Only handle YouTube URLs for now — Twitch goes through TwitchDiscoveryService
+                            const isYoutube = vodUrl.includes('youtube.com') || vodUrl.includes('youtu.be');
+                            if (!isYoutube) { skipped++; continue; }
+
+                            let normalizedUrl: string;
+                            try {
+                                normalizedUrl = normalizeYoutubeUrl(vodUrl);
+                            } catch {
+                                skipped++;
+                                continue;
+                            }
+
+                            // Skip if already ingested
+                            const existing = await IngestionJob.findOne({ youtube_url: normalizedUrl }).lean();
+                            if (existing) { skipped++; continue; }
+
+                            // Extract player names from set slots
+                            const slots = set.slots || [];
+                            const p1Name: string | undefined = slots[0]?.entrant?.participants?.[0]?.player?.gamerTag
+                                || slots[0]?.entrant?.name;
+                            const p2Name: string | undefined = slots[1]?.entrant?.participants?.[0]?.player?.gamerTag
+                                || slots[1]?.entrant?.name;
+
+                            const roundText: string = set.fullRoundText || '';
+                            const videoTitle = `${tournamentName} — ${roundText}${p1Name && p2Name ? ` | ${p1Name} vs ${p2Name}` : ''}`.trim();
+
+                            const jobId = UuidHelper.generate();
+
+                            try {
+                                await IngestionJob.create({
+                                    job_id: jobId,
+                                    game_id: detectedGameId,
+                                    youtube_url: normalizedUrl,
+                                    video_title: videoTitle,
+                                    search_query: `startgg:${tournamentName}`,
+                                    source: 'startgg',
+                                    video_platform: 'youtube',
+                                    p1_name: p1Name,
+                                    p2_name: p2Name,
+                                    tournament_name: tournamentName,
+                                    status: 'pending',
+                                    retry_count: 0,
+                                });
+
+                                await queueService.addAnalysisJob({
+                                    job_id: jobId,
+                                    game_id: detectedGameId,
+                                    youtube_url: normalizedUrl,
+                                    video_title: videoTitle,
+                                    video_platform: 'youtube',
+                                    p1_name: p1Name,
+                                    p2_name: p2Name,
+                                    tournament_name: tournamentName,
+                                    source: 'ingestion',
+                                });
+
+                                queued++;
+                                Logger.info(`[TournamentService] start.gg VOD queued: ${p1Name} vs ${p2Name} — ${tournamentName}`);
+                            } catch {
+                                // Duplicate URL index — already queued
+                                skipped++;
+                            }
+                        }
+                    }
+                }
+            } catch (e: any) {
+                errors.push(`${gameId}: ${e.message}`);
+                Logger.error(`[TournamentService] syncStartGgVods failed for ${gameId}: ${e.message}`);
+            }
+        }
+
+        Logger.info(`[TournamentService] start.gg VOD sync: ${queued} queued, ${skipped} skipped`);
+        return { success: true, data: { queued, skipped, errors } };
     }
 }

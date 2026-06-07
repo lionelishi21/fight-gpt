@@ -14,6 +14,13 @@ export interface AnalysisJobData {
     job_id: string;
     pro_player_id?: string;
     video_title?: string;
+    video_platform?: 'youtube' | 'twitch';
+    // Pre-labeled metadata (from start.gg or Twitch metadata — skips AI guessing)
+    p1_name?: string;
+    p2_name?: string;
+    p1_character_id?: string;
+    p2_character_id?: string;
+    tournament_name?: string;
     // Priority: 1 = user upload (high), 10 = background ingestion (low)
     source?: 'user' | 'ingestion';
 }

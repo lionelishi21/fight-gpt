@@ -54,6 +54,7 @@ import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
 import { TournamentService } from './services/TournamentService';
+import { TwitchDiscoveryService } from './services/TwitchDiscoveryService';
 import { LobbyService } from './services/LobbyService';
 import { NotificationService } from './services/NotificationService';
 import { AutoResearchService } from './services/AutoResearchService';
@@ -99,6 +100,7 @@ export class App {
   private io: any;
   private routes: Routes;
   private ingestionService: InstanceType<typeof IngestionService> | null = null;
+  private tournamentService: InstanceType<typeof TournamentService> | null = null;
   private rosterSyncService: RosterSyncService | null = null;
   private trainingService: TrainingService | null = null;
   private trendAnalysisService: ITrendAnalysisService | null = null;
@@ -247,12 +249,12 @@ export class App {
     const engagementRoutes = new EngagementRoutes(engagementController);
 
     const tournamentRepository = AppConfig.MONGODB_URI ? new TournamentRepository() : null as any;
-    const tournamentService = AppConfig.MONGODB_URI ? new TournamentService(
+    this.tournamentService = AppConfig.MONGODB_URI ? new TournamentService(
       tournamentRepository,
       this.ingestionService || undefined,
       AppConfig.START_GG_TOKEN,
-    ) : null as any;
-    const tournamentController = AppConfig.MONGODB_URI ? new TournamentController(tournamentService) : null;
+    ) : null;
+    const tournamentController = AppConfig.MONGODB_URI ? new TournamentController(this.tournamentService!) : null;
 
     this.routes = new Routes(
       analysisController,
@@ -588,6 +590,25 @@ export class App {
 
       // Start onboarding drip email scheduler (every 4 hours)
       new DripService().startScheduler();
+
+      // Start Twitch VOD discovery (every 6 hours, requires TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET)
+      new TwitchDiscoveryService().startScheduler();
+
+      // Start start.gg direct VOD sync (every 6 hours — pulls sets with YouTube VODs attached)
+      if (AppConfig.MONGODB_URI && AppConfig.START_GG_TOKEN && this.tournamentService) {
+        const sgVodSync = async () => {
+          try {
+            const result = await this.tournamentService!.syncStartGgVods();
+            if (result.success) {
+              Logger.info(`[Scheduler] start.gg VODs: ${result.data?.queued} queued, ${result.data?.skipped} skipped`);
+            }
+          } catch (e: any) {
+            Logger.error('[Scheduler] start.gg VOD sync failed:', e.message);
+          }
+        };
+        sgVodSync();
+        setInterval(sgVodSync, 6 * 60 * 60 * 1000);
+      }
 
       // Seed default lobbies for active games (non-blocking)
       this.lobbyService.seedDefaultLobbies().catch(() => {});

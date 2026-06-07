@@ -8,15 +8,22 @@ export interface IIngestionJob {
     youtube_url: string;
     video_title?: string;
     channel_name?: string;
-    search_query: string;         // The query that surfaced this video
-    source: 'scheduled' | 'manual' | 'tournament' | 'pro_scout';
+    search_query: string;
+    source: 'scheduled' | 'manual' | 'tournament' | 'pro_scout' | 'startgg' | 'twitch';
+    video_platform?: 'youtube' | 'twitch';
+    // Pre-labeled metadata from start.gg or other sources (skips AI guessing)
+    p1_name?: string;
+    p2_name?: string;
+    p1_character_id?: string;
+    p2_character_id?: string;
+    tournament_name?: string;
     status: IngestionJobStatus;
     error_message?: string;
-    analysis_id?: string;         // Linked analysis result once processed
-    scenario_count?: number;      // Number of scenarios extracted
+    analysis_id?: string;
+    scenario_count?: number;
     retry_count: number;
     processed_at?: Date;
-    pro_player_id?: string; // Link to pro player if this is a scout job
+    pro_player_id?: string;
     created_at?: Date;
     updated_at?: Date;
 }
@@ -32,7 +39,13 @@ const IngestionJobSchema = new Schema<IIngestionJobDocument>({
     video_title: { type: String },
     channel_name: { type: String },
     search_query: { type: String, required: true },
-    source: { type: String, enum: ['scheduled', 'manual', 'tournament', 'pro_scout'], default: 'scheduled' },
+    source: { type: String, enum: ['scheduled', 'manual', 'tournament', 'pro_scout', 'startgg', 'twitch'], default: 'scheduled' },
+    video_platform: { type: String, enum: ['youtube', 'twitch'] },
+    p1_name: { type: String },
+    p2_name: { type: String },
+    p1_character_id: { type: String },
+    p2_character_id: { type: String },
+    tournament_name: { type: String },
     status: {
         type: String,
         enum: ['pending', 'processing', 'completed', 'failed', 'skipped'],

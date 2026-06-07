@@ -25,8 +25,62 @@ import { GamificationService } from './services/GamificationService';
 import Mission from './models/Mission';
 import UserMission from './models/UserMission';
 import { AppConfig } from './config/app';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { Storage } from '@google-cloud/storage';
 
+const execAsync = promisify(exec);
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+/**
+ * Downloads the first 20 minutes of a Twitch VOD using streamlink + ffmpeg,
+ * uploads to GCS, and returns the GCS URI for Gemini.
+ * Returns null if streamlink/ffmpeg are unavailable or download fails.
+ */
+async function downloadTwitchVod(vodUrl: string, jobId: string): Promise<string | null> {
+    const bucket = AppConfig.GOOGLE_STORAGE_BUCKET;
+    if (!bucket) {
+        Logger.warn('[Worker] GOOGLE_STORAGE_BUCKET not set — cannot upload Twitch VOD');
+        return null;
+    }
+
+    const tmpFile = path.join(os.tmpdir(), `twitch_${jobId}.mp4`);
+    const gcsPath = `twitch-vods/${jobId}.mp4`;
+
+    try {
+        // Step 1: resolve HLS stream URL via streamlink
+        Logger.info(`[Worker] Resolving Twitch HLS URL for ${vodUrl}`);
+        const { stdout: hlsUrl } = await execAsync(
+            `streamlink --stream-url "${vodUrl}" 720p,480p,360p,best`,
+            { timeout: 30_000 }
+        );
+
+        // Step 2: download first 20 minutes via ffmpeg
+        Logger.info(`[Worker] Downloading first 20 min of Twitch VOD`);
+        await execAsync(
+            `ffmpeg -y -i "${hlsUrl.trim()}" -t 1200 -c copy "${tmpFile}"`,
+            { timeout: 300_000 }
+        );
+
+        // Step 3: upload to GCS
+        Logger.info(`[Worker] Uploading Twitch segment to GCS`);
+        const storage = new Storage({ projectId: AppConfig.GOOGLE_CLOUD_PROJECT });
+        await storage.bucket(bucket).upload(tmpFile, {
+            destination: gcsPath,
+            metadata: { contentType: 'video/mp4' },
+        });
+
+        return `gs://${bucket}/${gcsPath}`;
+    } catch (err: any) {
+        Logger.error(`[Worker] Twitch VOD download/upload failed: ${err.message}`);
+        return null;
+    } finally {
+        try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch {}
+    }
+}
 
 async function runWorker() {
     try {
@@ -89,19 +143,50 @@ async function runWorker() {
         const worker = new Worker<AnalysisJobData>(
             'analysis-queue',
             async (job) => {
-                const { job_id, youtube_url, game_id, pro_player_id } = job.data;
-                
-                Logger.info(`[Worker] Processing job ${job_id} (${youtube_url})`);
+                const {
+                    job_id, youtube_url, game_id, pro_player_id,
+                    video_title, video_platform,
+                    p1_name, p2_name, p1_character_id, p2_character_id, tournament_name,
+                } = job.data;
+
+                Logger.info(`[Worker] Processing job ${job_id} [${video_platform || 'youtube'}] (${youtube_url})`);
 
                 try {
                     // Mark as processing in DB
                     await ingestionRepo.updateJobStatus(job_id, 'processing');
 
-                    // Run analysis
+                    // For Twitch VODs: download HLS segment → upload to GCS → pass GCS URI
+                    // For YouTube: pass URL directly to Gemini (native support)
+                    let resolvedUrl = youtube_url;
+                    let gcsUploadPath: string | null = null;
+                    if (video_platform === 'twitch' || youtube_url.includes('twitch.tv')) {
+                        const download = await downloadTwitchVod(youtube_url, job_id);
+                        if (download) {
+                            resolvedUrl = download; // GCS URI
+                            gcsUploadPath = download;
+                        } else {
+                            Logger.warn(`[Worker] Twitch download failed for ${youtube_url}, skipping`);
+                            await ingestionRepo.updateJobStatus(job_id, 'skipped', { error_message: 'Twitch download failed' } as any);
+                            return;
+                        }
+                    }
+
+                    // Build enriched title so AI has tournament context even if it can't read the video title
+                    let enrichedTitle = video_title || '';
+                    if (tournament_name && !enrichedTitle.includes(tournament_name)) {
+                        enrichedTitle = `${tournament_name} — ${enrichedTitle}`.trim().replace(/^—\s/, '');
+                    }
+
+                    // Run analysis — pre-labels from start.gg bypass AI character guessing
                     const result = await analysisService.analyzeVideo({
-                        youtube_url,
+                        youtube_url: resolvedUrl,
                         game_id,
-                        pro_player_id
+                        pro_player_id,
+                        video_title: enrichedTitle || undefined,
+                        p1_name,
+                        p2_name,
+                        p1_character_id,
+                        p2_character_id,
                     });
 
                     if (result.success && result.data) {
