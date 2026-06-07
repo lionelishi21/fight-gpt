@@ -8,7 +8,6 @@ import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncycl
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 import { queueService } from './QueueService';
-import { IAnalysisService } from './AnalysisService';
 import { normalizeYoutubeUrl } from '../helpers/youtubeHelper';
 
 export interface IAdminService {
@@ -23,17 +22,31 @@ export interface IAdminService {
     createCharacter(data: any): Promise<ApiResponse<any>>;
     updateCharacter(id: string, data: any): Promise<ApiResponse<any>>;
     deleteCharacter(id: string): Promise<ApiResponse<boolean>>;
-    reanalyzeAnalysis(analysisId: string): Promise<ApiResponse<any>>;
+    reanalyzeAnalysis(
+        analysisId: string,
+        overrides?: {
+            p1_character_id?: string;
+            p2_character_id?: string;
+            p1_name?: string;
+            p2_name?: string;
+        }
+    ): Promise<ApiResponse<any>>;
 }
 
 export class AdminService extends BaseService implements IAdminService {
-    constructor(
-        private readonly analysisService?: IAnalysisService
-    ) {
+    constructor() {
         super();
     }
 
-    async reanalyzeAnalysis(analysisId: string): Promise<ApiResponse<any>> {
+    async reanalyzeAnalysis(
+        analysisId: string,
+        overrides?: {
+            p1_character_id?: string;
+            p2_character_id?: string;
+            p1_name?: string;
+            p2_name?: string;
+        }
+    ): Promise<ApiResponse<any>> {
         try {
             const analysis = await Analysis.findOne({ analysis_id: analysisId });
             if (!analysis) return { success: false, error: 'Analysis record not found' };
@@ -41,22 +54,39 @@ export class AdminService extends BaseService implements IAdminService {
             const youtubeUrl = analysis.youtube_url;
             if (!youtubeUrl) return { success: false, error: 'Analysis lacks a YouTube URL for re-analysis' };
 
-            if (!this.analysisService) return { success: false, error: 'Analysis service unavailable' };
+            const gameId = analysis.game_id;
 
-            // Trigger re-analysis with force=true to bypass cache
-            // We run it in background to avoid timeout
-            this.analysisService.analyzeVideo({
+            // Find an existing job for this URL and reset it, or create a fresh one
+            let job = await IngestionJob.findOne({ youtube_url: youtubeUrl });
+            if (job) {
+                job.status = 'pending';
+                job.retry_count = (job.retry_count || 0) + 1;
+                job.error_message = undefined;
+                await job.save();
+            } else {
+                const jobId = `reanalyze_${Date.now()}`;
+                job = new IngestionJob({
+                    job_id: jobId,
+                    game_id: gameId,
+                    youtube_url: youtubeUrl,
+                    search_query: 'REANALYZE',
+                    source: 'manual',
+                    status: 'pending',
+                });
+                await job.save();
+            }
+
+            await queueService.addAnalysisJob({
+                job_id: job.job_id,
+                game_id: gameId,
                 youtube_url: youtubeUrl,
-                game_id: analysis.game_id,
-                force: true
-            }).catch(err => {
-                console.error(`[AdminService] Re-analysis failed for ${analysisId}:`, err);
+                source: 'user',
             });
-            
-            return { 
-                success: true, 
-                message: 'Re-analysis task triggered in background. The record will be updated shortly.',
-                data: { analysis_id: analysisId, url: youtubeUrl }
+
+            return {
+                success: true,
+                message: 'Re-analysis queued. The record will be updated shortly.',
+                data: { analysis_id: analysisId, url: youtubeUrl, job_id: job.job_id },
             };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger re-analysis' };
