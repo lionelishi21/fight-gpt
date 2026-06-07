@@ -56,17 +56,26 @@ export class AdminService extends BaseService implements IAdminService {
 
             const gameId = analysis.game_id;
 
-            // Always create a fresh job ID so BullMQ doesn't reject a duplicate
+            // Fresh BullMQ-safe job ID every time
             const jobId = `reanalyze_${analysisId}_${Date.now()}`;
-            const job = new IngestionJob({
-                job_id: jobId,
-                game_id: gameId,
-                youtube_url: youtubeUrl,
-                search_query: 'REANALYZE',
-                source: 'manual',
-                status: 'pending',
-            });
-            await job.save();
+
+            // youtube_url has a unique index — update the existing job record in-place
+            // rather than inserting a new one. If no existing job, create one.
+            await IngestionJob.findOneAndUpdate(
+                { youtube_url: youtubeUrl },
+                {
+                    $set: {
+                        job_id: jobId,
+                        game_id: gameId,
+                        status: 'pending',
+                        source: 'manual',
+                        search_query: 'REANALYZE',
+                        error_message: undefined,
+                    },
+                    $inc: { retry_count: 1 },
+                },
+                { upsert: true, new: true }
+            );
 
             await queueService.addAnalysisJob({
                 job_id: jobId,
@@ -78,7 +87,7 @@ export class AdminService extends BaseService implements IAdminService {
             return {
                 success: true,
                 message: 'Re-analysis queued. The record will be updated shortly.',
-                data: { analysis_id: analysisId, url: youtubeUrl, job_id: job.job_id },
+                data: { analysis_id: analysisId, url: youtubeUrl, job_id: jobId },
             };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger re-analysis' };
