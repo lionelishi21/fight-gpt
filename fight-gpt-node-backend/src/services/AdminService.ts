@@ -56,28 +56,20 @@ export class AdminService extends BaseService implements IAdminService {
 
             const gameId = analysis.game_id;
 
-            // Find an existing job for this URL and reset it, or create a fresh one
-            let job = await IngestionJob.findOne({ youtube_url: youtubeUrl });
-            if (job) {
-                job.status = 'pending';
-                job.retry_count = (job.retry_count || 0) + 1;
-                job.error_message = undefined;
-                await job.save();
-            } else {
-                const jobId = `reanalyze_${Date.now()}`;
-                job = new IngestionJob({
-                    job_id: jobId,
-                    game_id: gameId,
-                    youtube_url: youtubeUrl,
-                    search_query: 'REANALYZE',
-                    source: 'manual',
-                    status: 'pending',
-                });
-                await job.save();
-            }
+            // Always create a fresh job ID so BullMQ doesn't reject a duplicate
+            const jobId = `reanalyze_${analysisId}_${Date.now()}`;
+            const job = new IngestionJob({
+                job_id: jobId,
+                game_id: gameId,
+                youtube_url: youtubeUrl,
+                search_query: 'REANALYZE',
+                source: 'manual',
+                status: 'pending',
+            });
+            await job.save();
 
             await queueService.addAnalysisJob({
-                job_id: job.job_id,
+                job_id: jobId,
                 game_id: gameId,
                 youtube_url: youtubeUrl,
                 source: 'user',
