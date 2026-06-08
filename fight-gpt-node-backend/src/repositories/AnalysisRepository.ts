@@ -86,6 +86,7 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
       analysis_id: analysisId,
       p1_name: response.p1_name,
       p2_name: response.p2_name,
+      ai_usage: response.ai_usage,
       ...(userId ? { user_id: userId } : {}),
     };
 

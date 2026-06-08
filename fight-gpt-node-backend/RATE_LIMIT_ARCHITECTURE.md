@@ -43,6 +43,30 @@ Target (Correct Architecture)
 
 ---
 
+## ✅ Already Implemented — Per-User Analysis Quotas (Tier-Based)
+
+Unlike the IP-based rate limiting described below, video analysis requests are **already** gated server-side by user tier — this is separate from (and predates) the I2 plan further down.
+
+**Where**: `src/services/AnalysisService.ts` (~lines 95–116), backed by `AnalysisRepository.countRecentAnalysesByUser(userId, hours)` (`src/repositories/AnalysisRepository.ts:109-117`).
+
+**Current limits** (`LIMITS` dict, `AnalysisService.ts` ~line 101):
+
+| Tier | Limit |
+|------|-------|
+| `FREE` | 3 analyses, lifetime cap (not rolling) |
+| `COMPETITOR` | 30 per rolling 30 days |
+| `PRO` | 150 per rolling 30 days |
+
+**Flow**: `POST /api/analyze` → `optionalAuthMiddleware` (attaches `req.user` if a JWT is present, `src/middleware/auth.ts:40-49`) → `AnalysisController` → `AnalysisService.analyzeVideo(request, userId)` → quota check against `User.tier` → proceeds or returns a rejection with the limit reason (`AnalysisService.ts:110-115`).
+
+**Open question — anonymous users**: because the route uses `optionalAuthMiddleware` rather than `authMiddleware`, requests with no JWT have no `req.user`, so it's worth confirming whether the quota check has an equivalent guard for anonymous traffic or whether anonymous analysis should simply require login.
+
+**Frontend note**: the actual enforcement must stay server-side (tied to `user.tier` + the Mongo count above) since client-side counters are trivially bypassed. `localStorage` should only *mirror* the count for instant UI feedback (e.g., "2/3 free analyses used"), synced from the rejection payload `AnalysisService.ts` returns when the limit is hit.
+
+To change the FREE cap (e.g., 3 lifetime → 5/month), edit the `LIMITS` dict at `AnalysisService.ts` ~line 101 and switch the lifetime check to `countRecentAnalysesByUser(userId, 30 * 24)`.
+
+---
+
 ## 🔴 CRITICAL — Do Before Launch (Week 1, ~1,000 Users)
 
 ### C1 — Admin/Internal Routes: Bypass IP Rate Limiter

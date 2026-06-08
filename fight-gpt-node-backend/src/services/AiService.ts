@@ -3,7 +3,7 @@ import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
 import axios from 'axios';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { AnalysisRequest, AnalysisResponse } from '../types';
+import { AnalysisRequest, AnalysisResponse, AiUsageRecord } from '../types';
 import { BaseService } from './BaseService';
 import { IGameMetadataService } from './GameMetadataService';
 import { ICharacterEncyclopediaService } from './CharacterEncyclopediaService';
@@ -133,6 +133,21 @@ export class AiService extends BaseService implements IAiService {
     await this.storage.bucket(AppConfig.GOOGLE_STORAGE_BUCKET).file(fileName).delete();
   }
 
+  /**
+   * Pulls real token counts off a Gemini `generateContent` result so cost can be
+   * computed from actuals (see AdminService) instead of flat per-stage estimates.
+   */
+  private recordUsage(result: any, stage: AiUsageRecord['stage'], model: string): AiUsageRecord {
+    const u = result?.response?.usageMetadata || {};
+    return {
+      stage,
+      model,
+      prompt_tokens: u.promptTokenCount || 0,
+      candidates_tokens: u.candidatesTokenCount || 0,
+      total_tokens: u.totalTokenCount || 0,
+    };
+  }
+
   private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
     try {
       const { SystemSettings } = require('../models/SystemSettings');
@@ -245,22 +260,30 @@ export class AiService extends BaseService implements IAiService {
       }
     };
 
+    // Accumulates real Gemini token usage across whichever stages run, so the
+    // final response carries actual cost data instead of flat per-stage estimates.
+    const usage: AiUsageRecord[] = [];
+    const attachUsage = (resp: AnalysisResponse): AnalysisResponse => {
+      resp.ai_usage = { records: usage, total_tokens: usage.reduce((sum, r) => sum + r.total_tokens, 0) };
+      return resp;
+    };
+
     try {
       // ── Stage 1: Flash screen (~$0.02) — reject non-gameplay before any expensive call ──
-      const screen = await this.screenVideo(videoUri, request);
+      const screen = await this.screenVideo(videoUri, request, r => usage.push(r));
       if (!screen.is_gameplay) {
         const reason = screen.rejection_reason || 'Video does not contain fighting game gameplay';
-        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, screenData: screen });
+        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, screenData: screen, usage });
       }
       console.log(`[AiService] Stage1 passed: ${screen.game_detected} | ${screen.p1_character} vs ${screen.p2_character} (${screen.confidence})`);
 
       // ── Stage 2: Flash + thinking (~$0.20) — full structured analysis ──
       let flashResult: AnalysisResponse | null = null;
       try {
-        flashResult = await this.generateFlashThinkingAnalysis(videoUri, request, screen, analysisResponseSchema);
+        flashResult = await this.generateFlashThinkingAnalysis(videoUri, request, screen, analysisResponseSchema, r => usage.push(r));
         if (flashResult.timeline && flashResult.timeline.length >= 5) {
           console.log(`[AiService] Stage2 Flash sufficient: ${flashResult.timeline.length} timeline events`);
-          return flashResult;
+          return attachUsage(flashResult);
         }
         console.log(`[AiService] Stage2 Flash thin (${flashResult?.timeline?.length ?? 0} events) — escalating to Pro`);
       } catch (flashErr: any) {
@@ -277,12 +300,13 @@ export class AiService extends BaseService implements IAiService {
           responseSchema: analysisResponseSchema
         }
       });
+      usage.push(this.recordUsage(result, 'pro', this.modelName));
       const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       try {
         const parsed = JSON.parse(responseText) as any;
         if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
           const reason = parsed.reason || 'Video does not contain fighting game gameplay';
-          throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
+          throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, usage });
         }
 
         if (!parsed.p1_character) parsed.p1_character = request.p1_character_id;
@@ -290,7 +314,7 @@ export class AiService extends BaseService implements IAiService {
         if (!parsed.p1_name) parsed.p1_name = request.p1_name;
         if (!parsed.p2_name) parsed.p2_name = request.p2_name;
 
-        return parsed as AnalysisResponse;
+        return attachUsage(parsed as AnalysisResponse);
       } catch (e: any) {
         if (e.name === 'NotGameplayError') throw e;
         console.error('Failed to parse Gemini Pro response', responseText);
@@ -334,6 +358,7 @@ export class AiService extends BaseService implements IAiService {
   private async screenVideo(
     videoUri: string | null,
     request: AnalysisRequest,
+    onUsage?: (record: AiUsageRecord) => void,
   ): Promise<{ is_gameplay: boolean; game_detected: string; p1_character: string; p2_character: string; confidence: string; rejection_reason: string }> {
     const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
@@ -371,6 +396,7 @@ Return ONLY the JSON. No markdown.`,
         contents: [{ role: 'user', parts: contentParts }],
         generationConfig: { responseMimeType: 'application/json' } as any,
       });
+      onUsage?.(this.recordUsage(result, 'screen', 'gemini-2.5-flash'));
       const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       return JSON.parse(cleaned);
@@ -389,6 +415,7 @@ Return ONLY the JSON. No markdown.`,
     request: AnalysisRequest,
     screen: { p1_character: string; p2_character: string },
     analysisResponseSchema: any,
+    onUsage?: (record: AiUsageRecord) => void,
   ): Promise<AnalysisResponse> {
     const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
@@ -432,6 +459,7 @@ Return ONLY the JSON. No markdown.`,
         thinkingConfig: { thinkingBudget: 1024 },
       } as any,
     });
+    onUsage?.(this.recordUsage(result, 'flash', 'gemini-2.5-flash'));
 
     const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     const parsed = JSON.parse(responseText) as any;

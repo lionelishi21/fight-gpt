@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { AnalysisResponse } from '../types';
+import { AnalysisResponse, AiUsageRecord } from '../types';
 
 /**
  * Analysis document interface extending mongoose Document
@@ -16,6 +16,8 @@ export interface IAnalysis extends Document {
   p2_name?: string;
   view_count: number;
   click_count: number;
+  // Real Gemini token usage for this analysis run — drives the admin AI cost dashboard
+  ai_usage?: { records: AiUsageRecord[]; total_tokens: number };
   created_at: Date;
   updated_at: Date;
 }
@@ -75,6 +77,9 @@ const AnalysisSchema: Schema = new Schema(
     click_count: {
       type: Number,
       default: 0,
+    },
+    ai_usage: {
+      type: Schema.Types.Mixed,
     },
   },
   {

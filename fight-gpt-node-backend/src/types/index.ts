@@ -60,6 +60,18 @@ export interface AnalysisRequest {
 }
 
 /**
+ * Token usage for a single Gemini call within the analysis pipeline
+ * (used to compute real AI cost instead of relying on flat per-stage estimates).
+ */
+export interface AiUsageRecord {
+  stage: 'screen' | 'flash' | 'pro' | 'bedrock' | 'grok';
+  model: string;
+  prompt_tokens: number;
+  candidates_tokens: number;
+  total_tokens: number;
+}
+
+/**
  * Analysis response from AI service
  */
 export interface AnalysisResponse {
@@ -87,6 +99,9 @@ export interface AnalysisResponse {
   };
   cached?: boolean;
   analysis_id?: string;
+  // Real Gemini token usage captured per pipeline stage — populated by AiService
+  // so cost can be computed from actuals rather than flat per-stage estimates.
+  ai_usage?: { records: AiUsageRecord[]; total_tokens: number };
 }
 
 /**

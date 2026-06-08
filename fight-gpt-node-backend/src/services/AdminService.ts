@@ -5,10 +5,56 @@ import { Scenario } from '../models/Scenario';
 import { Character } from '../models/Character';
 import { Game } from '../models/Game';
 import { CharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
-import { ApiResponse } from '../types';
+import { ApiResponse, AiUsageRecord } from '../types';
 import { BaseService } from './BaseService';
 import { queueService } from './QueueService';
 import { normalizeYoutubeUrl } from '../helpers/youtubeHelper';
+
+// Approximate Gemini per-token pricing (USD/token), used to turn raw token counts
+// into an estimated cost. Verify against https://ai.google.dev/pricing if rates
+// change — kept in one place so they're easy to update.
+const GEMINI_PRICING_PER_TOKEN: Record<string, { input: number; output: number }> = {
+    'gemini-2.5-flash': { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000 },
+    'gemini-2.5-pro':   { input: 1.25 / 1_000_000, output: 10.00 / 1_000_000 },
+};
+
+function estimateCostUsd(records: AiUsageRecord[]): number {
+    return records.reduce((sum, r) => {
+        const rate = GEMINI_PRICING_PER_TOKEN[r.model] || GEMINI_PRICING_PER_TOKEN['gemini-2.5-flash'];
+        return sum + r.prompt_tokens * rate.input + r.candidates_tokens * rate.output;
+    }, 0);
+}
+
+function summarizeAiUsage(docs: Array<{ ai_usage?: { records: AiUsageRecord[]; total_tokens: number } }>) {
+    let totalTokens = 0;
+    let estimatedCostUsd = 0;
+    const byStage: Record<string, { count: number; total_tokens: number; estimated_cost_usd: number }> = {};
+
+    for (const doc of docs) {
+        const records = doc.ai_usage?.records || [];
+        if (records.length === 0) continue;
+
+        totalTokens += doc.ai_usage?.total_tokens || records.reduce((s, r) => s + r.total_tokens, 0);
+        estimatedCostUsd += estimateCostUsd(records);
+
+        for (const r of records) {
+            const bucket = byStage[r.stage] || { count: 0, total_tokens: 0, estimated_cost_usd: 0 };
+            bucket.count += 1;
+            bucket.total_tokens += r.total_tokens;
+            bucket.estimated_cost_usd += estimateCostUsd([r]);
+            byStage[r.stage] = bucket;
+        }
+    }
+
+    return {
+        videos_with_usage: docs.filter(d => (d.ai_usage?.records?.length || 0) > 0).length,
+        total_tokens: totalTokens,
+        estimated_cost_usd: Number(estimatedCostUsd.toFixed(2)),
+        by_stage: Object.fromEntries(
+            Object.entries(byStage).map(([stage, b]) => [stage, { ...b, estimated_cost_usd: Number(b.estimated_cost_usd.toFixed(2)) }])
+        ),
+    };
+}
 
 export interface IAdminService {
     getSystemStats(): Promise<ApiResponse<any>>;
@@ -99,6 +145,9 @@ export class AdminService extends BaseService implements IAdminService {
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
 
+            const startOfWeek = new Date(startOfToday);
+            startOfWeek.setDate(startOfWeek.getDate() - 6);
+
             const [
                 totalUsers,
                 totalAnalyses,
@@ -129,6 +178,21 @@ export class AdminService extends BaseService implements IAdminService {
                 ])
             ]);
 
+            // AI cost — computed from real Gemini token usage captured per analysis
+            // (see AiService.recordUsage / Analysis.ai_usage), not flat per-stage estimates.
+            const [todayUsageDocs, weekUsageDocs] = await Promise.all([
+                Analysis.find({ created_at: { $gte: startOfToday }, ai_usage: { $exists: true } })
+                    .select('ai_usage')
+                    .lean(),
+                Analysis.find({ created_at: { $gte: startOfWeek }, ai_usage: { $exists: true } })
+                    .select('ai_usage')
+                    .lean(),
+            ]);
+            const aiCost = {
+                today: summarizeAiUsage(todayUsageDocs as any[]),
+                last_7_days: summarizeAiUsage(weekUsageDocs as any[]),
+            };
+
             return {
                 success: true,
                 data: {
@@ -151,7 +215,8 @@ export class AdminService extends BaseService implements IAdminService {
                     discovery: {
                         views: (discoveryStats as any)[0]?.views || 0,
                         clicks: (discoveryStats as any)[0]?.clicks || 0
-                    }
+                    },
+                    ai_cost: aiCost
                 }
             };
         } catch (error) {
