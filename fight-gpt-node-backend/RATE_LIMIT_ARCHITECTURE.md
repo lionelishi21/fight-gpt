@@ -69,26 +69,16 @@ To change the FREE cap (e.g., 3 lifetime → 5/month), edit the `LIMITS` dict at
 
 ## 🔴 CRITICAL — Do Before Launch (Week 1, ~1,000 Users)
 
-### C1 — Admin/Internal Routes: Bypass IP Rate Limiter
+### C1 — Admin/Internal Routes: Bypass IP Rate Limiter — ✅ DONE
 
-**Problem**: The dashboard polls `/api/admin/stats` every 60s. This drains from the same bucket as your real users. If you're using the dashboard while users are active, you hit the limit faster.
+**Verified implemented** (no further action needed):
+- `src/middleware/adminKeyAuth.ts` checks `x-admin-key` against `ADMIN_API_SECRET`, returns 401/503 if missing/invalid
+- `src/routes/adminRoutes.ts:21-23` applies `adminKeyAuth` → `authMiddleware` → `adminMiddleware` in that order
+- `ADMIN_API_SECRET` is set in both the backend `.env` and the frontend `.env.local` (as `NEXT_PUBLIC_ADMIN_API_SECRET`), matching values
+- Frontend `src/lib/services/api.ts:72-74` attaches `x-admin-key` on every `/admin/` request
+- The global limiter's `skip` function (`src/index.ts` ~line 410) already exempts any request carrying `x-auth-token`/`authorization` — the admin dashboard sends a JWT, so it's exempted twice over
 
-**Impact at 1,000 users**: High. You'll experience 429s on your own admin panel while users are active.
-
-**What to change**:
-- Add a secret `X-Admin-Key` header check middleware
-- Apply it to all `/api/admin/*` routes
-- Exempt those routes from the IP rate limiter entirely
-- Store the key in `.env` as `ADMIN_API_SECRET`
-
-**Files to change**:
-- `src/middleware/adminKeyAuth.ts` — **[NEW]** simple header check
-- `src/routes/adminRoutes.ts` — apply new middleware, remove IP limiter
-- `src/index.ts` — make `limiter` not apply to `/api/admin/`
-- Frontend `dashboardService.ts` — send the `X-Admin-Key` header
-- `.env` — add `ADMIN_API_SECRET=<generate a long random string>`
-
-**Effort**: ~1 hour
+No remaining gap here.
 
 ---
 
@@ -110,21 +100,9 @@ To change the FREE cap (e.g., 3 lifetime → 5/month), edit the `LIMITS` dict at
 
 ---
 
-### C3 — Reduce Dashboard Polling Frequency
+### C3 — Reduce Dashboard Polling Frequency — ✅ MOOT (verified)
 
-**Problem**: The dashboard currently polls `/api/admin/stats` every 60 seconds. With the worker status check, discovery feed, and sensei stats, the dashboard alone generates ~3 requests/minute from your browser. If you have the dashboard open all day, that's ~180 requests/hour just from you.
-
-**Impact at 1,000 users**: Medium. Immediate relief without architectural changes.
-
-**What to change**:
-- Increase polling interval for `getSystemStats` from 60s → 5 minutes (worker status doesn't need to be real-time)
-- The discovery feed (`DiscoveryFeed`) should only poll if the user is actively on the page (use `visibilitychange` event)
-
-**Files to change**:
-- `src/app/dashboard/page.tsx` — change `60000` to `300000` (5 min)
-- `src/components/dashboard/DiscoveryFeed.tsx` — add `document.addEventListener('visibilitychange')` guard
-
-**Effort**: ~20 minutes
+**Re-checked against current code**: neither `src/app/admin/stats/page.tsx` nor `DiscoveryFeed.tsx` poll on an interval anymore — `getSystemStats()` fires once on mount (`React.useEffect(..., [])`) and `DiscoveryFeed` fetches once via `useCallback`/`useEffect` with no `setInterval`. The 60s-polling problem this item described no longer exists in the dashboard as written. Combined with C1 being done, admin traffic is a non-issue at 1,000-user scale — no action needed.
 
 ---
 
@@ -240,9 +218,9 @@ To change the FREE cap (e.g., 3 lifetime → 5/month), edit the `LIMITS` dict at
 
 | Change | Risk if Skipped | Effort | Do Before Launch? |
 |--------|----------------|--------|-------------------|
-| C1 — Admin key bypass | Dashboard 429s while users active | 1 hr | ✅ **YES** |
-| C2 — Auth brute-force limiter | Security gap + signup storms | 30 min | ✅ **YES** |
-| C3 — Reduce polling frequency | Dashboard contributes to rate limit | 20 min | ✅ **YES** |
+| C1 — Admin key bypass | Dashboard 429s while users active | 1 hr | ✅ **DONE** |
+| C2 — Auth brute-force limiter | Security gap + signup storms | 30 min | ✅ **DONE** (200/15min — more permissive than originally proposed, by design) |
+| C3 — Reduce polling frequency | Dashboard contributes to rate limit | 20 min | ✅ **MOOT** — dashboard no longer polls on an interval |
 | I1 — Per-user rate limits | Shared-IP false positives | 2 hr | ⚠️ Risky to skip, survivable at 1k |
 | I2 — Tier-based AI limits | Free users cost $ unchecked | 2-3 hr | ⚠️ Do if you have a free tier |
 | I3 — Cache public routes | Extra DB load | 2-3 hr | 🔵 Can wait |
@@ -290,16 +268,14 @@ RATE_LIMIT_PRO_AI_PER_HOUR=200
 
 ## Todo List
 
-### ✅ Before Launch (This Week — ~2 hours total)
-- [ ] **C1**: Create `src/middleware/adminKeyAuth.ts` (check `X-Admin-Key` header)
-- [ ] **C1**: Update `src/index.ts` — exclude `/api/admin/` from global IP limiter
-- [ ] **C1**: Update `src/routes/adminRoutes.ts` — apply `adminKeyAuth` middleware
-- [ ] **C1**: Update frontend `src/lib/services/dashboardService.ts` — send admin key header
-- [ ] **C1**: Generate and add `ADMIN_API_SECRET` to production `.env`
-- [ ] **C2**: Add `authLimiter` (5 req / 15 min) to `src/index.ts`
-- [ ] **C2**: Apply `authLimiter` to login and register in `src/routes/authRoutes.ts`
-- [ ] **C3**: Change polling interval in `src/app/dashboard/page.tsx` (60s → 5 min)
-- [ ] **C3**: Add `visibilitychange` guard to `DiscoveryFeed.tsx` polling
+### ✅ Before Launch — ALL DONE, verified in code
+- [x] **C1**: `src/middleware/adminKeyAuth.ts` exists, checks `x-admin-key`
+- [x] **C1**: Global limiter `skip` exempts authenticated/admin requests (`src/index.ts`)
+- [x] **C1**: `adminRoutes.ts` applies `adminKeyAuth` → `authMiddleware` → `adminMiddleware`
+- [x] **C1**: Frontend `api.ts` sends `x-admin-key` header on `/admin/` requests
+- [x] **C1**: `ADMIN_API_SECRET` set in backend `.env` and frontend `.env.local`
+- [x] **C2**: `authLimiter` (200 req / 15 min — deliberately more permissive) wired to login/register
+- [x] **C3**: N/A — dashboard fetches stats once on mount, no interval polling exists
 
 ### 🟡 Post-Launch Week 2–3
 - [ ] **I1**: Add `keyGenerator` to rate limiter using `req.user?.id` instead of IP
