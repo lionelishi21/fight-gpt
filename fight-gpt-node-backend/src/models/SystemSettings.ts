@@ -1,9 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ISystemSettings {
-    active_ai_provider: 'gemini' | 'grok' | 'bedrock';
-    grok_fallback_enabled: boolean;
-    bedrock_fallback_enabled: boolean;
     monthly_global_limit: number;
     created_at?: Date;
     updated_at?: Date;
@@ -14,22 +11,6 @@ export interface ISystemSettingsDocument extends ISystemSettings, Document {
 }
 
 const SystemSettingsSchema = new Schema<ISystemSettingsDocument>({
-    active_ai_provider: {
-        type: String,
-        enum: ['gemini', 'grok', 'bedrock'],
-        default: 'gemini',
-        required: true
-    },
-    grok_fallback_enabled: {
-        type: Boolean,
-        default: true,
-        required: true
-    },
-    bedrock_fallback_enabled: {
-        type: Boolean,
-        default: true,
-        required: true
-    },
     monthly_global_limit: {
         type: Number,
         default: 1000,
@@ -42,16 +23,10 @@ const SystemSettingsSchema = new Schema<ISystemSettingsDocument>({
     }
 });
 
-// Singleton helper to get settings, creating defaults if not exists
 SystemSettingsSchema.statics.getSettings = async function(): Promise<ISystemSettingsDocument> {
     let settings = await this.findOne();
     if (!settings) {
-        settings = await this.create({
-            active_ai_provider: 'gemini',
-            grok_fallback_enabled: true,
-            bedrock_fallback_enabled: true,
-            monthly_global_limit: 1000
-        });
+        settings = await this.create({ monthly_global_limit: 1000 });
     }
     return settings;
 };

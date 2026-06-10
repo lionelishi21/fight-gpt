@@ -1,8 +1,6 @@
 import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google/generative-ai';
 import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
-import axios from 'axios';
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { AnalysisRequest, AnalysisResponse, AiUsageRecord } from '../types';
 import { BaseService } from './BaseService';
 import { IGameMetadataService } from './GameMetadataService';
@@ -149,21 +147,6 @@ export class AiService extends BaseService implements IAiService {
   }
 
   private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
-    try {
-      const { SystemSettings } = require('../models/SystemSettings');
-      const settings = await SystemSettings.getSettings();
-      if (settings.active_ai_provider === 'bedrock') {
-        console.log('[AiService] Active AI provider is Bedrock. Routing to Bedrock analysis.');
-        return await this.generateBedrockAnalysis(request);
-      }
-      if (settings.active_ai_provider === 'grok') {
-        console.log('[AiService] Active AI provider is Grok. Routing to Grok analysis.');
-        return await this.generateGrokAnalysis(request);
-      }
-    } catch (settingsError) {
-      console.warn('[AiService] Failed to load SystemSettings, defaulting to Gemini:', settingsError);
-    }
-
     const prompt = VersionResolver.resolvePromptForGame(
       request.game_id || 'sf6',
       request.match_format || '1v1',
@@ -324,28 +307,7 @@ export class AiService extends BaseService implements IAiService {
       if (e.name === 'NotGameplayError') throw e;
       const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits') || e.message.includes('403') || e.message.includes('dunning'));
       if (isQuotaError) {
-        try {
-          const { SystemSettings } = require('../models/SystemSettings');
-          const settings = await SystemSettings.getSettings();
-
-          if (settings.bedrock_fallback_enabled && settings.active_ai_provider !== 'bedrock') {
-            console.warn('[AiService] Gemini quota exceeded. Flipped provider to Bedrock automatically.');
-            settings.active_ai_provider = 'bedrock';
-            await settings.save();
-            return await this.generateBedrockAnalysis(request);
-          }
-
-          if (settings.grok_fallback_enabled && settings.active_ai_provider !== 'grok') {
-            console.warn('[AiService] Gemini quota exceeded. Flipped provider to Grok automatically.');
-            settings.active_ai_provider = 'grok';
-            await settings.save();
-            return await this.generateGrokAnalysis(request);
-          }
-        } catch (settingsError) {
-          console.error('[AiService] Failed to auto-failover:', settingsError);
-        }
-
-        console.error('[AiService] Circuit Breaker triggered: Quota exceeded. Pausing analysis queue.');
+        console.error('[AiService] Circuit Breaker triggered: Gemini quota exceeded. Pausing analysis queue.');
         queueService.pauseQueue().catch(err => console.error('Failed to pause queue', err));
       }
       throw this.handleError(e, 'generateAnalysis');
@@ -474,199 +436,6 @@ Return ONLY the JSON. No markdown.`,
     if (!parsed.p2_name)      parsed.p2_name      = enrichedRequest.p2_name;
 
     return parsed as AnalysisResponse;
-  }
-
-  private async generateBedrockAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const region = process.env.AWS_REGION || 'us-east-1';
-
-    const clientConfig: any = { region };
-    if (accessKeyId && secretAccessKey) {
-      clientConfig.credentials = {
-        accessKeyId,
-        secretAccessKey,
-      };
-    }
-
-    const client = new BedrockRuntimeClient(clientConfig);
-
-    const prompt = VersionResolver.resolvePromptForGame(
-      request.game_id || 'sf6',
-      request.match_format || '1v1',
-      request.p1_team,
-      request.p2_team,
-    );
-
-    let fullPrompt = prompt;
-
-    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
-    if (fewShotBlock) {
-      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
-    }
-
-    if (request.ai_context) {
-      fullPrompt += `\n\nContext:\n${request.ai_context}`;
-    }
-
-    if (request.video_title) {
-      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
-    }
-
-    const p1Char = request.p1_character_id || 'Player 1';
-    const p2Char = request.p2_character_id || 'Player 2';
-    const p1Name = request.p1_name || 'Player 1';
-    const p2Name = request.p2_name || 'Player 2';
-
-    // Override the gameplay validation step — Bedrock cannot watch videos so it
-    // would always return not_gameplay. This match is confirmed real; skip the check.
-    fullPrompt += `\n\nCRITICAL OVERRIDE: This IS a confirmed fighting game match video. Skip the gameplay validation check entirely — do NOT return not_gameplay. Proceed directly to generating the timeline.`;
-
-    fullPrompt += `\n\nNOTE: You are running in text-only fallback mode (no video access). Generate a realistic, highly technical match timeline of 6–10 key exchanges based on the video title, game metadata, and character context above. You MUST produce a non-empty timeline array — an empty timeline is a failure. Use ${p1Char} vs ${p2Char} character-specific moves and playstyles. Set p1_name to "${p1Name}" and p2_name to "${p2Name}". Return ONLY a valid JSON object matching the requested schema. Do not use markdown code blocks.`;
-
-    try {
-      const response = await client.send(
-        new InvokeModelCommand({
-          modelId: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-          contentType: 'application/json',
-          accept: 'application/json',
-          body: JSON.stringify({
-            anthropic_version: 'bedrock-2023-05-31',
-            max_tokens: 4096,
-            system: 'You are MetaPunish — the world\'s most advanced competitive fighting game intelligence system.',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: fullPrompt,
-                  },
-                ],
-              },
-            ],
-            temperature: 0.2,
-          }),
-        })
-      );
-
-      const responseString = Buffer.from(response.body).toString('utf8');
-      const responseObj = JSON.parse(responseString);
-      const responseText = responseObj.content?.[0]?.text || '{}';
-
-      const cleanedJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleanedJson);
-
-      parsed.is_gameplay_video = true;
-      parsed.status = 'analyzed';
-
-      if (!parsed.p1_character) parsed.p1_character = request.p1_character_id;
-      if (!parsed.p2_character) parsed.p2_character = request.p2_character_id;
-      if (!parsed.p1_name) parsed.p1_name = request.p1_name;
-      if (!parsed.p2_name) parsed.p2_name = request.p2_name;
-
-      if (!parsed.timeline || parsed.timeline.length === 0) {
-        console.error('[AiService] Bedrock returned empty timeline — raw response:', responseText.slice(0, 500));
-        throw new Error('Bedrock returned an empty timeline. Job will retry.');
-      }
-
-      return parsed as AnalysisResponse;
-    } catch (error: any) {
-      console.error('[AiService] Bedrock fallback analysis failed:', error instanceof Error ? error.message : error);
-      throw this.handleError(error, 'generateBedrockAnalysis');
-    }
-  }
-
-  private async generateGrokAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {
-    const grokApiKey = process.env.GROK_API_KEY;
-    if (!grokApiKey) {
-      throw new Error('Grok API Key (GROK_API_KEY) is not configured.');
-    }
-
-    const prompt = VersionResolver.resolvePromptForGame(
-      request.game_id || 'sf6',
-      request.match_format || '1v1',
-      request.p1_team,
-      request.p2_team,
-    );
-
-    let fullPrompt = prompt;
-
-    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
-    if (fewShotBlock) {
-      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
-    }
-
-    if (request.ai_context) {
-      fullPrompt += `\n\nContext:\n${request.ai_context}`;
-    }
-
-    if (request.video_title) {
-      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
-    }
-
-    const p1Char = request.p1_character_id || 'Player 1';
-    const p2Char = request.p2_character_id || 'Player 2';
-    const p1Name = request.p1_name || 'Player 1';
-    const p2Name = request.p2_name || 'Player 2';
-
-    // Same override as Bedrock: Grok cannot watch videos so gameplay validation would
-    // always trigger not_gameplay. Skip it — the match is confirmed real.
-    fullPrompt += `\n\nCRITICAL OVERRIDE: This IS a confirmed fighting game match video. Skip the gameplay validation check entirely — do NOT return not_gameplay. Proceed directly to generating the timeline.`;
-
-    fullPrompt += `\n\nNOTE: You are running in text-only fallback mode (no video access). Generate a realistic, highly technical match timeline of 6–10 key exchanges based on the video title, game metadata, and character context above. You MUST produce a non-empty timeline array — an empty timeline is a failure. Use ${p1Char} vs ${p2Char} character-specific moves and playstyles. Set p1_name to "${p1Name}" and p2_name to "${p2Name}". Return ONLY a valid JSON object matching the requested schema.`;
-
-    try {
-      const response = await axios.post(
-        'https://api.x.ai/v1/chat/completions',
-        {
-          model: 'grok-2',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are MetaPunish — the world\'s most advanced competitive fighting game intelligence system.'
-            },
-            {
-              role: 'user',
-              content: fullPrompt
-            }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${grokApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 60000
-        }
-      );
-
-      const responseText = response.data?.choices?.[0]?.message?.content || '{}';
-      const parsed = JSON.parse(responseText);
-
-      parsed.is_gameplay_video = true;
-      parsed.status = 'analyzed';
-
-      if (!parsed.p1_character) parsed.p1_character = request.p1_character_id;
-      if (!parsed.p2_character) parsed.p2_character = request.p2_character_id;
-      if (!parsed.p1_name) parsed.p1_name = request.p1_name;
-      if (!parsed.p2_name) parsed.p2_name = request.p2_name;
-
-      if (!parsed.timeline || parsed.timeline.length === 0) {
-        console.error('[AiService] Grok returned empty timeline — raw response:', responseText.slice(0, 500));
-        throw new Error('Grok returned an empty timeline. Job will retry.');
-      }
-
-      return parsed as AnalysisResponse;
-    } catch (error: any) {
-      console.error('[AiService] Grok fallback analysis failed:', error.message);
-      if (error.response) {
-        console.error('[AiService] Grok Error Response:', JSON.stringify(error.response.data, null, 2));
-      }
-      throw this.handleError(error, 'generateGrokAnalysis');
-    }
   }
 
   private async buildFewShotBlock(request: AnalysisRequest): Promise<string> {
