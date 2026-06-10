@@ -23,6 +23,8 @@ export interface AnalysisJobData {
     tournament_name?: string;
     // Priority: 1 = user upload (high), 10 = background ingestion (low)
     source?: 'user' | 'ingestion';
+    // Skip cache and force a fresh Gemini call (used by admin reanalyze)
+    force?: boolean;
 }
 
 export interface ProofValidationJobData {

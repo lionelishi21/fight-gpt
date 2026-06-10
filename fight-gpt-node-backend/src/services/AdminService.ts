@@ -128,6 +128,7 @@ export class AdminService extends BaseService implements IAdminService {
                 game_id: gameId,
                 youtube_url: youtubeUrl,
                 source: 'user',
+                force: true,
             });
 
             return {

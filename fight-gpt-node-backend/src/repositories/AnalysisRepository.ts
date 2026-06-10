@@ -90,12 +90,19 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
       ...(userId ? { user_id: userId } : {}),
     };
 
-    // If an analysis with the same analysis_id already exists, update it instead of creating a new one
-    const existing = await this.model.findOne({ analysis_id: analysisId });
+    // Check for existing doc by analysis_id OR youtube_url (for re-analysis).
+    // When found by youtube_url, preserve the original analysis_id so external
+    // links (share URLs, frontend routes) don't break.
+    const existing = await this.model.findOne({
+      $or: [
+        { analysis_id: analysisId },
+        ...(data.youtube_url ? [{ youtube_url: data.youtube_url }] : []),
+      ],
+    });
     if (existing) {
       const updated = await this.model.findOneAndUpdate(
-        { analysis_id: analysisId },
-        { $set: data },
+        { _id: existing._id },
+        { $set: { ...data, analysis_id: existing.analysis_id } },
         { new: true }
       );
       if (updated) return updated;

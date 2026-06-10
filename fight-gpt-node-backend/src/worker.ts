@@ -147,6 +147,7 @@ async function runWorker() {
                     job_id, youtube_url, game_id, pro_player_id,
                     video_title, video_platform,
                     p1_name, p2_name, p1_character_id, p2_character_id, tournament_name,
+                    force,
                 } = job.data;
 
                 Logger.info(`[Worker] Processing job ${job_id} [${video_platform || 'youtube'}] (${youtube_url})`);
@@ -187,6 +188,7 @@ async function runWorker() {
                         p2_name,
                         p1_character_id,
                         p2_character_id,
+                        force: force || false,
                     });
 
                     if (result.success && result.data) {
