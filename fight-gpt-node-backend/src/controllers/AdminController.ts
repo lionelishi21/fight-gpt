@@ -456,6 +456,19 @@ export class AdminController extends BaseController {
      * POST /api/admin/analyses/:id/reanalyze
      * Force re-analysis of a specific record
      */
+    /**
+     * POST /api/admin/analyses/reanalyze-incomplete
+     * Find and requeue all discovery analyses missing timeline/characters/players
+     */
+    reanalyzeIncomplete = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const result = await this.adminService.reanalyzeIncomplete();
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Controller failed');
+        }
+    };
+
     reanalyzeAnalysis = async (req: Request, res: Response): Promise<void> => {
         try {
             const { id } = req.params;

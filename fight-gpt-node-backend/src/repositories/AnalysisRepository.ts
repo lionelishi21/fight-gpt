@@ -133,17 +133,28 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
     p1Char?: string,
     p2Char?: string
   ): Promise<IAnalysis[]> {
-    const filter: any = { video_source: 'youtube' };
+    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown'];
+
+    // Only surface analyses that have all required fields — timeline events,
+    // both character names, and both player names. Anything missing these is
+    // an incomplete analysis and must not be shown to users.
+    const filter: any = {
+      video_source: 'youtube',
+      'analysis.timeline': { $exists: true, $not: { $size: 0 }, $ne: null },
+      'analysis.p1_character': { $exists: true, $nin: UNKNOWN },
+      'analysis.p2_character': { $exists: true, $nin: UNKNOWN },
+      'analysis.p1_name':      { $exists: true, $nin: UNKNOWN },
+      'analysis.p2_name':      { $exists: true, $nin: UNKNOWN },
+    };
+
     if (gameId) filter.game_id = gameId;
 
     if (p1Char && p2Char) {
-      // Specific matchup (bidirectional)
       filter.$or = [
         { 'analysis.p1_character': p1Char, 'analysis.p2_character': p2Char },
         { 'analysis.p1_character': p2Char, 'analysis.p2_character': p1Char },
       ];
     } else if (p1Char) {
-      // Any vs p1Char
       filter.$or = [
         { 'analysis.p1_character': p1Char },
         { 'analysis.p2_character': p1Char },
@@ -151,6 +162,31 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
     }
 
     return this.findMany(filter, { sort: { created_at: -1 }, limit });
+  }
+
+  /**
+   * Find all youtube analyses that are missing timeline events, character names,
+   * or player names — these need to be reprocessed before they can appear in the
+   * discovery feed.
+   */
+  async findIncompleteDiscoveryAnalyses(): Promise<IAnalysis[]> {
+    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown'];
+    return this.model.find({
+      video_source: 'youtube',
+      $or: [
+        { 'analysis.timeline': { $exists: false } },
+        { 'analysis.timeline': { $size: 0 } },
+        { 'analysis.timeline': null },
+        { 'analysis.p1_character': { $in: UNKNOWN } },
+        { 'analysis.p2_character': { $in: UNKNOWN } },
+        { 'analysis.p1_name':      { $in: UNKNOWN } },
+        { 'analysis.p2_name':      { $in: UNKNOWN } },
+        { 'analysis.p1_character': { $exists: false } },
+        { 'analysis.p2_character': { $exists: false } },
+        { 'analysis.p1_name':      { $exists: false } },
+        { 'analysis.p2_name':      { $exists: false } },
+      ],
+    }).lean();
   }
 
   /**

@@ -56,6 +56,7 @@ export class AdminRoutes {
         // Data Management
         this.router.get('/analyses', this.adminController.getRecentAnalyses);
         this.router.delete('/analyses/:id', this.adminController.deleteAnalysis);
+        this.router.post('/analyses/reanalyze-incomplete', this.adminController.reanalyzeIncomplete);
         this.router.post('/analyses/:id/reanalyze', this.adminController.reanalyzeAnalysis);
 
         // Job Management

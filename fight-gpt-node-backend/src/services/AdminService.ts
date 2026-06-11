@@ -62,6 +62,7 @@ export interface IAdminService {
     getAnalyses(limit: number, offset: number, gameId?: string, search?: string): Promise<ApiResponse<any[]>>;
     deleteAnalysis(analysisId: string): Promise<ApiResponse<boolean>>;
     retryJob(jobId: string): Promise<ApiResponse<boolean>>;
+    reanalyzeIncomplete(): Promise<ApiResponse<{ queued: number; skipped: number; ids: string[] }>>;
     triggerManualUrl(gameId: string, youtubeUrl: string): Promise<ApiResponse<any>>;
     seedUrls(gameId: string, youtubeUrls: string[]): Promise<ApiResponse<{ queued: number; skipped: number }>>;
     getCharacters(gameId?: string): Promise<ApiResponse<any[]>>;
@@ -138,6 +139,68 @@ export class AdminService extends BaseService implements IAdminService {
             };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to trigger re-analysis' };
+        }
+    }
+
+    /**
+     * Find every discovery analysis missing timeline events, character names, or
+     * player names, and force-requeue each one. These must never appear in the
+     * discovery feed until they pass validation.
+     */
+    async reanalyzeIncomplete(): Promise<ApiResponse<{ queued: number; skipped: number; ids: string[] }>> {
+        try {
+            const { AnalysisRepository } = require('../repositories/AnalysisRepository');
+            const repo = new AnalysisRepository();
+            const incomplete = await repo.findIncompleteDiscoveryAnalyses();
+
+            let queued = 0;
+            let skipped = 0;
+            const ids: string[] = [];
+
+            for (const analysis of incomplete) {
+                const youtubeUrl = analysis.youtube_url;
+                const analysisId = analysis.analysis_id;
+                const gameId = analysis.game_id;
+
+                if (!youtubeUrl) { skipped++; continue; }
+
+                const jobId = `reanalyze_incomplete_${analysisId}_${Date.now()}`;
+
+                await IngestionJob.findOneAndUpdate(
+                    { youtube_url: youtubeUrl },
+                    {
+                        $set: {
+                            job_id: jobId,
+                            game_id: gameId,
+                            status: 'pending',
+                            source: 'manual',
+                            search_query: 'REANALYZE_INCOMPLETE',
+                            error_message: undefined,
+                        },
+                        $inc: { retry_count: 1 },
+                    },
+                    { upsert: true, new: true }
+                );
+
+                await queueService.addAnalysisJob({
+                    job_id: jobId,
+                    game_id: gameId,
+                    youtube_url: youtubeUrl,
+                    source: 'user',
+                    force: true,
+                });
+
+                ids.push(analysisId);
+                queued++;
+            }
+
+            return {
+                success: true,
+                message: `Queued ${queued} incomplete analyses for reprocessing (${skipped} skipped — no YouTube URL).`,
+                data: { queued, skipped, ids },
+            };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to reanalyze incomplete analyses' };
         }
     }
 
