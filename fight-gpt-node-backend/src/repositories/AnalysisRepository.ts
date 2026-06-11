@@ -133,14 +133,15 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
     p1Char?: string,
     p2Char?: string
   ): Promise<IAnalysis[]> {
-    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown'];
+    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown', 'P1', 'P2'];
 
-    // Only surface analyses that have all required fields — timeline events,
-    // both character names, and both player names. Anything missing these is
-    // an incomplete analysis and must not be shown to users.
+    // Only surface analyses that have ALL required fields.
+    // 'analysis.timeline.0' checks the first array element exists — meaning the
+    // array is non-empty. This is the correct MongoDB pattern; combining $not/$size
+    // with $exists/$ne on the same field is invalid and gets silently ignored.
     const filter: any = {
       video_source: 'youtube',
-      'analysis.timeline': { $exists: true, $not: { $size: 0 }, $ne: null },
+      'analysis.timeline.0':   { $exists: true },
       'analysis.p1_character': { $exists: true, $nin: UNKNOWN },
       'analysis.p2_character': { $exists: true, $nin: UNKNOWN },
       'analysis.p1_name':      { $exists: true, $nin: UNKNOWN },
@@ -170,21 +171,19 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
    * discovery feed.
    */
   async findIncompleteDiscoveryAnalyses(): Promise<IAnalysis[]> {
-    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown'];
+    const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown', 'P1', 'P2'];
     return this.model.find({
       video_source: 'youtube',
       $or: [
-        { 'analysis.timeline': { $exists: false } },
-        { 'analysis.timeline': { $size: 0 } },
-        { 'analysis.timeline': null },
-        { 'analysis.p1_character': { $in: UNKNOWN } },
-        { 'analysis.p2_character': { $in: UNKNOWN } },
-        { 'analysis.p1_name':      { $in: UNKNOWN } },
-        { 'analysis.p2_name':      { $in: UNKNOWN } },
+        { 'analysis.timeline.0': { $exists: false } },
         { 'analysis.p1_character': { $exists: false } },
         { 'analysis.p2_character': { $exists: false } },
         { 'analysis.p1_name':      { $exists: false } },
         { 'analysis.p2_name':      { $exists: false } },
+        { 'analysis.p1_character': { $in: UNKNOWN } },
+        { 'analysis.p2_character': { $in: UNKNOWN } },
+        { 'analysis.p1_name':      { $in: UNKNOWN } },
+        { 'analysis.p2_name':      { $in: UNKNOWN } },
       ],
     }).lean();
   }
