@@ -185,7 +185,7 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
         { 'analysis.p1_name':      { $in: UNKNOWN } },
         { 'analysis.p2_name':      { $in: UNKNOWN } },
       ],
-    }).lean();
+    });
   }
 
   /**
