@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google/generative-ai';
-import { queueService } from './QueueService';
 import { Storage } from '@google-cloud/storage';
 import { AnalysisRequest, AnalysisResponse, AiUsageRecord } from '../types';
 import { BaseService } from './BaseService';
@@ -309,8 +308,10 @@ export class AiService extends BaseService implements IAiService {
       if (e.name === 'NotGameplayError') throw e;
       const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits') || e.message.includes('403') || e.message.includes('dunning'));
       if (isQuotaError) {
-        console.error('[AiService] Circuit Breaker triggered: Gemini quota exceeded. Pausing analysis queue.');
-        queueService.pauseQueue().catch(err => console.error('Failed to pause queue', err));
+        // Log the quota hit but do NOT pause the queue. BullMQ already handles
+        // retries with exponential backoff (attempts:3, delay:60s). Pausing the
+        // queue would block those retries and require manual intervention to recover.
+        console.error('[AiService] Gemini quota/rate-limit hit — job will be retried by BullMQ backoff.');
       }
       throw this.handleError(e, 'generateAnalysis');
     }

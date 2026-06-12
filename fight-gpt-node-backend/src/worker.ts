@@ -216,10 +216,10 @@ async function runWorker() {
             },
             { 
                 connection,
-                concurrency: 1, // 1 at a time to respect Gemini RPM limits
+                concurrency: 1,
                 limiter: {
-                    max: 5,
-                    duration: 60000 // 5 analyses per minute (Gemini 1.5 Flash RPM limit)
+                    max: 1,
+                    duration: 30000, // 1 job per 30s = 2/min → ~6 Gemini calls/min, safely under 15 RPM Flash limit
                 }
             }
         );
