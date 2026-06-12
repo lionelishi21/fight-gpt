@@ -8,6 +8,11 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// ── Active games: the 6 games currently enabled for analysis ─────────────────
+// To activate a new game: move its game_id from INACTIVE_GAMES to ACTIVE_GAMES
+// and re-run this seed script. No code changes needed.
+const ACTIVE_GAMES = new Set(['sf6', 'tekken8', 'ggst', 'mk1', 'dbfz', 'umvc3']);
+
 // Derive the canonical list from VersionResolver so this script and the
 // prompt system are always in sync — one source of truth.
 const GAMES_FROM_REGISTRY: Array<{
@@ -29,7 +34,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Capcom',
         release_year: 2023,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('sf6'),
         latest_version: '1.0',
     },
     {
@@ -40,7 +45,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Capcom',
         release_year: 2016,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('sf5'),
         latest_version: 'CE',
     },
     {
@@ -51,7 +56,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Bandai Namco',
         release_year: 2024,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('tekken8'),
         latest_version: '1.0',
     },
     {
@@ -62,7 +67,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Bandai Namco',
         release_year: 2015,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('tekken7'),
         latest_version: '4.0',
     },
     {
@@ -73,7 +78,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Arc System Works',
         release_year: 2021,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('ggst'),
         latest_version: '1.0',
     },
     {
@@ -84,7 +89,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'NetherRealm Studios',
         release_year: 2023,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('mk1'),
         latest_version: '1.0',
     },
     {
@@ -95,7 +100,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Arc System Works',
         release_year: 2018,
         match_format: 'team_3v3',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('dbfz'),
         latest_version: '1.0',
     },
     {
@@ -106,7 +111,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Capcom',
         release_year: 2011,
         match_format: 'team_3v3',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('umvc3'),
         latest_version: '1.0',
     },
     {
@@ -117,7 +122,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'SNK',
         release_year: 2022,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('kofxv'),
         latest_version: '2.0',
     },
     {
@@ -128,7 +133,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'SNK',
         release_year: 2009,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('kof2002'),
         latest_version: '1.0',
     },
     {
@@ -139,7 +144,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Arc System Works',
         release_year: 2023,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('gbvsr'),
         latest_version: '1.0',
     },
     {
@@ -150,7 +155,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'French-Bread',
         release_year: 2023,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('unib'),
         latest_version: '1.0',
     },
     {
@@ -161,7 +166,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Arc System Works',
         release_year: 2015,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('bbcf'),
         latest_version: '2.0',
     },
     {
@@ -172,7 +177,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'French-Bread',
         release_year: 2021,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('melty'),
         latest_version: '1.0',
     },
     {
@@ -183,7 +188,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'SNK',
         release_year: 2019,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('samsho'),
         latest_version: '1.0',
     },
     {
@@ -194,7 +199,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Hidden Variable Studios',
         release_year: 2014,
         match_format: 'team_3v3',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('skullgirls'),
         latest_version: '4.0',
     },
     {
@@ -205,7 +210,7 @@ const GAMES_FROM_REGISTRY: Array<{
         developer: 'Sega AM2',
         release_year: 2021,
         match_format: '1v1',
-        is_active: true,
+        is_active: ACTIVE_GAMES.has('vf5'),
         latest_version: '1.0',
     },
 ];

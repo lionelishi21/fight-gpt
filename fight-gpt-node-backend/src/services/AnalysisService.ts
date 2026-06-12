@@ -62,7 +62,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
   async analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
-      this.validateAnalysisRequest(request);
+      await this.validateAnalysisRequest(request);
 
       // --- GLOBAL SYSTEM BUDGET CAP ---
       try {
@@ -564,12 +564,26 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
     return null;
   }
 
-  private validateAnalysisRequest(request: AnalysisRequest): void {
+  private async validateAnalysisRequest(request: AnalysisRequest): Promise<void> {
     if (!request.youtube_url && !request.video_path) throw new Error('Source required');
     if (request.youtube_url && request.video_path) throw new Error('Multiple sources');
     if (!request.game_id) throw new Error('game_id is required — select a game before submitting');
+
     // Throws UnsupportedGameError if game_id is not in the supported registry
     VersionResolver.assertGameSupported(request.game_id);
+
+    // Throws InactiveGameError if the game exists but is_active: false.
+    // Prevents any Gemini calls for games that are not yet enabled.
+    const gameRecord = await Game.findOne({
+      game_id: request.game_id.toLowerCase().trim(),
+    }).lean().exec();
+
+    if (!gameRecord || !(gameRecord as any).is_active) {
+      throw Object.assign(
+        new Error(`"${request.game_id}" is not currently available for analysis. Check back soon.`),
+        { name: 'InactiveGameError', gameId: request.game_id }
+      );
+    }
   }
 
   private async enrichRequestWithGameContext(request: AnalysisRequest): Promise<AnalysisRequest> {
