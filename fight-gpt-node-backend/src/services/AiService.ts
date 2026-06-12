@@ -227,7 +227,8 @@ export class AiService extends BaseService implements IAiService {
         },
         top_3_tips: {
           type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING }
+          items: { type: SchemaType.STRING },
+          maxItems: 3,
         },
         daily_mission: {
           type: SchemaType.OBJECT,
@@ -280,7 +281,8 @@ export class AiService extends BaseService implements IAiService {
         contents: [{ role: 'user', parts: contentParts }],
         generationConfig: {
           responseMimeType: 'application/json',
-          responseSchema: analysisResponseSchema
+          responseSchema: analysisResponseSchema,
+          maxOutputTokens: 16384,
         }
       });
       usage.push(this.recordUsage(result, 'pro', this.modelName));
@@ -419,6 +421,7 @@ Return ONLY the JSON. No markdown.`,
         responseMimeType: 'application/json',
         responseSchema: analysisResponseSchema,
         thinkingConfig: { thinkingBudget: 1024 },
+        maxOutputTokens: 8192,
       } as any,
     });
     onUsage?.(this.recordUsage(result, 'flash', 'gemini-2.5-flash'));

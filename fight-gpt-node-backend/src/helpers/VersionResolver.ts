@@ -425,6 +425,9 @@ You MUST format your ONLY response as a valid JSON object. Do NOT wrap it in mar
             'mk1':      'v1_mk1',
             'sf6':      'v1',
             'sf':       'v1',
+            'dbfz':     'v1_team',
+            'mvc3':     'v1_team',
+            'umvc3':    'v1_team',
         };
 
         const normalizedId = gameId?.toLowerCase()?.trim() ?? '';

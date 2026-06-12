@@ -812,7 +812,7 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
           // Threshold increased to 0.85 for better variety
           if (topScore > 0.85) isNovel = false;
           
-          console.log(`[VectorIntelligence] Event: ${event.description.slice(0, 30)}... Score: ${topScore.toFixed(4)} -> Novel: ${isNovel}`);
+          console.log(`[VectorIntelligence] Event: ${(event.description || '').slice(0, 30)}... Score: ${topScore.toFixed(4)} -> Novel: ${isNovel}`);
         } else {
           console.log(`[VectorIntelligence] No similar scenarios found (treated as unique).`);
         }
