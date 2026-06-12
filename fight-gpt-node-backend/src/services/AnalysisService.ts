@@ -8,6 +8,7 @@ import { ICharacterEncyclopediaService } from './CharacterEncyclopediaService';
 import { ICharacterService } from './CharacterService';
 import { BaseService } from './BaseService';
 import { UuidHelper } from '../helpers/uuidHelper';
+import { VersionResolver } from '../helpers/VersionResolver';
 import { formatFullGameContextForAI } from '../helpers/aiContextHelper';
 import { AiPromptHelper, CharacterAnalysisData } from '../helpers/aiPromptHelper';
 import { IGameMetadata, GameRule as CharacterGameRule } from '../types/gameMetadata';
@@ -566,6 +567,9 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
   private validateAnalysisRequest(request: AnalysisRequest): void {
     if (!request.youtube_url && !request.video_path) throw new Error('Source required');
     if (request.youtube_url && request.video_path) throw new Error('Multiple sources');
+    if (!request.game_id) throw new Error('game_id is required — select a game before submitting');
+    // Throws UnsupportedGameError if game_id is not in the supported registry
+    VersionResolver.assertGameSupported(request.game_id);
   }
 
   private async enrichRequestWithGameContext(request: AnalysisRequest): Promise<AnalysisRequest> {
