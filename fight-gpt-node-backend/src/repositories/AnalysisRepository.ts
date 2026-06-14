@@ -135,17 +135,14 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
   ): Promise<IAnalysis[]> {
     const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown', 'P1', 'P2'];
 
-    // Only surface analyses that have ALL required fields.
-    // 'analysis.timeline.0' checks the first array element exists — meaning the
-    // array is non-empty. This is the correct MongoDB pattern; combining $not/$size
-    // with $exists/$ne on the same field is invalid and gets silently ignored.
+    // Only surface analyses that have the minimum required fields for a useful card.
+    // Player names are optional — many YouTube videos don't show them on screen.
+    // Character names + a non-empty timeline are the hard requirements.
     const filter: any = {
       video_source: 'youtube',
       'analysis.timeline.0':   { $exists: true },
       'analysis.p1_character': { $exists: true, $nin: UNKNOWN },
       'analysis.p2_character': { $exists: true, $nin: UNKNOWN },
-      'analysis.p1_name':      { $exists: true, $nin: UNKNOWN },
-      'analysis.p2_name':      { $exists: true, $nin: UNKNOWN },
     };
 
     if (gameId) filter.game_id = gameId;
@@ -172,18 +169,17 @@ export class AnalysisRepository extends BaseRepository<IAnalysis> implements IAn
    */
   async findIncompleteDiscoveryAnalyses(): Promise<IAnalysis[]> {
     const UNKNOWN = [null, '', 'Unknown', 'Player 1', 'Player 2', 'unknown', 'P1', 'P2'];
+    // Only flag analyses missing the hard requirements (timeline + character names).
+    // Missing player names are acceptable — re-analysing won't help if the video
+    // genuinely doesn't show them on screen.
     return this.model.find({
       video_source: 'youtube',
       $or: [
         { 'analysis.timeline.0': { $exists: false } },
         { 'analysis.p1_character': { $exists: false } },
         { 'analysis.p2_character': { $exists: false } },
-        { 'analysis.p1_name':      { $exists: false } },
-        { 'analysis.p2_name':      { $exists: false } },
         { 'analysis.p1_character': { $in: UNKNOWN } },
         { 'analysis.p2_character': { $in: UNKNOWN } },
-        { 'analysis.p1_name':      { $in: UNKNOWN } },
-        { 'analysis.p2_name':      { $in: UNKNOWN } },
       ],
     });
   }

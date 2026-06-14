@@ -25,6 +25,19 @@ function estimateCostUsd(records: AiUsageRecord[]): number {
     }, 0);
 }
 
+export async function checkGeminiCreditBudget(): Promise<{ allowed: boolean; spentUsd: number; budgetUsd: number }> {
+    const budgetUsd = parseFloat(process.env.GEMINI_MONTHLY_BUDGET_USD ?? '50');
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const docs = await Analysis.find({ created_at: { $gte: monthStart }, ai_usage: { $exists: true } })
+        .select('ai_usage')
+        .lean();
+    const spentUsd = estimateCostUsd(
+        (docs as any[]).flatMap((d: any) => d.ai_usage?.records ?? [])
+    );
+    return { allowed: spentUsd < budgetUsd, spentUsd, budgetUsd };
+}
+
 function summarizeAiUsage(docs: Array<{ ai_usage?: { records: AiUsageRecord[]; total_tokens: number } }>) {
     let totalTokens = 0;
     let estimatedCostUsd = 0;

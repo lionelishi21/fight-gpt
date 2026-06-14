@@ -8,6 +8,8 @@ import { IGameMetadata, GameRule, GameRule as CharacterGameRule } from '../types
 import { VersionResolver } from '../helpers/VersionResolver';
 import { AppConfig } from '../config/app';
 import { IVectorRepository } from '../repositories/VectorRepository';
+import { GeminiCreditExhaustedError } from '../errors';
+import { checkGeminiCreditBudget } from './AdminService';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -146,6 +148,11 @@ export class AiService extends BaseService implements IAiService {
   }
 
   private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
+    const budget = await checkGeminiCreditBudget().catch(() => ({ allowed: true, spentUsd: 0, budgetUsd: 50 }));
+    if (!budget.allowed) {
+      throw new GeminiCreditExhaustedError(budget.spentUsd, budget.budgetUsd);
+    }
+
     const prompt = VersionResolver.resolvePromptForGame(
       request.game_id || 'sf6',
       request.match_format || '1v1',
@@ -306,6 +313,8 @@ export class AiService extends BaseService implements IAiService {
       }
     } catch (e: any) {
       if (e.name === 'NotGameplayError') throw e;
+      if (e instanceof GeminiCreditExhaustedError) throw e;
+      // Reactive fallback: catch unexpected quota/rate-limit errors from the Gemini API itself
       const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits') || e.message.includes('403') || e.message.includes('dunning'));
       if (isQuotaError) {
         // Log the quota hit but do NOT pause the queue. BullMQ already handles

@@ -578,7 +578,9 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
       game_id: request.game_id.toLowerCase().trim(),
     }).lean().exec();
 
-    if (!gameRecord || !(gameRecord as any).is_active) {
+    // Only block if the record is explicitly disabled. A missing record (seeder not run)
+    // is treated as active so processing isn't blocked by a missing DB migration.
+    if (gameRecord && !(gameRecord as any).is_active) {
       throw Object.assign(
         new Error(`"${request.game_id}" is not currently available for analysis. Check back soon.`),
         { name: 'InactiveGameError', gameId: request.game_id }

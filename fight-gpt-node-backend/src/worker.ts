@@ -21,6 +21,7 @@ import { NotificationService } from './services/NotificationService';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
 import { queueService, AnalysisJobData, ProofValidationJobData } from './services/QueueService';
+import { GeminiCreditExhaustedError } from './errors';
 import { GamificationService } from './services/GamificationService';
 import Mission from './models/Mission';
 import UserMission from './models/UserMission';
@@ -205,12 +206,21 @@ async function runWorker() {
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : 'Unknown error';
                     Logger.error(`[Worker] Job ${job_id} failed: ${msg}`);
-                    
+
+                    if (e instanceof GeminiCreditExhaustedError) {
+                        // Credit exhaustion won't resolve on retry — mark failed immediately
+                        // so the job doesn't burn retry slots and the admin can see the real reason.
+                        await ingestionRepo.updateJobStatus(job_id, 'failed', {
+                            error_message: `CREDIT_EXHAUSTED: ${msg}`,
+                        } as any);
+                        throw e;
+                    }
+
                     // The queue handler will handle retries, but we update the DB for status visibility
                     await ingestionRepo.updateJobStatus(job_id, 'pending', {
                         error_message: msg,
                     } as any);
-                    
+
                     throw e; // Rethrow to let BullMQ handle retry
                 }
             },
