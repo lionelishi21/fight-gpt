@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     // Start bot client
     const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-    client.once('ready', () => {
+    client.once('clientReady', () => {
         Logger.info(`[Discord] Bot online as ${client.user?.tag}`);
     });
 
