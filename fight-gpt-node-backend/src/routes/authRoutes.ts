@@ -13,6 +13,16 @@ const registerLimiter = rateLimit({
     skip: () => process.env.NODE_ENV === 'development',
 });
 
+// Limit forgot-password to 3 requests per hour per IP to prevent abuse
+const forgotPasswordLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Too many reset attempts. Try again in an hour.' },
+    skip: () => process.env.NODE_ENV === 'development',
+});
+
 export class AuthRoutes {
     private router: Router;
     private authController: AuthController;
@@ -27,6 +37,8 @@ export class AuthRoutes {
         // Public routes
         this.router.post('/register', registerLimiter, this.authController.register);
         this.router.post('/login', this.authController.login);
+        this.router.post('/forgot-password', forgotPasswordLimiter, this.authController.forgotPassword);
+        this.router.post('/reset-password', this.authController.resetPassword);
 
         // Protected routes
         this.router.get('/me', authMiddleware, this.authController.getMe);

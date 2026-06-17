@@ -913,3 +913,43 @@ export function buildDripDay7Email(name: string): string {
   `;
   return base('MetaPunish Coach', 'DAY 7 · YOUR TRAINING PLAN IS READY', `${name}, unlock your personalized improvement plan.`, body);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PASSWORD RESET
+// ════════════════════════════════════════════════════════════════════════════
+export interface PasswordResetData {
+  name: string;
+  resetUrl: string;
+}
+
+export function buildPasswordResetEmail({ name, resetUrl }: PasswordResetData): string {
+  const body = `
+    <tr>
+      <td style="padding:40px 28px 32px;background:#050505;border-bottom:1px solid #1a1a1a;">
+        <div style="font-family:${C.mono};font-size:10px;color:${C.accent};letter-spacing:0.3em;text-transform:uppercase;margin-bottom:16px;">
+          ● ACCESS RECOVERY INITIATED
+        </div>
+        <div class="hero-text" style="font-family:${C.mono};font-size:36px;font-weight:bold;line-height:1;color:${C.text};letter-spacing:-0.02em;text-transform:uppercase;margin-bottom:20px;">
+          RESET YOUR<br/>ACCESS CODE,<br/><span style="color:${C.accent};">${name.toUpperCase()}.</span>
+        </div>
+        <p style="font-family:${C.mono};font-size:13px;color:${C.sub};line-height:1.7;margin:0 0 28px;">
+          We received a request to reset the password for your MetaPunish account.
+          Click the button below to set a new password. This link expires in <strong style="color:${C.text};">1 hour</strong>.
+        </p>
+        <div style="text-align:center;margin-bottom:24px;">
+          ${btn('RESET MY PASSWORD', resetUrl, C.accent)}
+        </div>
+      </td>
+    </tr>
+    ${panel('SECURITY NOTICE', `
+      <p style="font-family:${C.mono};font-size:12px;color:${C.sub};line-height:1.6;margin:0 0 8px;">
+        If you did not request a password reset, you can safely ignore this email.
+        Your password will not change.
+      </p>
+      <p style="font-family:${C.mono};font-size:11px;color:${C.muted};margin:0;">
+        Link expires: <span style="color:${C.yellow};">1 HOUR FROM NOW</span>
+      </p>
+    `, C.yellow)}
+  `;
+  return base('MetaPunish Security', 'PASSWORD RESET REQUEST', `${name}, reset your MetaPunish access code.`, body);
+}

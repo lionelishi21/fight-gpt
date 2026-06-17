@@ -7,6 +7,7 @@ import {
     buildUpgradePromptEmail,     UpgradePromptData,
     buildWeeklyBriefEmail,       WeeklyBriefData,
     buildPaymentFailedEmail,     PaymentFailedData,
+    buildPasswordResetEmail,
     buildAdminInviteEmail,
     buildNotificationEmail,
     buildRivalAlertEmail,
@@ -211,6 +212,15 @@ export class EmailService {
             to,
             subjects[day],
             builders[day](),
+        );
+    }
+    // ── Password Reset ─────────────────────────────────────────────────────
+    async sendPasswordResetEmail(to: string, name: string, resetUrl: string): Promise<boolean> {
+        return this.send(
+            this.FROM.intel,
+            to,
+            'Reset your MetaPunish access code',
+            buildPasswordResetEmail({ name, resetUrl }),
         );
     }
 }

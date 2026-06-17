@@ -62,6 +62,8 @@ export interface IUser extends Document {
         heatmap: { date: Date; value: number }[];
     };
     drip_sent: number;
+    passwordResetToken?: string;
+    passwordResetExpires?: Date;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -128,6 +130,8 @@ const UserSchema: Schema = new Schema(
         referralCount: { type: Number, default: 0 },
         referralCredits: { type: Number, default: 0 },
         drip_sent: { type: Number, default: 0 },
+        passwordResetToken: { type: String, select: false },
+        passwordResetExpires: { type: Date, select: false },
         gamification: {
             xp: { type: Number, default: 0 },
             level: { type: Number, default: 1 },

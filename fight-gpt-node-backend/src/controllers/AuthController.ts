@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { BaseController } from './BaseController';
 import User, { IUser } from '../models/User';
 import UserGame from '../models/UserGame';
 import { Invite } from '../models/Invite';
 import { emailService } from '../services/EmailService';
+import { AppConfig } from '../config/app';
 import { NotificationRepository } from '../repositories/NotificationRepository';
 import { NotificationService } from '../services/NotificationService';
 
@@ -372,6 +374,78 @@ export class AuthController extends BaseController {
             this.sendResponse(res, { success: true, data: user });
         } catch (error) {
             this.sendError(res, 'Failed to update preferences', 500);
+        }
+    };
+
+    /**
+     * POST /auth/forgot-password — send reset email (public)
+     */
+    public forgotPassword = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                this.sendError(res, 'Email is required', 400);
+                return;
+            }
+
+            // Always respond with success to prevent email enumeration
+            const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+passwordResetToken +passwordResetExpires');
+            if (!user) {
+                this.sendResponse(res, { success: true, data: { message: 'If that email exists, a reset link has been sent.' } });
+                return;
+            }
+
+            // Generate a secure random token, store its SHA-256 hash
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+            user.passwordResetToken = hashedToken;
+            user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+            await user.save();
+
+            const resetUrl = `${AppConfig.APP_URL}/reset-password?token=${rawToken}`;
+            emailService.sendPasswordResetEmail(user.email, user.name, resetUrl).catch(() => {});
+
+            this.sendResponse(res, { success: true, data: { message: 'If that email exists, a reset link has been sent.' } });
+        } catch (error) {
+            this.sendError(res, 'Failed to process request', 500);
+        }
+    };
+
+    /**
+     * POST /auth/reset-password — set new password using reset token (public)
+     */
+    public resetPassword = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { token, password } = req.body;
+            if (!token || !password) {
+                this.sendError(res, 'Token and new password are required', 400);
+                return;
+            }
+            if (password.length < 6) {
+                this.sendError(res, 'Password must be at least 6 characters', 400);
+                return;
+            }
+
+            const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+            const user = await User.findOne({
+                passwordResetToken: hashedToken,
+                passwordResetExpires: { $gt: new Date() },
+            }).select('+passwordResetToken +passwordResetExpires');
+
+            if (!user) {
+                this.sendError(res, 'Invalid or expired reset token', 400);
+                return;
+            }
+
+            user.password = password;
+            user.passwordResetToken = undefined;
+            user.passwordResetExpires = undefined;
+            await user.save();
+
+            this.sendResponse(res, { success: true, data: { message: 'Password updated. You can now log in.' } });
+        } catch (error) {
+            this.sendError(res, 'Failed to reset password', 500);
         }
     };
 
