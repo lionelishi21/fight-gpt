@@ -1,95 +1,81 @@
-import Stripe from 'stripe';
-import { AppConfig } from '../config/app';
 import User from '../models/User';
 import { ApiResponse } from '../types';
 import { BaseService } from './BaseService';
 import { Logger } from '../helpers/logger';
 
+const LS_API_KEY          = process.env.LEMONSQUEEZY_API_KEY          ?? '';
+const LS_STORE_ID         = process.env.LEMONSQUEEZY_STORE_ID         ?? '';
+const LS_COMPETITOR_VARIANT = process.env.LEMONSQUEEZY_COMPETITOR_VARIANT_ID ?? '';
+const LS_PRO_VARIANT        = process.env.LEMONSQUEEZY_PRO_VARIANT_ID        ?? '';
+const APP_URL             = process.env.APP_URL                        ?? 'https://metapunish.com';
+
 export interface IPaymentService {
-    createCheckoutSession(userId: string, priceId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>>;
-    handleWebhook(payload: any, sig: string): Promise<ApiResponse<boolean>>;
+    createCheckoutSession(userId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>>;
 }
 
 export class PaymentService extends BaseService implements IPaymentService {
-    private stripe: InstanceType<typeof Stripe>;
 
-    constructor() {
-        super();
-        this.stripe = new Stripe(AppConfig.STRIPE_SECRET_KEY, {
-            apiVersion: '2023-10-16' as any,
-        });
-    }
-
-    async createCheckoutSession(userId: string, priceId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>> {
+    async createCheckoutSession(userId: string, plan: 'competitor' | 'pro'): Promise<ApiResponse<{ url: string }>> {
         try {
             const user = await User.findById(userId);
             if (!user) return { success: false, error: 'User not found' };
 
-            const session = await this.stripe.checkout.sessions.create({
-                payment_method_types: ['card'],
-                line_items: [{ price: priceId, quantity: 1 }],
-                mode: 'subscription',
-                customer_email: user.email,
-                client_reference_id: userId,
-                success_url: `${AppConfig.APP_URL}/dashboard?payment=success`,
-                cancel_url: `${AppConfig.APP_URL}/dashboard?payment=cancelled`,
-                metadata: { userId, plan },
-            });
-
-            return { success: true, data: { url: session.url as string } };
-        } catch (error) {
-            Logger.error('Stripe session creation failed', error);
-            return { success: false, error: error instanceof Error ? error.message : 'Payment initialization failed' };
-        }
-    }
-
-    async handleWebhook(payload: any, sig: string): Promise<ApiResponse<boolean>> {
-        let event: any;
-
-        try {
-            event = this.stripe.webhooks.constructEvent(
-                payload,
-                sig,
-                AppConfig.STRIPE_WEBHOOK_SECRET
-            );
-        } catch (err) {
-            Logger.error('Webhook signature verification failed', err);
-            return { success: false, error: 'Invalid signature' };
-        }
-
-        try {
-            switch (event.type) {
-                case 'checkout.session.completed': {
-                    const session = event.data.object as any;
-                    const userId = session.client_reference_id || session.metadata?.userId;
-                    const plan = session.metadata?.plan;
-                    const tier = plan === 'competitor' ? 'COMPETITOR' : 'PRO';
-
-                    if (userId) {
-                        await User.findByIdAndUpdate(userId, {
-                            tier,
-                            stripeCustomerId: session.customer as string,
-                            stripeSubscriptionId: session.subscription as string,
-                        });
-                        Logger.info(`User ${userId} upgraded to ${tier} via Stripe`);
-                    }
-                    break;
-                }
-                case 'customer.subscription.deleted': {
-                    const subscription = event.data.object as any;
-                    await User.findOneAndUpdate(
-                        { stripeSubscriptionId: subscription.id },
-                        { tier: 'FREE' }
-                    );
-                    Logger.info(`Subscription ${subscription.id} cancelled. User downgraded to free.`);
-                    break;
-                }
+            if (!LS_API_KEY || !LS_STORE_ID) {
+                return { success: false, error: 'Payment provider not configured' };
             }
 
-            return { success: true, data: true };
+            const variantId = plan === 'pro' ? LS_PRO_VARIANT : LS_COMPETITOR_VARIANT;
+            if (!variantId) {
+                return { success: false, error: `No variant configured for plan: ${plan}` };
+            }
+
+            const body = {
+                data: {
+                    type: 'checkouts',
+                    attributes: {
+                        checkout_data: {
+                            email: user.email,
+                            custom: {
+                                user_id:    userId,
+                                user_email: user.email,
+                                plan,
+                            },
+                        },
+                        checkout_options: {
+                            success_url: `${APP_URL}/checkout/success`,
+                        },
+                    },
+                    relationships: {
+                        store:   { data: { type: 'stores',   id: String(LS_STORE_ID) } },
+                        variant: { data: { type: 'variants', id: String(variantId)   } },
+                    },
+                },
+            };
+
+            const res = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
+                method: 'POST',
+                headers: {
+                    Authorization:  `Bearer ${LS_API_KEY}`,
+                    'Content-Type': 'application/vnd.api+json',
+                    Accept:         'application/vnd.api+json',
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                Logger.error('Lemon Squeezy checkout error', data);
+                return { success: false, error: 'Failed to create checkout session' };
+            }
+
+            const url = data?.data?.attributes?.url;
+            if (!url) return { success: false, error: 'No checkout URL returned' };
+
+            return { success: true, data: { url } };
         } catch (error) {
-            Logger.error('Webhook processing failed', error);
-            return { success: false, error: 'Internal processing error' };
+            Logger.error('Lemon Squeezy session creation failed', error);
+            return { success: false, error: error instanceof Error ? error.message : 'Payment initialization failed' };
         }
     }
 }
