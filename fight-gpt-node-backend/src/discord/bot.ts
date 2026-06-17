@@ -91,7 +91,7 @@ async function handleFramedata(interaction: ChatInputCommandInteraction): Promis
         const { CharacterEncyclopedia } = await import('../models/CharacterEncyclopedia');
         const enc = await CharacterEncyclopedia.findOne({
             game_id: game,
-            character_name: { $regex: charName, $options: 'i' },
+            character_id: { $regex: charName, $options: 'i' },
         }).lean() as any;
 
         if (!enc) {
@@ -101,36 +101,47 @@ async function handleFramedata(interaction: ChatInputCommandInteraction): Promis
 
         const embed = new EmbedBuilder()
             .setColor(0xF43F5E)
-            .setTitle(`${enc.character_name} — ${game.toUpperCase()}`)
+            .setTitle(`${enc.character_id} — ${game.toUpperCase()}`)
             .setURL('https://metapunish.com/dashboard/theory')
             .setFooter({ text: 'MetaPunish Intelligence · metapunish.com' });
 
-        if (moveName && enc.moves?.length) {
-            const move = enc.moves.find((m: any) =>
+        const allMoves = [
+            ...(enc.moveset?.normals   ?? []),
+            ...(enc.moveset?.specials  ?? []),
+            ...(enc.moveset?.ex_moves  ?? []),
+            ...(enc.moveset?.supers    ?? []),
+        ];
+
+        if (moveName && allMoves.length) {
+            const move = allMoves.find((m: any) =>
                 m.name?.toLowerCase().includes(moveName.toLowerCase()) ||
                 m.input?.toLowerCase().includes(moveName.toLowerCase()),
             );
             if (move) {
                 embed.setDescription(`**${move.name ?? moveName}** \`${move.input ?? ''}\``);
+                const fd = move.frame_data ?? {};
                 const fields: { name: string; value: string; inline: boolean }[] = [];
-                if (move.startup    != null) fields.push({ name: 'Startup',    value: `${move.startup}f`,    inline: true });
-                if (move.active     != null) fields.push({ name: 'Active',     value: `${move.active}f`,     inline: true });
-                if (move.recovery   != null) fields.push({ name: 'Recovery',   value: `${move.recovery}f`,   inline: true });
-                if (move.on_block   != null) fields.push({ name: 'On Block',   value: `${move.on_block}`,    inline: true });
-                if (move.on_hit     != null) fields.push({ name: 'On Hit',     value: `${move.on_hit}`,      inline: true });
-                if (move.damage     != null) fields.push({ name: 'Damage',     value: `${move.damage}`,      inline: true });
-                if (move.properties) fields.push({ name: 'Properties', value: move.properties, inline: false });
+                if (fd.startup  != null) fields.push({ name: 'Startup',  value: `${fd.startup}f`,  inline: true });
+                if (fd.active   != null) fields.push({ name: 'Active',   value: `${fd.active}f`,   inline: true });
+                if (fd.recovery != null) fields.push({ name: 'Recovery', value: `${fd.recovery}f`, inline: true });
+                if (fd.on_block != null) fields.push({ name: 'On Block', value: `${fd.on_block}`,  inline: true });
+                if (fd.on_hit   != null) fields.push({ name: 'On Hit',   value: `${fd.on_hit}`,    inline: true });
+                if (fd.damage   != null) fields.push({ name: 'Damage',   value: `${fd.damage}`,    inline: true });
+                if (move.properties?.length) fields.push({ name: 'Properties', value: move.properties.join(', '), inline: false });
                 if (fields.length) embed.addFields(fields);
                 else embed.addFields([{ name: 'Note', value: 'No frame data stored yet for this move.', inline: false }]);
             } else {
                 embed.setDescription(`Move **${moveName}** not found. Listing character overview instead.`);
-                embed.addFields([{ name: 'Total Moves Indexed', value: `${enc.moves.length}`, inline: true }]);
+                embed.addFields([{ name: 'Total Moves Indexed', value: `${allMoves.length}`, inline: true }]);
             }
         } else {
-            embed.setDescription(enc.description ?? enc.playstyle ?? 'No description available.');
-            if (enc.strengths?.length)  embed.addFields([{ name: 'Strengths',  value: enc.strengths.slice(0,3).join('\n'),  inline: true }]);
-            if (enc.weaknesses?.length) embed.addFields([{ name: 'Weaknesses', value: enc.weaknesses.slice(0,3).join('\n'), inline: true }]);
-            embed.addFields([{ name: 'Full Framedata', value: '[View on MetaPunish](https://metapunish.com/dashboard/theory)', inline: false }]);
+            embed.setDescription(`Patch: **${enc.patch_version}**`);
+            embed.addFields([
+                { name: 'Normals',  value: `${enc.moveset?.normals?.length  ?? 0}`,  inline: true },
+                { name: 'Specials', value: `${enc.moveset?.specials?.length ?? 0}`, inline: true },
+                { name: 'Supers',   value: `${enc.moveset?.supers?.length   ?? 0}`,  inline: true },
+                { name: 'Full Framedata', value: '[View on MetaPunish](https://metapunish.com/dashboard/theory)', inline: false },
+            ]);
         }
 
         await interaction.editReply({ embeds: [embed] });
