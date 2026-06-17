@@ -13,10 +13,7 @@ export class PaymentRoutes {
     private setupRoutes(): void {
         // Create checkout session (Authenticated)
         this.router.post('/create-session', authMiddleware, this.paymentController.createSession);
-
-        // Webhook (Public, but verified via Stripe signature)
-        // IMPORTANT: Must be configured in index.ts with express.raw()
-        this.router.post('/webhook', this.paymentController.webhook);
+        // Webhook is handled by the Next.js frontend (Lemon Squeezy)
     }
 
     public getRouter(): Router {
