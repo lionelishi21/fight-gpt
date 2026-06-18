@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, GenerativeModel, SchemaType, Schema } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { Storage } from '@google-cloud/storage';
 import { AnalysisRequest, AnalysisResponse, AiUsageRecord } from '../types';
 import { BaseService } from './BaseService';
@@ -10,6 +10,7 @@ import { AppConfig } from '../config/app';
 import { IVectorRepository } from '../repositories/VectorRepository';
 import { GeminiCreditExhaustedError } from '../errors';
 import { checkGeminiCreditBudget } from './AdminService';
+import { createAnalysisGraph } from '../pipelines/analysisGraph';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -40,6 +41,7 @@ export class AiService extends BaseService implements IAiService {
   private readonly characterEncyclopediaService: ICharacterEncyclopediaService;
   private readonly vectorRepository?: IVectorRepository;
   private storage: Storage;
+  private readonly graph: ReturnType<typeof createAnalysisGraph>;
 
   constructor(
     apiKey: string,
@@ -65,6 +67,14 @@ export class AiService extends BaseService implements IAiService {
     this.gameMetadataService = gameMetadataService;
     this.characterEncyclopediaService = characterEncyclopediaService;
     this.vectorRepository = vectorRepository;
+
+    // LangGraph pipeline — handles screen → flash → pro routing with LangSmith tracing
+    this.graph = createAnalysisGraph({
+      vectorRepository,
+      generateEmbedding: this.generateEmbedding.bind(this),
+      apiKey: apiKey || AppConfig.GEMINI_API_KEY,
+      modelName,
+    });
   }
 
   /**
@@ -86,15 +96,45 @@ export class AiService extends BaseService implements IAiService {
       }
       // For YouTube URLs: pass directly to Gemini — it supports YouTube URLs natively.
       // This completely bypasses any download/bot-detection issues.
-      // gcsUri stays null; generateAnalysis will use request.youtube_url as fileUri.
+      // gcsUri stays null; the graph will use request.youtube_url as fileUri.
 
-      // Generate analysis — Gemini will use YouTube URL or GCS URI
-      const result = await this.generateAnalysis(gcsUri, request);
+      // Check credit budget before kicking off any Gemini calls
+      const budget = await checkGeminiCreditBudget().catch(() => ({ allowed: true, spentUsd: 0, budgetUsd: 50 }));
+      if (!budget.allowed) {
+        throw new GeminiCreditExhaustedError(budget.spentUsd, budget.budgetUsd);
+      }
+
+      // Run the LangGraph pipeline — screen → flash → pro (LangSmith traces each stage)
+      const state = await this.graph.invoke({ request, videoUri: gcsUri });
 
       // Cleanup GCS file after analysis (only applies to local file uploads)
       if (fileName) {
         await this.deleteFromGcs(fileName).catch(e => console.warn('[AiService] GCS Cleanup failed:', e));
       }
+
+      if (state.stage === 'rejected') {
+        const reason = state.screenResult?.rejection_reason || 'Video does not contain fighting game gameplay';
+        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason });
+      }
+
+      if (!state.analysis) {
+        throw new Error('Analysis graph completed without producing a result');
+      }
+
+      // Attach stage usage summary so downstream cost tracking still works
+      const result: AnalysisResponse = {
+        ...state.analysis,
+        ai_usage: {
+          records: state.usage.map(u => ({
+            stage: u.stage as AiUsageRecord['stage'],
+            model: u.model,
+            prompt_tokens: 0,
+            candidates_tokens: 0,
+            total_tokens: 0,
+          })),
+          total_tokens: 0,
+        },
+      };
 
       return result;
 
@@ -132,357 +172,6 @@ export class AiService extends BaseService implements IAiService {
     await this.storage.bucket(AppConfig.GOOGLE_STORAGE_BUCKET).file(fileName).delete();
   }
 
-  /**
-   * Pulls real token counts off a Gemini `generateContent` result so cost can be
-   * computed from actuals (see AdminService) instead of flat per-stage estimates.
-   */
-  private recordUsage(result: any, stage: AiUsageRecord['stage'], model: string): AiUsageRecord {
-    const u = result?.response?.usageMetadata || {};
-    return {
-      stage,
-      model,
-      prompt_tokens: u.promptTokenCount || 0,
-      candidates_tokens: u.candidatesTokenCount || 0,
-      total_tokens: u.totalTokenCount || 0,
-    };
-  }
-
-  private async generateAnalysis(videoUri: string | null, request: AnalysisRequest): Promise<AnalysisResponse> {
-    const budget = await checkGeminiCreditBudget().catch(() => ({ allowed: true, spentUsd: 0, budgetUsd: 50 }));
-    if (!budget.allowed) {
-      throw new GeminiCreditExhaustedError(budget.spentUsd, budget.budgetUsd);
-    }
-
-    const prompt = VersionResolver.resolvePromptForGame(
-      request.game_id || 'sf6',
-      request.match_format || '1v1',
-      request.p1_team,
-      request.p2_team,
-    );
-
-    let fullPrompt = prompt;
-
-    // Inject top-3 similar pro-match scenarios as few-shot examples before the main prompt.
-    // This grounds Gemini in real match data from the vector DB instead of generic training knowledge.
-    const fewShotBlock = await this.buildFewShotBlock(request).catch(() => '');
-    if (fewShotBlock) {
-      fullPrompt = fewShotBlock + '\n\n' + fullPrompt;
-    }
-
-    if (request.ai_context) {
-      fullPrompt += `\n\nContext:\n${request.ai_context}`;
-    }
-
-    if (request.video_title) {
-      fullPrompt += `\n\nVideo Title: ${request.video_title}`;
-    }
-
-    const contentParts: any[] = [];
-
-    // Pass video to Gemini:
-    // 1. GCS URI for local file uploads
-    // 2. YouTube URL directly — @google/generative-ai supports YouTube URLs natively
-    if (videoUri && videoUri.startsWith('gs://')) {
-      const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
-      contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
-    } else if (request.youtube_url) {
-      // Gemini fetches YouTube internally — no download or bot detection needed
-      contentParts.push({ fileData: { fileUri: request.youtube_url } });
-    }
-
-    contentParts.push({ text: fullPrompt });
-
-    const analysisResponseSchema: Schema = {
-      type: SchemaType.OBJECT,
-      properties: {
-        is_gameplay_video: { type: SchemaType.BOOLEAN },
-        status: { type: SchemaType.STRING },
-        reason: { type: SchemaType.STRING },
-        game_title: { type: SchemaType.STRING },
-        match_format: { type: SchemaType.STRING },
-        p1_character: { type: SchemaType.STRING },
-        p2_character: { type: SchemaType.STRING },
-        p1_name: { type: SchemaType.STRING },
-        p2_name: { type: SchemaType.STRING },
-        match_winner: { type: SchemaType.STRING },
-        timeline: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              timestamp: { type: SchemaType.STRING },
-              event_type: { type: SchemaType.STRING },
-              actor: { type: SchemaType.STRING },
-              move_used: { type: SchemaType.STRING },
-              move_confidence: { type: SchemaType.STRING },
-              move_outcome: { type: SchemaType.STRING },
-              opponent_response: { type: SchemaType.STRING },
-              spacing: { type: SchemaType.STRING },
-              is_anti_air: { type: SchemaType.BOOLEAN },
-              attack_direction: { type: SchemaType.STRING },
-              evasion_type: { type: SchemaType.STRING },
-              description: { type: SchemaType.STRING },
-              coach_advice: { type: SchemaType.STRING },
-              turn_owner: { type: SchemaType.STRING },
-              neutral_state: { type: SchemaType.STRING },
-              frame_advantage: { type: SchemaType.STRING },
-              p1_state: { type: SchemaType.STRING },
-              p2_state: { type: SchemaType.STRING }
-            }
-          }
-        },
-        top_3_tips: {
-          type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING },
-          maxItems: 3,
-        },
-        daily_mission: {
-          type: SchemaType.OBJECT,
-          properties: {
-            title: { type: SchemaType.STRING },
-            drill_steps: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING }
-            },
-            goal: { type: SchemaType.STRING }
-          }
-        }
-      }
-    };
-
-    // Accumulates real Gemini token usage across whichever stages run, so the
-    // final response carries actual cost data instead of flat per-stage estimates.
-    const usage: AiUsageRecord[] = [];
-    const attachUsage = (resp: AnalysisResponse): AnalysisResponse => {
-      resp.ai_usage = { records: usage, total_tokens: usage.reduce((sum, r) => sum + r.total_tokens, 0) };
-      return resp;
-    };
-
-    try {
-      // ── Stage 1: Flash screen (~$0.02) — reject non-gameplay before any expensive call ──
-      const screen = await this.screenVideo(videoUri, request, r => usage.push(r));
-      if (!screen.is_gameplay) {
-        const reason = screen.rejection_reason || 'Video does not contain fighting game gameplay';
-        throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, screenData: screen, usage });
-      }
-      console.log(`[AiService] Stage1 passed: ${screen.game_detected} | ${screen.p1_character} vs ${screen.p2_character} (${screen.confidence})`);
-
-      // ── Stage 2: Flash + thinking (~$0.20) — full structured analysis ──
-      let flashResult: AnalysisResponse | null = null;
-      try {
-        flashResult = await this.generateFlashThinkingAnalysis(videoUri, request, screen, analysisResponseSchema, r => usage.push(r));
-        if (flashResult.timeline && flashResult.timeline.length >= 5) {
-          console.log(`[AiService] Stage2 Flash sufficient: ${flashResult.timeline.length} timeline events`);
-          return attachUsage(flashResult);
-        }
-        console.log(`[AiService] Stage2 Flash thin (${flashResult?.timeline?.length ?? 0} events) — escalating to Pro`);
-      } catch (flashErr: any) {
-        if (flashErr.name === 'NotGameplayError') throw flashErr;
-        console.warn('[AiService] Stage2 Flash failed, escalating to Pro:', flashErr?.message);
-      }
-
-      // ── Stage 3: Gemini Pro (~$3.50) — rare escalation for thin/failed Flash results ──
-      console.log('[AiService] Stage3 Gemini Pro running');
-      const result = await this.model.generateContent({
-        contents: [{ role: 'user', parts: contentParts }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: analysisResponseSchema,
-          maxOutputTokens: 16384,
-        }
-      });
-      usage.push(this.recordUsage(result, 'pro', this.modelName));
-      const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      try {
-        const parsed = JSON.parse(responseText) as any;
-        if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
-          const reason = parsed.reason || 'Video does not contain fighting game gameplay';
-          throw Object.assign(new Error(reason), { name: 'NotGameplayError', reason, usage });
-        }
-
-        if (!parsed.p1_character) parsed.p1_character = request.p1_character_id;
-        if (!parsed.p2_character) parsed.p2_character = request.p2_character_id;
-        if (!parsed.p1_name) parsed.p1_name = request.p1_name;
-        if (!parsed.p2_name) parsed.p2_name = request.p2_name;
-
-        return attachUsage(parsed as AnalysisResponse);
-      } catch (e: any) {
-        if (e.name === 'NotGameplayError') throw e;
-        console.error('Failed to parse Gemini Pro response', responseText);
-        throw new Error('Invalid JSON response from Gemini API');
-      }
-    } catch (e: any) {
-      if (e.name === 'NotGameplayError') throw e;
-      if (e instanceof GeminiCreditExhaustedError) throw e;
-      // Reactive fallback: catch unexpected quota/rate-limit errors from the Gemini API itself
-      const isQuotaError = e.message && (e.message.includes('429') || e.message.includes('Too Many Requests') || e.message.includes('quota') || e.message.includes('prepayment credits') || e.message.includes('403') || e.message.includes('dunning'));
-      if (isQuotaError) {
-        // Log the quota hit but do NOT pause the queue. BullMQ already handles
-        // retries with exponential backoff (attempts:3, delay:60s). Pausing the
-        // queue would block those retries and require manual intervention to recover.
-        console.error('[AiService] Gemini quota/rate-limit hit — job will be retried by BullMQ backoff.');
-      }
-      throw this.handleError(e, 'generateAnalysis');
-    }
-  }
-
-  // ─── Stage 1: cheap Flash screen ────────────────────────────────────────────
-  // Answers: is this real gameplay? what game? what characters?
-  // Cost: ~$0.02. Rejects non-gameplay before any expensive call runs.
-  private async screenVideo(
-    videoUri: string | null,
-    request: AnalysisRequest,
-    onUsage?: (record: AiUsageRecord) => void,
-  ): Promise<{ is_gameplay: boolean; game_detected: string; p1_character: string; p2_character: string; confidence: string; rejection_reason: string }> {
-    const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const contentParts: any[] = [];
-    if (videoUri && videoUri.startsWith('gs://')) {
-      const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
-      contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
-    } else if (request.youtube_url) {
-      contentParts.push({ fileData: { fileUri: request.youtube_url } });
-    }
-
-    contentParts.push({
-      text: `You are a fighting game video classifier. Watch this video and answer ONLY these questions.
-
-Return a JSON object with exactly these fields:
-{
-  "is_gameplay": true/false,
-  "game_detected": "sf6 | tekken8 | mk1 | ggst | dbfz | mvc3 | other | unknown",
-  "p1_character": "character name or null",
-  "p2_character": "character name or null",
-  "confidence": "high | medium | low",
-  "rejection_reason": "null if gameplay, else brief reason e.g. 'patch notes video' or 'character intro montage'"
-}
-
-is_gameplay = true ONLY if:
-- Two players are actively fighting each other in a versus match
-- The match has rounds, a health bar HUD, and real competitive gameplay
-- NOT: combo tutorials, tier lists, patch notes, AI intros, story mode cutscenes, interviews, reaction videos
-
-Return ONLY the JSON. No markdown.`,
-    });
-
-    try {
-      const result = await flashModel.generateContent({
-        contents: [{ role: 'user', parts: contentParts }],
-        generationConfig: { responseMimeType: 'application/json' } as any,
-      });
-      onUsage?.(this.recordUsage(result, 'screen', 'gemini-2.5-flash'));
-      const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(cleaned);
-    } catch (err) {
-      console.warn('[AiService] Screen failed, defaulting to gameplay=true:', err);
-      // If screening itself fails, let the main analysis try
-      return { is_gameplay: true, game_detected: request.game_id || 'unknown', p1_character: '', p2_character: '', confidence: 'low', rejection_reason: '' };
-    }
-  }
-
-  // ─── Stage 2: Flash with thinking mode ───────────────────────────────────────
-  // Full structured analysis using Flash + 1024-token thinking budget.
-  // Produces the same schema as Pro at ~1/8th the cost.
-  private async generateFlashThinkingAnalysis(
-    videoUri: string | null,
-    request: AnalysisRequest,
-    screen: { p1_character: string; p2_character: string },
-    analysisResponseSchema: any,
-    onUsage?: (record: AiUsageRecord) => void,
-  ): Promise<AnalysisResponse> {
-    const flashModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    // Merge screen hints into request so the prompt has character context
-    const enrichedRequest: AnalysisRequest = {
-      ...request,
-      p1_character_id: request.p1_character_id || screen.p1_character || undefined,
-      p2_character_id: request.p2_character_id || screen.p2_character || undefined,
-    };
-
-    const prompt = VersionResolver.resolvePromptForGame(
-      enrichedRequest.game_id || 'sf6',
-      enrichedRequest.match_format || '1v1',
-      enrichedRequest.p1_team,
-      enrichedRequest.p2_team,
-    );
-
-    const fewShotBlock = await this.buildFewShotBlock(enrichedRequest).catch(() => '');
-    let fullPrompt = fewShotBlock ? fewShotBlock + '\n\n' + prompt : prompt;
-
-    if (enrichedRequest.ai_context) fullPrompt += `\n\nContext:\n${enrichedRequest.ai_context}`;
-    if (enrichedRequest.video_title)  fullPrompt += `\n\nVideo Title: ${enrichedRequest.video_title}`;
-
-    // Game-specific move notation guide injected to reduce misidentification
-    fullPrompt += VersionResolver.getMoveNotationGuide(enrichedRequest.game_id || 'sf6');
-
-    const contentParts: any[] = [];
-    if (videoUri && videoUri.startsWith('gs://')) {
-      const mimeType = videoUri.endsWith('.webm') ? 'video/webm' : 'video/mp4';
-      contentParts.push({ fileData: { mimeType, fileUri: videoUri } });
-    } else if (enrichedRequest.youtube_url) {
-      contentParts.push({ fileData: { fileUri: enrichedRequest.youtube_url } });
-    }
-    contentParts.push({ text: fullPrompt });
-
-    const result = await flashModel.generateContent({
-      contents: [{ role: 'user', parts: contentParts }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: analysisResponseSchema,
-        thinkingConfig: { thinkingBudget: 1024 },
-        maxOutputTokens: 8192,
-      } as any,
-    });
-    onUsage?.(this.recordUsage(result, 'flash', 'gemini-2.5-flash'));
-
-    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const parsed = JSON.parse(responseText) as any;
-
-    if (parsed.is_gameplay_video === false || parsed.status === 'not_gameplay') {
-      throw Object.assign(new Error(parsed.reason || 'Not gameplay'), { name: 'NotGameplayError' });
-    }
-
-    if (!parsed.p1_character) parsed.p1_character = enrichedRequest.p1_character_id;
-    if (!parsed.p2_character) parsed.p2_character = enrichedRequest.p2_character_id;
-    if (!parsed.p1_name)      parsed.p1_name      = enrichedRequest.p1_name;
-    if (!parsed.p2_name)      parsed.p2_name      = enrichedRequest.p2_name;
-
-    return parsed as AnalysisResponse;
-  }
-
-  private async buildFewShotBlock(request: AnalysisRequest): Promise<string> {
-    if (!this.vectorRepository) return '';
-
-    const gameId = request.game_id || 'sf6';
-    const teamChars = (t?: { point: string; assist1: string; assist2: string }) =>
-      t ? [t.point, t.assist1, t.assist2].filter(Boolean) : [];
-    const characters = [
-      ...teamChars(request.p1_team),
-      ...teamChars(request.p2_team),
-      request.p1_character_id,
-      request.p2_character_id,
-    ].filter((c): c is string => Boolean(c));
-
-    const contextText = characters.length
-      ? `${gameId} match: ${characters.join(' vs ')}`
-      : `${gameId} high level tournament match`;
-
-    const embedding = await this.generateEmbedding(contextText);
-    const scenarios = await this.vectorRepository.findSimilarScenarios(embedding, gameId, 3);
-
-    if (!scenarios.length) return '';
-
-    const examples = scenarios
-      .map((s, i) => {
-        const chars = s.characters_involved?.join(' vs ') || 'unknown';
-        const tags = s.tags?.join(', ') || '';
-        return `Example ${i + 1} [${chars}${tags ? ` | ${tags}` : ''}]:\n  Context: ${s.context}\n  Description: ${s.description}`;
-      })
-      .join('\n\n');
-
-    return `REFERENCE SCENARIOS FROM PRO MATCH DATABASE (use these as calibration examples for analysis quality and terminology):\n\n${examples}\n\n---`;
-  }
 
   /**
    * Verify mission proof video
