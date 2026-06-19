@@ -86,7 +86,16 @@ async function downloadTwitchVod(vodUrl: string, jobId: string): Promise<string 
 async function runWorker() {
     try {
         Logger.info('Starting MetaPunish Worker Node...');
-        
+
+        // LangSmith tracing status — if LANGCHAIN_API_KEY is missing traces won't appear
+        const tracingEnabled = process.env.LANGCHAIN_TRACING_V2 === 'true';
+        const hasApiKey = !!process.env.LANGCHAIN_API_KEY;
+        if (tracingEnabled && hasApiKey) {
+            Logger.info(`[LangSmith] Tracing ENABLED → project: ${process.env.LANGCHAIN_PROJECT || 'default'}`);
+        } else {
+            Logger.warn(`[LangSmith] Tracing DISABLED — LANGCHAIN_TRACING_V2=${process.env.LANGCHAIN_TRACING_V2 ?? 'unset'}, LANGCHAIN_API_KEY=${hasApiKey ? 'set' : 'MISSING'}`);
+        }
+
         // 1. Initialize DB
         await Database.connect();
 
