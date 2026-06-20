@@ -134,31 +134,56 @@ NOT gameplay: combo tutorials, tier lists, patch notes, story mode, interviews.
 
 Return ONLY the JSON. No markdown.`;
 
+// ── Key-aware invoke — retries with fallback key on quota exhaustion ──────────
+function is429(err: any): boolean {
+  return (
+    err?.status === 429 ||
+    err?.message?.includes('429') ||
+    err?.message?.includes('prepayment credits') ||
+    err?.message?.includes('Too Many Requests')
+  );
+}
+
+async function invokeWithFallback(
+  primaryKey: string,
+  fallbackKey: string | undefined,
+  modelId: string,
+  opts: Record<string, unknown>,
+  messages: any[]
+): Promise<any> {
+  const primary = new ChatGoogleGenerativeAI({ model: modelId, apiKey: primaryKey, ...opts });
+  try {
+    return await primary.invoke(messages);
+  } catch (err: any) {
+    if (is429(err) && fallbackKey) {
+      Logger.warn(`[AnalysisGraph] Primary key quota depleted — switching to fallback key for ${modelId}`);
+      const fallback = new ChatGoogleGenerativeAI({ model: modelId, apiKey: fallbackKey, ...opts });
+      return await fallback.invoke(messages);
+    }
+    throw err;
+  }
+}
+
 // ── Factory ───────────────────────────────────────────────────────────────────
 export function createAnalysisGraph(deps: {
   vectorRepository?: IVectorRepository;
   generateEmbedding: (text: string) => Promise<number[]>;
   apiKey: string;
-  modelName: string;  // your GEMINI_MODEL env var (Pro model)
+  fallbackApiKey?: string;  // antigravity / secondary Gemini key
+  modelName: string;
 }) {
-  const { vectorRepository, generateEmbedding, apiKey, modelName } = deps;
+  const { vectorRepository, generateEmbedding, apiKey, fallbackApiKey, modelName } = deps;
 
   // ── Node 1: Screen ──────────────────────────────────────────────────────────
   // Cheap Flash call — rejects non-gameplay before any expensive call runs.
   async function screenNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
-    const model = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
-      apiKey,
-      temperature: 0,
-    });
-
     const msg = new HumanMessage({
       content: [videoContent(state), { type: "text", text: SCREEN_PROMPT }] as any,
     });
 
     let screenResult: ScreenResult;
     try {
-      const result = await model.invoke([msg]);
+      const result = await invokeWithFallback(apiKey, fallbackApiKey, "gemini-2.5-flash", { temperature: 0 }, [msg]);
       const text = typeof result.content === "string"
         ? result.content
         : JSON.stringify(result.content);
@@ -189,13 +214,6 @@ export function createAnalysisGraph(deps: {
   // ── Node 2: Flash + thinking ────────────────────────────────────────────────
   // Full structured analysis. Escalates to Pro only if timeline is thin (< 5 events).
   async function flashNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
-    const model = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
-      apiKey,
-      temperature: 0,
-      maxOutputTokens: 8192,
-    });
-
     const enrichedRequest: AnalysisRequest = {
       ...state.request,
       p1_character_id: state.request.p1_character_id || state.screenResult?.p1_character || undefined,
@@ -225,12 +243,11 @@ export function createAnalysisGraph(deps: {
 
     let analysis: AnalysisResponse;
     try {
-      // Pass thinking budget through invocation kwargs
-      const result = await model.invoke([msg], {
-        additionalKwargs: {
-          generationConfig: { thinkingConfig: { thinkingBudget: 1024 } },
-        },
-      } as any);
+      const result = await invokeWithFallback(
+        apiKey, fallbackApiKey, "gemini-2.5-flash",
+        { temperature: 0, maxOutputTokens: 8192 },
+        [msg]
+      );
 
       const text = typeof result.content === "string"
         ? result.content
@@ -268,13 +285,6 @@ export function createAnalysisGraph(deps: {
   async function proNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
     Logger.info("[AnalysisGraph] Pro escalation running");
 
-    const model = new ChatGoogleGenerativeAI({
-      model: modelName,
-      apiKey,
-      temperature: 0,
-      maxOutputTokens: 16384,
-    });
-
     const basePrompt = VersionResolver.resolvePromptForGame(
       state.request.game_id || "sf6",
       state.request.match_format || "1v1",
@@ -294,7 +304,11 @@ export function createAnalysisGraph(deps: {
       content: [videoContent(state), { type: "text", text: fullPrompt }] as any,
     });
 
-    const result = await model.invoke([msg]);
+    const result = await invokeWithFallback(
+      apiKey, fallbackApiKey, modelName,
+      { temperature: 0, maxOutputTokens: 16384 },
+      [msg]
+    );
     const text = typeof result.content === "string"
       ? result.content
       : JSON.stringify(result.content);

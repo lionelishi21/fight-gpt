@@ -69,10 +69,12 @@ export class AiService extends BaseService implements IAiService {
     this.vectorRepository = vectorRepository;
 
     // LangGraph pipeline — handles screen → flash → pro routing with LangSmith tracing
+    // fallbackApiKey (GEMINI_API_KEY_2) is used automatically when primary hits 429
     this.graph = createAnalysisGraph({
       vectorRepository,
       generateEmbedding: this.generateEmbedding.bind(this),
       apiKey: apiKey || AppConfig.GEMINI_API_KEY,
+      fallbackApiKey: AppConfig.GEMINI_API_KEY_2 || undefined,
       modelName,
     });
   }

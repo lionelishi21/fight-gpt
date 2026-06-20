@@ -53,6 +53,7 @@ export class AppConfig {
   }
   public static get LOG_LEVEL(): string { return process.env.LOG_LEVEL || 'info'; }
   public static get GEMINI_API_KEY(): string { return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''; }
+  public static get GEMINI_API_KEY_2(): string { return process.env.GEMINI_API_KEY_2 || ''; }
   public static get GEMINI_MODEL(): string { return process.env.GEMINI_MODEL || 'gemini-2.5-pro'; }
   public static get GEMINI_MODEL_PREMIUM(): string { return process.env.GEMINI_MODEL_PREMIUM || 'gemini-2.5-pro'; }
   public static get STRIPE_SECRET_KEY(): string { return process.env.STRIPE_SECRET_KEY || ''; }
