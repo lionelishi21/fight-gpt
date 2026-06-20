@@ -87,13 +87,26 @@ async function runWorker() {
     try {
         Logger.info('Starting MetaPunish Worker Node...');
 
-        // LangSmith tracing status — if LANGCHAIN_API_KEY is missing traces won't appear
-        const tracingEnabled = process.env.LANGCHAIN_TRACING_V2 === 'true';
-        const hasApiKey = !!process.env.LANGCHAIN_API_KEY;
+        // LangSmith checks LANGSMITH_* first, then LANGCHAIN_* as fallback
+        const tracingEnabled =
+            process.env.LANGSMITH_TRACING === 'true' ||
+            process.env.LANGSMITH_TRACING_V2 === 'true' ||
+            process.env.LANGCHAIN_TRACING_V2 === 'true';
+        const hasApiKey =
+            !!process.env.LANGSMITH_API_KEY ||
+            !!process.env.LANGCHAIN_API_KEY;
+        const project =
+            process.env.LANGSMITH_PROJECT ||
+            process.env.LANGCHAIN_PROJECT ||
+            'default';
+        const endpoint =
+            process.env.LANGSMITH_ENDPOINT ||
+            'https://api.smith.langchain.com';
+
         if (tracingEnabled && hasApiKey) {
-            Logger.info(`[LangSmith] Tracing ENABLED → project: ${process.env.LANGCHAIN_PROJECT || 'default'}`);
+            Logger.info(`[LangSmith] Tracing ENABLED → project: ${project} | endpoint: ${endpoint}`);
         } else {
-            Logger.warn(`[LangSmith] Tracing DISABLED — LANGCHAIN_TRACING_V2=${process.env.LANGCHAIN_TRACING_V2 ?? 'unset'}, LANGCHAIN_API_KEY=${hasApiKey ? 'set' : 'MISSING'}`);
+            Logger.warn(`[LangSmith] Tracing DISABLED — tracing=${tracingEnabled}, apiKey=${hasApiKey ? 'set' : 'MISSING'}, endpoint=${endpoint}`);
         }
 
         // 1. Initialize DB
