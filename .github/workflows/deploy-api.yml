@@ -81,6 +81,8 @@ jobs:
             grep -q "^LANGCHAIN_TRACING_V2=" .env || echo "LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}" >> .env
             sed -i "s|^LANGCHAIN_PROJECT=.*|LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}|" .env || true
             grep -q "^LANGCHAIN_PROJECT=" .env || echo "LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}" >> .env
+            sed -i "s|^GEMINI_API_KEY_2=.*|GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}|" .env || true
+            grep -q "^GEMINI_API_KEY_2=" .env || echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
             sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}|" .env || true
             grep -q "^AWS_ACCESS_KEY_ID=" .env || echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
             sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}|" .env || true
