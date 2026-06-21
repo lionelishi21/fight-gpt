@@ -75,12 +75,14 @@ jobs:
             grep -q "^SENTRY_DSN=" .env || echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
             sed -i "s|^GROK_API_KEY=.*|GROK_API_KEY=${{ secrets.GROK_API_KEY }}|" .env || true
             grep -q "^GROK_API_KEY=" .env || echo "GROK_API_KEY=${{ secrets.GROK_API_KEY }}" >> .env
-            sed -i "s|^LANGCHAIN_API_KEY=.*|LANGCHAIN_API_KEY=${{ secrets.LANGCHAIN_API_KEY }}|" .env || true
-            grep -q "^LANGCHAIN_API_KEY=" .env || echo "LANGCHAIN_API_KEY=${{ secrets.LANGCHAIN_API_KEY }}" >> .env
-            sed -i "s|^LANGCHAIN_TRACING_V2=.*|LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}|" .env || true
-            grep -q "^LANGCHAIN_TRACING_V2=" .env || echo "LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}" >> .env
-            sed -i "s|^LANGCHAIN_PROJECT=.*|LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}|" .env || true
-            grep -q "^LANGCHAIN_PROJECT=" .env || echo "LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}" >> .env
+            sed -i "s|^LANGSMITH_API_KEY=.*|LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}|" .env || true
+            grep -q "^LANGSMITH_API_KEY=" .env || echo "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" >> .env
+            sed -i "s|^LANGSMITH_TRACING=.*|LANGSMITH_TRACING=${{ secrets.LANGSMITH_TRACING }}|" .env || true
+            grep -q "^LANGSMITH_TRACING=" .env || echo "LANGSMITH_TRACING=${{ secrets.LANGSMITH_TRACING }}" >> .env
+            sed -i "s|^LANGSMITH_PROJECT=.*|LANGSMITH_PROJECT=${{ secrets.LANGSMITH_PROJECT }}|" .env || true
+            grep -q "^LANGSMITH_PROJECT=" .env || echo "LANGSMITH_PROJECT=${{ secrets.LANGSMITH_PROJECT }}" >> .env
+            sed -i "s|^LANGSMITH_ENDPOINT=.*|LANGSMITH_ENDPOINT=${{ secrets.LANGSMITH_ENDPOINT }}|" .env || true
+            grep -q "^LANGSMITH_ENDPOINT=" .env || echo "LANGSMITH_ENDPOINT=${{ secrets.LANGSMITH_ENDPOINT }}" >> .env
             sed -i "s|^GEMINI_API_KEY_2=.*|GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}|" .env || true
             grep -q "^GEMINI_API_KEY_2=" .env || echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
             sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}|" .env || true
