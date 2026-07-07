@@ -57,6 +57,7 @@ export interface AnalysisRequest {
   metadata?: Record<string, any>; // Flexible metadata storage
   force?: boolean; // Force re-analysis and bypass cache
   analysis_id?: string; // Original analysis ID for overwriting on reprocess
+  userId?: string; // Consumer who uploaded this video — used to personalize retrieval via PlayerTendencyProfile
 }
 
 /**
@@ -87,6 +88,20 @@ export interface AnalysisResponse {
   p1_team?: TeamComposition;
   p2_team?: TeamComposition;
   match_winner?: string;
+  // Two-way character-focused analysis
+  raw_events?: TimelineEvent[]; // Objective timeline extracted from video
+  analysis_p1?: {
+    top_3_tips: string[];
+    daily_mission?: DailyMission;
+    coaching_by_event: Record<string, { description: string; coach_advice: string }>; // Keyed by event timestamp or node_id
+  };
+  analysis_p2?: {
+    top_3_tips: string[];
+    daily_mission?: DailyMission;
+    coaching_by_event: Record<string, { description: string; coach_advice: string }>; // Keyed by event timestamp or node_id
+  };
+  
+  // Legacy single-perspective fields (kept for backwards compatibility)
   timeline?: TimelineEvent[];
   top_3_tips?: string[];
   daily_mission?: DailyMission;
@@ -114,7 +129,8 @@ export interface TimelineEvent {
   event_type:
     | 'punish_missed' | 'bad_habit' | 'pro_move' | 'neutral_loss' | 'neutral_win'
     | 'frame_trap' | 'whiff_punish' | 'okizeme' | 'corner_carry' | 'wake_up_option'
-    | 'anti_air' | 'evasion' | 'spacing_error' | 'counter_hit' | 'trade';
+    | 'anti_air' | 'evasion' | 'spacing_error' | 'counter_hit' | 'trade'
+    | 'combined_sequence';
   actor?: 'p1' | 'p2';
   move_used?: string;
   move_confidence?: 'high' | 'medium' | 'low';
@@ -133,8 +149,11 @@ export interface TimelineEvent {
   evasion_type?:
     | 'jump_back' | 'jump_forward' | 'neutral_jump'
     | 'parry' | 'perfect_parry' | 'backdash' | 'drive_impact_armor' | null;
-  description: string;
-  coach_advice: string;
+  description?: string; // Made optional since it might move to perspective analysis
+  coach_advice?: string; // Made optional since it might move to perspective analysis
+  // Combined sequences fields
+  sequence_chain?: string[];
+  tactical_intent?: string;
   // Legacy fields — kept for existing processVectorIntelligence callers
   turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
   neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';

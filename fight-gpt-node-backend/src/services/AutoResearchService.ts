@@ -5,6 +5,7 @@ import { Game } from '../models/Game';
 import { Character } from '../models/Character';
 import { TheoryDoc } from '../models/TheoryDocument';
 import { Scenario } from '../models/Scenario';
+import { ResearchLog } from '../models/ResearchLog';
 
 /**
  * AutoResearchService — Karpathy-style autonomous research agent.
@@ -38,7 +39,7 @@ export class AutoResearchService {
     /**
      * Manually trigger a full research cycle (useful from admin panel).
      */
-    async runResearchCycle(): Promise<{ character: number; matchup: number; skipped: number }> {
+    async runResearchCycle(triggeredBy: 'cron' | 'manual' = 'cron'): Promise<{ character: number; matchup: number; skipped: number }> {
         if (this.isRunning) {
             console.log('[AutoResearch] Cycle already in progress — skipping');
             return { character: 0, matchup: 0, skipped: 1 };
@@ -57,6 +58,12 @@ export class AutoResearchService {
             for (const game of games) {
                 const gameId = game.game_id;
                 const characters = await Character.find({ game_id: gameId, is_current: true }).lean().exec();
+
+                const startTime = Date.now();
+                const coveredChars = new Set<string>();
+                const errors: string[] = [];
+                let gameCharGenerated = 0;
+                let gameMatchupGenerated = 0;
 
                 // ── 1. Character theory gaps ───────────────────────────────
                 for (const char of characters) {
@@ -90,8 +97,11 @@ export class AutoResearchService {
 
                             if (result.success && result.data) {
                                 characterGenerated++;
+                                gameCharGenerated++;
+                                coveredChars.add(charId);
                             }
                         } catch (err: any) {
+                            errors.push(`Character ${charId} (${level}): ${err.message || String(err)}`);
                             console.error(`[AutoResearch] Failed ${level} character theory ${charId}:`, err);
                             if (err?.message?.includes('429 Too Many Requests') || err?.status === 429) {
                                 console.error('[AutoResearch] API Quota exceeded. Aborting cycle.');
@@ -137,8 +147,12 @@ export class AutoResearchService {
 
                                 if (result.success && result.data) {
                                     matchupGenerated++;
+                                    gameMatchupGenerated++;
+                                    coveredChars.add(charA);
+                                    coveredChars.add(charB);
                                 }
                             } catch (err: any) {
+                                errors.push(`Matchup ${charA} vs ${charB} (${level}): ${err.message || String(err)}`);
                                 console.error(`[AutoResearch] Failed ${level} matchup ${charA} vs ${charB}:`, err);
                                 if (err?.message?.includes('429 Too Many Requests') || err?.status === 429) {
                                     console.error('[AutoResearch] API Quota exceeded. Aborting cycle.');
@@ -150,14 +164,26 @@ export class AutoResearchService {
                 }
 
                 // ── 3. Broadcast summary if anything was generated ─────────
-                if (characterGenerated + matchupGenerated > 0) {
+                if (gameCharGenerated + gameMatchupGenerated > 0) {
                     await this.notificationService.broadcast('VECTOR_INSIGHT', {
                         gameId,
                         title: `${(game as any).name} intel updated`,
-                        description: `${characterGenerated} character theories and ${matchupGenerated} matchup theories refreshed from latest tournament data.`,
+                        description: `${gameCharGenerated} character theories and ${gameMatchupGenerated} matchup theories refreshed from latest tournament data.`,
                         link: '/dojo/roster',
                     }, 'medium');
                 }
+
+                // ── 4. Save ResearchLog ────────────────────────────────────
+                const status = errors.length === 0 ? 'success' : ((gameCharGenerated + gameMatchupGenerated > 0) ? 'partial' : 'failed');
+                await ResearchLog.create({
+                    game_id: gameId,
+                    triggered_by: triggeredBy,
+                    theories_generated: gameCharGenerated + gameMatchupGenerated,
+                    characters_covered: Array.from(coveredChars),
+                    errors,
+                    duration_ms: Date.now() - startTime,
+                    status
+                });
             }
 
             console.log(`[AutoResearch] Cycle complete — ${characterGenerated} character, ${matchupGenerated} matchup, ${skipped} skipped`);

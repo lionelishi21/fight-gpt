@@ -1,6 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Sentry must init before any other imports so it can instrument them — this is a
+// separate process from index.ts's API server, so it needs its own initialization.
+import { initSentry } from './helpers/sentry';
+initSentry();
+
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { Database } from './config/database';
@@ -17,6 +22,7 @@ import { CharacterService } from './services/CharacterService';
 import { CharacterRepository } from './repositories/CharacterRepository';
 import { GameRepository } from './repositories/GameRepository';
 import { VectorRepository } from './repositories/VectorRepository';
+import { PlayerTendencyRepository } from './repositories/PlayerTendencyRepository';
 import { NotificationService } from './services/NotificationService';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
@@ -133,18 +139,21 @@ async function runWorker() {
         const vectorRepo = new VectorRepository();
         const notificationRepo = new NotificationRepository();
         const rivalRepo = new RivalRepository();
+        const playerTendencyRepo = new PlayerTendencyRepository();
 
         // 3. Initialize Services (Dependency Injection)
         const gameMetadataService = new GameMetadataService(gameMetadataRepo);
         const characterEncyclopediaService = new CharacterEncyclopediaService(characterEncyclopediaRepo);
         const characterService = new CharacterService(characterRepo, gameRepo);
         const notificationService = new NotificationService(notificationRepo);
-        
+
         const aiService = new AiService(
             AppConfig.GEMINI_API_KEY,
             AppConfig.GEMINI_MODEL,
             gameMetadataService,
-            characterEncyclopediaService
+            characterEncyclopediaService,
+            vectorRepo,
+            playerTendencyRepo
         );
 
         const analysisService = new AnalysisService(
@@ -155,7 +164,9 @@ async function runWorker() {
             characterService,
             vectorRepo,
             notificationService,
-            rivalRepo
+            rivalRepo,
+            undefined,
+            playerTendencyRepo
         );
 
         // 4. Setup BullMQ Worker
@@ -235,6 +246,14 @@ async function runWorker() {
                         await ingestionRepo.updateJobStatus(job_id, 'failed', {
                             error_message: `CREDIT_EXHAUSTED: ${msg}`,
                         } as any);
+
+                        // Without this, quota exhaustion was logged and silently looped through
+                        // every remaining job until someone happened to check logs manually.
+                        const { Sentry } = require('./helpers/sentry');
+                        Sentry.captureException(e, { level: 'critical', tags: { type: 'gemini_quota_exhausted' } });
+                        await queueService.pauseQueue().catch(err => Logger.error('[Worker] Failed to auto-pause queue on quota exhaustion', err));
+                        Logger.warn('[Worker] Queue auto-paused — Gemini quota exhausted. Resume manually once billing/quota is resolved.');
+
                         throw e;
                     }
 
@@ -363,6 +382,22 @@ async function runWorker() {
             } catch (e) {
                 Logger.error(`[Worker] Failed-handler error for mission ${missionId}: ${e instanceof Error ? e.message : e}`);
             }
+        });
+
+        // Without these, an async crash in BullMQ internals or a stray promise
+        // bypasses Sentry entirely and PM2 sees a hang instead of a clean restart.
+        process.on('unhandledRejection', (reason) => {
+            Logger.error('[Worker] Unhandled promise rejection', reason as any);
+            const { Sentry } = require('./helpers/sentry');
+            Sentry.captureException(reason, { level: 'fatal', tags: { type: 'unhandledRejection', process: 'worker' } });
+            process.exit(1);
+        });
+
+        process.on('uncaughtException', (error) => {
+            Logger.error('[Worker] Uncaught exception', error);
+            const { Sentry } = require('./helpers/sentry');
+            Sentry.captureException(error, { level: 'fatal', tags: { type: 'uncaughtException', process: 'worker' } });
+            process.exit(1);
         });
 
         // Graceful shutdown

@@ -334,18 +334,25 @@ export class IngestionService extends BaseService implements IIngestionService {
                     }
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : 'Unknown error';
-                    const shouldRetry = job.retry_count < 2;
-
-                    await this.ingestionRepository.updateJobStatus(
-                        job.job_id,
-                        shouldRetry ? 'pending' : 'failed',
-                        {
-                            error_message: msg,
-                            retry_count: job.retry_count + 1,
-                        } as any
-                    );
-                    failed++;
-                    Logger.warn(`[IngestionService] Job ${job.job_id} failed (retry ${job.retry_count + 1}): ${msg}`);
+                    
+                    if (msg.toLowerCase().includes('unavailable')) {
+                        // User request: just remove entirely if video is unavailable
+                        await this.ingestionRepository.deleteJob(job.job_id).catch(() => {});
+                        failed++;
+                        Logger.warn(`[IngestionService] Job ${job.job_id} completely removed because video is unavailable.`);
+                    } else {
+                        const shouldRetry = job.retry_count < 2;
+                        await this.ingestionRepository.updateJobStatus(
+                            job.job_id,
+                            shouldRetry ? 'pending' : 'failed',
+                            {
+                                error_message: msg,
+                                retry_count: job.retry_count + 1,
+                            } as any
+                        );
+                        failed++;
+                        Logger.warn(`[IngestionService] Job ${job.job_id} failed (retry ${job.retry_count + 1}): ${msg}`);
+                    }
                 }
                 
                 // Rate limit buffer (e.g. 60s between analysis requests to stay under token limits)

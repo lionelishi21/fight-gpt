@@ -8,16 +8,21 @@ interface GameConfig {
   notation: string;
 }
 
-// ─── Base JSON schema shared by all prompts ──────────────────────────────────
+// ─── Base JSON schema for Phase 1 Objective Extraction ───────────────────────
 // Every game prompt ends with this schema (with game-specific event_type list).
 const BASE_SCHEMA_INSTRUCTIONS = `
+═══ COLLISION & SPACING VERIFICATION (RAG) ═══
+CRITICAL: Cross-reference visual events with the provided Game Context/Mechanics.
+- Check Spacing: If an attack is visually ambiguous, use the character's known range to determine if it was a 'whiff' (miss) or 'blocked'.
+- Check States: If an opponent is airborne, they cannot block grounded normal attacks. Label as 'whiff' or 'normal_hit' accordingly.
+
 ═══ OUTPUT FORMAT ═══
 Return ONLY valid JSON. No markdown. No code blocks.
 
 {
   "status": "success",
   "is_gameplay_video": true,
-  "source": "sensei_ai_analyzer_v3",
+  "source": "sensei_ai_analyzer_v4",
   "game_title": "Exact game title",
   "p1_name": "Player name if on screen, else null",
   "p2_name": "Player name if on screen, else null",
@@ -37,17 +42,9 @@ Return ONLY valid JSON. No markdown. No code blocks.
       "opponent_response": "SEE GAME-SPECIFIC RESPONSES ABOVE",
       "spacing": "throw_range | close | mid_range | max_range | out_of_range",
       "is_anti_air": false,
-      "evasion_type": null,
-      "description": "What happened and why it matters.",
-      "coach_advice": "Actionable instruction for improvement."
+      "evasion_type": null
     }
-  ],
-  "top_3_tips": ["Tip 1 based on a specific pattern seen", "Tip 2", "Tip 3"],
-  "daily_mission": {
-    "title": "Mission name",
-    "drill_steps": ["Step 1", "Step 2"],
-    "goal": "What the player achieves by drilling this."
-  }
+  ]
 }
 `;
 

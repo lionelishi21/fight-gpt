@@ -10,6 +10,9 @@ export interface IScenario {
     embedding: number[];
     match_references: string[];
     tags: string[];
+    // Combined sequences fields
+    sequence_chain?: string[];
+    tactical_intent?: string;
     // Match state context
     turn_owner?: 'p1' | 'p2' | 'neutral' | 'contested';
     neutral_state?: 'neutral' | 'p1_offense' | 'p2_offense' | 'scramble';
@@ -46,6 +49,8 @@ const ScenarioSchema = new Schema<IScenarioDocument>({
     },
     match_references: [{ type: String }],
     tags: [{ type: String }],
+    sequence_chain:       [{ type: String }],
+    tactical_intent:      { type: String },
     turn_owner:           { type: String },
     neutral_state:        { type: String },
     spacing:              { type: String },

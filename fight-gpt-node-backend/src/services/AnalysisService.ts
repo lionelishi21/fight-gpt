@@ -10,6 +10,9 @@ import { BaseService } from './BaseService';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { VersionResolver } from '../helpers/VersionResolver';
 import { formatFullGameContextForAI } from '../helpers/aiContextHelper';
+import { buildFewShotExamples } from '../helpers/fewShotRanker';
+import { IPlayerTendencyRepository } from '../repositories/PlayerTendencyRepository';
+import { TendencyOwnerType } from '../models/PlayerTendencyProfile';
 import { AiPromptHelper, CharacterAnalysisData } from '../helpers/aiPromptHelper';
 import { IGameMetadata, GameRule as CharacterGameRule } from '../types/gameMetadata';
 import { IVectorRepository } from '../repositories/VectorRepository';
@@ -47,6 +50,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     private readonly notificationService?: NotificationService,
     private readonly rivalRepository?: IRivalRepository,
     private readonly premiumAiService?: IAiService,
+    private readonly playerTendencyRepository?: IPlayerTendencyRepository,
   ) {
     super();
   }
@@ -136,16 +140,24 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       }
 
       const enrichedRequest = await this.enrichRequestWithGameContext(request);
+      enrichedRequest.userId = userId;
 
       // --- FEW-SHOT VECTOR INJECTION ---
       // Retrieve similar verified scenarios from the vector DB as ground-truth examples.
-      try {
-        const fewShotExamples = await this.buildFewShotContext(enrichedRequest);
-        if (fewShotExamples) {
-          enrichedRequest.ai_context = (enrichedRequest.ai_context || '') + fewShotExamples;
+      // Only do this here when characters are already known (pre-labeled/start.gg case) —
+      // when neither character is known yet, this would burn an embedding call on an
+      // unfiltered, generic query. The LangGraph pipeline's groundNode re-does this properly
+      // once screenNode has identified the actual characters from the video itself.
+      const hasKnownCharacters = !!(enrichedRequest.p1_character_id || enrichedRequest.p2_character_id);
+      if (hasKnownCharacters) {
+        try {
+          const fewShotExamples = await this.buildFewShotContext(enrichedRequest);
+          if (fewShotExamples) {
+            enrichedRequest.ai_context = (enrichedRequest.ai_context || '') + fewShotExamples;
+          }
+        } catch (e) {
+          console.warn('[AnalysisService] Few-shot injection failed:', e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.warn('[AnalysisService] Few-shot injection failed:', e instanceof Error ? e.message : e);
       }
 
       // --- HUMAN CORRECTION INJECTION ---
@@ -164,6 +176,43 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         // User uploads get Gemini 2.5 Pro; background ingestion gets Flash
         const activeService = (isUserUpload && this.premiumAiService) ? this.premiumAiService : this.aiService;
         analysisResponse = await activeService.analyzeVideo(enrichedRequest);
+
+        // --- PHASE 2: TWO-WAY CHARACTER COACHING ---
+        if (analysisResponse.timeline && analysisResponse.timeline.length > 0) {
+          analysisResponse.raw_events = [...analysisResponse.timeline];
+
+          const p1Character = analysisResponse.p1_character || enrichedRequest.p1_character_id;
+          const p2Character = analysisResponse.p2_character || enrichedRequest.p2_character_id;
+
+          try {
+            const p1Coaching = await activeService.generatePerspectiveCoaching(
+              analysisResponse.raw_events,
+              'p1',
+              request.game_id || 'sf6',
+              p1Character,
+              p2Character,
+              enrichedRequest.ai_context
+            );
+            analysisResponse.analysis_p1 = p1Coaching;
+          } catch (e) {
+            console.warn('[AnalysisService] Failed to generate P1 coaching:', e);
+          }
+
+          try {
+            const p2Coaching = await activeService.generatePerspectiveCoaching(
+              analysisResponse.raw_events,
+              'p2',
+              request.game_id || 'sf6',
+              p2Character,
+              p1Character,
+              enrichedRequest.ai_context
+            );
+            analysisResponse.analysis_p2 = p2Coaching;
+          } catch (e) {
+            console.warn('[AnalysisService] Failed to generate P2 coaching:', e);
+          }
+        }
+
       } catch (e: any) {
         if (e.name === 'NotGameplayError') {
           // Save rejected non-gameplay video to the dojo section for detected characters
@@ -200,7 +249,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       // --- VECTOR STORAGE & INTELLIGENCE LOOP ---
       try {
-        await this.processVectorIntelligence(analysisId, request, analysisResponse);
+        await this.processVectorIntelligence(analysisId, request, analysisResponse, userId);
       } catch (e) {
         console.error('[AnalysisService] Vector processing failed:', e);
       }
@@ -399,55 +448,21 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       request.video_title || '',
     ].filter(Boolean).join(' — ');
 
-    const embedding = await this.aiService.generateEmbedding(queryText);
-    if (!embedding || embedding.length === 0) return null;
-
-    const characters = [request.p1_character_id, request.p2_character_id].filter(Boolean) as string[];
-    const similar = await this.vectorRepository.findSimilarScenarios(embedding, request.game_id, 6, characters);
-    if (!similar || similar.length === 0) return null;
-
-    // Prefer current-patch or cross-patch-valid scenarios as examples.
-    // Old-patch-specific scenarios (frame data that changed) are still shown
-    // but ranked lower so the AI understands what's foundational vs patch-specific.
     const currentPatch = await this.gameMetadataService
       .getCurrentGameMetadataByGameId(request.game_id)
       .then(r => r.success ? r.data?.patch_version : null)
       .catch(() => null);
 
-    const ranked = similar.sort((a: any, b: any) => {
-      const aScore = (a.patch_version === currentPatch ? 2 : 0) + (a.cross_patch_valid ? 1 : 0);
-      const bScore = (b.patch_version === currentPatch ? 2 : 0) + (b.cross_patch_valid ? 1 : 0);
-      return bScore - aScore;
-    }).slice(0, 3);
+    const characters = [request.p1_character_id, request.p2_character_id].filter(Boolean) as string[];
 
-    const examples = ranked
-      .filter(s => s.description)
-      .map((s, i) => {
-        const patchNote = (s as any).cross_patch_valid
-          ? '  [CROSS-PATCH VALID — mechanic applies regardless of patch]'
-          : (s as any).patch_version
-            ? `  [From patch ${(s as any).patch_version} — verify if move data still applies]`
-            : '';
-        return [
-          `EXAMPLE ${i + 1}:`,
-          s.characters_involved?.length ? `  Characters: ${s.characters_involved.join(' vs ')}` : '',
-          s.tags?.length ? `  Event type: ${s.tags[0]}` : '',
-          s.spacing ? `  Spacing: ${s.spacing}` : '',
-          s.frame_advantage ? `  Frame state: ${s.frame_advantage}` : '',
-          patchNote,
-          `  Verified event: ${s.description}`,
-          s.context ? `  Full context: ${s.context}` : '',
-        ].filter(Boolean).join('\n');
-      });
-
-    if (examples.length === 0) return null;
-
-    return `\n\n═══ VERIFIED REFERENCE EXAMPLES FROM SIMILAR MATCHES ═══
-The following events were correctly classified by human coaches. Use them as ground truth for outcome and spacing classification in this match:
-
-${examples.join('\n\n')}
-
-═══ END EXAMPLES ═══\n`;
+    return buildFewShotExamples({
+      vectorRepository: this.vectorRepository,
+      generateEmbedding: this.aiService.generateEmbedding.bind(this.aiService),
+      gameId: request.game_id,
+      characters,
+      currentPatchVersion: currentPatch,
+      queryText,
+    });
   }
 
   /**
@@ -537,6 +552,10 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
 
     for (const event of response.timeline) {
       if (!event.move_used || event.move_confidence === 'low') continue;
+      // "unlisted_move" means the model followed the move-whitelist constraint and
+      // honestly admitted it couldn't match a canonical name — that's not a
+      // hallucination, so don't downgrade confidence or attach the warning note.
+      if (event.move_used.toLowerCase() === 'unlisted_move') continue;
       // Skip generic descriptors — they're intentionally vague
       const genericTerms = ['a heavy', 'a medium', 'a light', 'a low', 'a special', 'a normal', 'a move', 'unknown'];
       if (genericTerms.some(t => event.move_used!.toLowerCase().startsWith(t))) continue;
@@ -785,7 +804,7 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
    * Processes the timeline events from an analysis and stores them in the vector database
    * if they are novel, or links them to existing scenarios if they are similar.
    */
-  public async processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse): Promise<void> {
+  public async processVectorIntelligence(analysisId: string, request: AnalysisRequest, analysisResponse: AnalysisResponse, userId?: string): Promise<void> {
     if (!this.vectorRepository) {
       console.warn('[VectorIntelligence] Skipping: Vector repository not initialized');
       return;
@@ -801,11 +820,16 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
       try {
         const p1 = this.sanitizeAiString(analysisResponse.p1_character) || 'P1';
         const p2 = this.sanitizeAiString(analysisResponse.p2_character) || 'P2';
+        
+        const p1Coach = analysisResponse.analysis_p1?.coaching_by_event?.[event.node_id || ''];
+        const description = p1Coach?.description || event.description || 'Action';
+        const advice = p1Coach?.coach_advice || event.coach_advice || 'No advice';
+        
         const contextParts = [
           `Game: ${request.game_id || 'Unknown'}.`,
           `Matchup: ${p1} vs ${p2}.`,
-          `Situation: ${event.description}.`,
-          `Advice: ${event.coach_advice}.`,
+          `Situation: ${description}.`,
+          `Advice: ${advice}.`,
         ];
         if (event.neutral_state)   contextParts.push(`Phase: ${event.neutral_state}.`);
         if (event.turn_owner)      contextParts.push(`Turn: ${event.turn_owner}.`);
@@ -858,7 +882,7 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
             scenario_id: scenarioId,
             game_id: request.game_id || 'unknown',
             pro_player_id: (request as any).pro_player_id,
-            description: event.description,
+            description: description,
             context: contextText,
             characters_involved: [
               this.sanitizeAiString(analysisResponse.p1_character),
@@ -867,6 +891,8 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
             embedding,
             match_references: [analysisId],
             tags: [event.event_type],
+            sequence_chain: event.sequence_chain,
+            tactical_intent: event.tactical_intent,
             turn_owner: event.turn_owner,
             neutral_state: event.neutral_state,
             spacing: event.spacing,
@@ -917,6 +943,109 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
         console.error(`[VectorIntelligence] Failed for event:`, e);
       }
     }
+
+    // --- PLAYER TENDENCY TRACKING ---
+    // Owner is the consumer who uploaded the video (user_id) or, for pro-footage
+    // ingestion, the labeled pro player. Skip entirely if there's nothing to attribute to.
+    try {
+      const ownerType: TendencyOwnerType | null = userId ? 'user' : (request as any).pro_player_id ? 'pro_player' : null;
+      const ownerId = userId || (request as any).pro_player_id;
+      if (ownerType && ownerId && this.playerTendencyRepository) {
+        await this.updatePlayerTendencyProfile(ownerType, ownerId, request, analysisResponse);
+      }
+    } catch (e) {
+      console.error('[VectorIntelligence] Player tendency update failed:', e);
+    }
+  }
+
+  /**
+   * Increments move/event-type/sequence-chain counters for this player+character (cheap,
+   * no LLM call). Only re-embeds the tendency summary every ~10 new samples, not per-event,
+   * so this stays a cost-saving feature rather than a new cost source.
+   */
+  private async updatePlayerTendencyProfile(
+    ownerType: TendencyOwnerType,
+    ownerId: string,
+    request: AnalysisRequest,
+    analysisResponse: AnalysisResponse,
+  ): Promise<void> {
+    if (!this.playerTendencyRepository || !analysisResponse.timeline?.length) return;
+
+    const gameId = request.game_id || 'unknown';
+
+    // Track P1 and P2 separately when both characters are known, since a tendency
+    // profile is scoped to one character at a time.
+    const actorsToCharacters: Record<string, string | null> = {
+      p1: this.sanitizeAiString(analysisResponse.p1_character),
+      p2: this.sanitizeAiString(analysisResponse.p2_character),
+    };
+
+    for (const actor of ['p1', 'p2'] as const) {
+      const characterId = actorsToCharacters[actor];
+      if (!characterId) continue;
+
+      const events = analysisResponse.timeline.filter(e => e.actor === actor);
+      if (events.length === 0) continue;
+
+      const moveDeltas: Record<string, number> = {};
+      const eventTypeDeltas: Record<string, number> = {};
+      const sequenceChains: string[][] = [];
+
+      for (const event of events) {
+        if (event.move_used) {
+          const key = event.move_used.toLowerCase().replace(/\s+/g, '_');
+          moveDeltas[key] = (moveDeltas[key] || 0) + 1;
+        }
+        if (event.event_type) {
+          eventTypeDeltas[event.event_type] = (eventTypeDeltas[event.event_type] || 0) + 1;
+        }
+        if (event.sequence_chain?.length) {
+          sequenceChains.push(event.sequence_chain);
+        }
+      }
+
+      const profile = await this.playerTendencyRepository.upsertCounts(ownerType, ownerId, gameId, characterId, {
+        moveDeltas,
+        eventTypeDeltas,
+        sequenceChains,
+        sampleCountDelta: events.length,
+      });
+
+      // Lazy re-embed: only once enough new samples have accumulated since the last embed.
+      const EMBED_EVERY_N_SAMPLES = 10;
+      if (profile.sample_count - profile.embedded_at_sample_count >= EMBED_EVERY_N_SAMPLES) {
+        const summaryText = this.buildTendencySummaryText(characterId, profile);
+        try {
+          const vector = await this.aiService.generateEmbedding(summaryText);
+          if (vector?.length) {
+            await this.playerTendencyRepository.updateTendencyVector(
+              profile.profile_key,
+              vector,
+              summaryText,
+              profile.sample_count,
+            );
+          }
+        } catch (e) {
+          console.warn('[VectorIntelligence] Tendency re-embed failed:', e instanceof Error ? e.message : e);
+        }
+      }
+    }
+  }
+
+  private buildTendencySummaryText(characterId: string, profile: { move_frequency: Record<string, number>; event_type_frequency: Record<string, number>; sample_count: number }): string {
+    const topN = (freq: Record<string, number>, n: number) => {
+      const total = Object.values(freq).reduce((s, v) => s + v, 0) || 1;
+      return Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(([key, count]) => `${key} (${Math.round((count / total) * 100)}%)`)
+        .join(', ');
+    };
+
+    const moves = topN(profile.move_frequency, 5);
+    const events = topN(profile.event_type_frequency, 5);
+
+    return `${characterId} player favors: ${moves}. Common event mix: ${events}. Based on ${profile.sample_count} observed events.`;
   }
 
   async getUserDiscoveryViews(userId: string): Promise<ApiResponse<string[]>> {

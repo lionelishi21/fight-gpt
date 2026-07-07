@@ -74,7 +74,8 @@ async function run() {
             await analysisService.processVectorIntelligence(
                 doc.analysis_id,
                 request as any,
-                doc.analysis as any
+                doc.analysis as any,
+                (doc as any).user_id
             );
         }
 

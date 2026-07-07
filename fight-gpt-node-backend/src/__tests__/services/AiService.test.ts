@@ -56,13 +56,31 @@ describe('AiService', () => {
 
   describe('healthCheck', () => {
     it('should return true when AI service is healthy', async () => {
+      const mockGenerateContent = jest.fn().mockResolvedValue({
+        response: { candidates: [{ content: { parts: [{ text: 'pong' }] } }] },
+      });
+      (GoogleGenerativeAI as jest.Mock).mockImplementation(() => ({
+        getGenerativeModel: jest.fn().mockReturnValue({ generateContent: mockGenerateContent }),
+      }));
 
-
-      const result = await aiService.healthCheck();
+      const service = new AiService(apiKey, modelName, mockGameMetadataService, mockCharacterEncyclopediaService);
+      const result = await service.healthCheck();
 
       expect(result).toBe(true);
     });
 
+    it('should return false when Gemini ping fails', async () => {
+      (GoogleGenerativeAI as jest.Mock).mockImplementation(() => ({
+        getGenerativeModel: jest.fn().mockReturnValue({
+          generateContent: jest.fn().mockRejectedValue(new Error('quota exceeded')),
+        }),
+      }));
+
+      const service = new AiService(apiKey, modelName, mockGameMetadataService, mockCharacterEncyclopediaService);
+      const result = await service.healthCheck();
+
+      expect(result).toBe(false);
+    });
   });
 
   describe('getGameMetadata', () => {

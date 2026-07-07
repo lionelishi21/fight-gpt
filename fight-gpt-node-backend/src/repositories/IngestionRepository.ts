@@ -9,6 +9,7 @@ export interface IIngestionRepository {
     getJobStats(gameId: string): Promise<{ total: number; completed: number; failed: number; pending: number }>;
     getRecentJobs(gameId: string, limit?: number): Promise<IIngestionJobDocument[]>;
     updateStuckJobs(): Promise<number>;
+    deleteJob(jobId: string): Promise<boolean>;
 }
 
 export class IngestionRepository extends BaseRepository<IIngestionJobDocument> implements IIngestionRepository {
@@ -78,5 +79,10 @@ export class IngestionRepository extends BaseRepository<IIngestionJobDocument> i
             { $set: { status: 'pending' } }
         ).exec();
         return result.modifiedCount;
+    }
+
+    async deleteJob(jobId: string): Promise<boolean> {
+        const result = await this.model.deleteOne({ job_id: jobId }).exec();
+        return result.deletedCount === 1;
     }
 }

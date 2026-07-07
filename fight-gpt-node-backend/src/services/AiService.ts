@@ -11,6 +11,7 @@ import { IVectorRepository } from '../repositories/VectorRepository';
 import { GeminiCreditExhaustedError } from '../errors';
 import { checkGeminiCreditBudget } from './AdminService';
 import { createAnalysisGraph } from '../pipelines/analysisGraph';
+import { IPlayerTendencyRepository } from '../repositories/PlayerTendencyRepository';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -27,6 +28,14 @@ export interface IAiService {
   getGameConstants(gameId: string): Promise<Record<string, unknown> | null>;
   getGlobalMechanics(gameId: string): Promise<GameRule[] | null>;
   generateEmbedding(text: string): Promise<number[]>;
+  generatePerspectiveCoaching(
+    rawEvents: any[],
+    perspective: 'p1' | 'p2',
+    gameId: string,
+    character: string | undefined,
+    opponentCharacter: string | undefined,
+    context?: string
+  ): Promise<any>;
 }
 
 /**
@@ -42,13 +51,16 @@ export class AiService extends BaseService implements IAiService {
   private readonly vectorRepository?: IVectorRepository;
   private storage: Storage;
   private readonly graph: ReturnType<typeof createAnalysisGraph>;
+  private lastHealthCheck: { result: boolean; checkedAt: number } | null = null;
+  private static readonly HEALTH_CHECK_TTL_MS = 60_000;
 
   constructor(
     apiKey: string,
     modelName: string,
     gameMetadataService: IGameMetadataService,
     characterEncyclopediaService: ICharacterEncyclopediaService,
-    vectorRepository?: IVectorRepository
+    vectorRepository?: IVectorRepository,
+    playerTendencyRepository?: IPlayerTendencyRepository
   ) {
     super();
     this.modelName = modelName;
@@ -76,6 +88,9 @@ export class AiService extends BaseService implements IAiService {
       apiKey: apiKey || AppConfig.GEMINI_API_KEY,
       fallbackApiKey: AppConfig.GEMINI_API_KEY_2 || undefined,
       modelName,
+      characterEncyclopediaService,
+      gameMetadataService,
+      playerTendencyRepository,
     });
   }
 
@@ -215,8 +230,32 @@ export class AiService extends BaseService implements IAiService {
   /**
    * Health check
    */
+  /**
+   * Actually pings Gemini rather than always returning true. Cached for
+   * HEALTH_CHECK_TTL_MS so frequent /api/health hits (load balancers, deploy
+   * scripts) don't themselves burn Gemini quota — at most one real call per minute.
+   */
   async healthCheck(): Promise<boolean> {
-    return true;
+    const now = Date.now();
+    if (this.lastHealthCheck && now - this.lastHealthCheck.checkedAt < AiService.HEALTH_CHECK_TTL_MS) {
+      return this.lastHealthCheck.result;
+    }
+
+    let result: boolean;
+    try {
+      const pingModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const response = await pingModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+        generationConfig: { maxOutputTokens: 5 },
+      });
+      result = !!response.response.candidates?.length;
+    } catch (err) {
+      console.warn('[AiService] healthCheck Gemini ping failed:', err instanceof Error ? err.message : err);
+      result = false;
+    }
+
+    this.lastHealthCheck = { result, checkedAt: now };
+    return result;
   }
 
   /**
@@ -260,6 +299,47 @@ export class AiService extends BaseService implements IAiService {
     } catch (error) {
       throw this.handleError(error, 'generateEmbedding');
     }
+  }
+
+  async generatePerspectiveCoaching(
+    rawEvents: any[],
+    perspective: 'p1' | 'p2',
+    gameId: string,
+    character: string | undefined,
+    opponentCharacter: string | undefined,
+    context?: string
+  ): Promise<any> {
+    const prompt = `You are an expert fighting game coach. Analyze this objective match timeline from the perspective of ${perspective.toUpperCase()} (${character || 'Unknown Character'}) playing against ${opponentCharacter || 'Unknown Character'} in ${gameId}.
+
+${context ? 'Game Context:\n' + context + '\n\n' : ''}
+Timeline Events:
+${JSON.stringify(rawEvents, null, 2)}
+
+Return ONLY valid JSON in the following format:
+{
+  "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "daily_mission": {
+    "title": "Mission name",
+    "drill_steps": ["Step 1", "Step 2"],
+    "goal": "Goal description"
+  },
+  "coaching_by_event": {
+    "evt-001": {
+      "description": "What happened to you.",
+      "coach_advice": "Actionable advice for this situation."
+    }
+  }
+}
+Note: The keys in coaching_by_event must exactly match the node_id from the timeline events.`;
+
+    const result = await this.model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+
+    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const sanitizedJson = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(sanitizedJson);
   }
 }
 

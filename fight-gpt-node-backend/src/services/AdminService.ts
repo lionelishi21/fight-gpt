@@ -21,7 +21,9 @@ const GEMINI_PRICING_PER_TOKEN: Record<string, { input: number; output: number }
 function estimateCostUsd(records: AiUsageRecord[]): number {
     return records.reduce((sum, r) => {
         const rate = GEMINI_PRICING_PER_TOKEN[r.model] || GEMINI_PRICING_PER_TOKEN['gemini-2.5-flash'];
-        return sum + r.prompt_tokens * rate.input + r.candidates_tokens * rate.output;
+        const promptTokens = typeof r.prompt_tokens === 'number' ? r.prompt_tokens : 0;
+        const candidatesTokens = typeof r.candidates_tokens === 'number' ? r.candidates_tokens : 0;
+        return sum + promptTokens * rate.input + candidatesTokens * rate.output;
     }, 0);
 }
 

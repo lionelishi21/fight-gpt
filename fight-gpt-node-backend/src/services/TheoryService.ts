@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 import { BaseService } from './BaseService';
 import { ITheoryRepository } from '../repositories/TheoryRepository';
 import { IVectorRepository } from '../repositories/VectorRepository';
+import { IKnowledgeRepository } from '../repositories/KnowledgeRepository';
 import { ITheoryDocument } from '../models/TheoryDocument';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
@@ -27,6 +28,7 @@ export class TheoryService extends BaseService implements ITheoryService {
     constructor(
         private readonly theoryRepository: ITheoryRepository,
         private readonly vectorRepository: IVectorRepository,
+        private readonly knowledgeRepository: IKnowledgeRepository,
         private readonly geminiApiKey: string,
         private readonly notificationService?: NotificationService,
     ) {
@@ -48,14 +50,15 @@ export class TheoryService extends BaseService implements ITheoryService {
             return { success: false, error: 'Valid character ID required for theory generation.' };
         }
         try {
-            const [scenarios, patchVersion] = await Promise.all([
+            const [scenarios, patchVersion, knowledge] = await Promise.all([
                 this.getScenariosForCharacter(gameId, charId),
                 this.getCurrentPatchVersion(gameId),
+                this.getKnowledgeForCharacter(gameId, charId)
             ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay, vortexGraph } =
-                await this.synthesiseCharacterTheory(gameId, charId, scenarios, targetSkillLevel, correctionFeedback);
+                await this.synthesiseCharacterTheory(gameId, charId, scenarios, knowledge, targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertCharacterTheory({
                 theory_id: UuidHelper.generate(),
@@ -117,14 +120,16 @@ export class TheoryService extends BaseService implements ITheoryService {
         const a = charA.toLowerCase().trim().replace(/\s+/g, '_');
         const b = charB.toLowerCase().trim().replace(/\s+/g, '_');
         try {
-            const [scenarios, patchVersion] = await Promise.all([
+            const [scenarios, patchVersion, knowledgeA, knowledgeB] = await Promise.all([
                 this.getScenariosForMatchup(gameId, a, b),
                 this.getCurrentPatchVersion(gameId),
+                this.getKnowledgeForCharacter(gameId, a),
+                this.getKnowledgeForCharacter(gameId, b)
             ]);
             const confidence = this.calcConfidence(scenarios.length);
 
             const { title, summary, fullTheory, strengths, weaknesses, winConditions, counterplay } =
-                await this.synthesiseMatchupTheory(gameId, a, b, scenarios, targetSkillLevel, correctionFeedback);
+                await this.synthesiseMatchupTheory(gameId, a, b, scenarios, [...knowledgeA, ...knowledgeB], targetSkillLevel, correctionFeedback);
 
             const saved = await this.theoryRepository.upsertMatchupTheory({
                 theory_id: UuidHelper.generate(),
@@ -233,8 +238,18 @@ export class TheoryService extends BaseService implements ITheoryService {
         }
         return (this.vectorRepository as any).model
             .find({ game_id: gameId, characters_involved: characterId }, { embedding: 0 })
-            .lean()
             .exec();
+    }
+
+    private async getKnowledgeForCharacter(gameId: string, characterId: string): Promise<any[]> {
+        try {
+            const query = `${characterId} frame data patch notes mechanics strategy ${gameId}`;
+            const embedding = await this.generateEmbedding(query);
+            const results = await this.knowledgeRepository.findSimilarKnowledge(embedding, gameId, 10, characterId);
+            return results;
+        } catch (_e) {
+            return [];
+        }
     }
 
     private async getScenariosForMatchup(gameId: string, charA: string, charB: string): Promise<any[]> {
@@ -269,6 +284,7 @@ export class TheoryService extends BaseService implements ITheoryService {
         gameId: string,
         characterId: string,
         scenarios: any[],
+        knowledge: any[],
         skillLevel: string = 'Intermediate',
         correctionFeedback?: string
     ) {
@@ -277,6 +293,10 @@ export class TheoryService extends BaseService implements ITheoryService {
                 `[${i + 1}] ${s.description} — ${s.context}`
             ).join('\n')
             : 'No match data yet.';
+
+        const knowledgeText = knowledge.length > 0
+            ? knowledge.map((k, i) => `[${k.type.toUpperCase()}] ${k.content}`).join('\n\n')
+            : 'No factual knowledge base provided.';
 
         const schema: Schema = {
             type: SchemaType.OBJECT,
@@ -333,6 +353,9 @@ export class TheoryService extends BaseService implements ITheoryService {
         const prompt = `You are MetaPunish — the world's most advanced competitive fighting game intelligence system. Your analysis goes beyond what any wiki, frame data site, or community guide covers. You synthesise competitive psychology, decision theory, and high-level match patterns into exclusive intel that cannot be found on Dustloop, SuperCombo, or any other platform.
 
 Generate a ${skillLevel}-level character theory for ${characterId} in ${gameId}.
+
+FACTUAL KNOWLEDGE BASE (USE THIS TO PREVENT HALLUCINATIONS):
+${knowledgeText}
 
 ${hasScenarios ? `You have ${scenarios.length} real high-level match scenarios to draw from:\n${scenarioText}` : `No match data is loaded yet — generate theory purely from your expert knowledge of ${characterId}'s design, frame data, and competitive history. This theory will be updated as match data is ingested.`}
 
@@ -395,6 +418,7 @@ Return ONLY valid JSON:
         charA: string,
         charB: string,
         scenarios: any[],
+        knowledge: any[],
         skillLevel: string = 'Intermediate',
         correctionFeedback?: string
     ) {
@@ -403,6 +427,10 @@ Return ONLY valid JSON:
                 `[${i + 1}] ${s.description} — ${s.context}`
             ).join('\n')
             : 'No matchup data yet.';
+
+        const knowledgeText = knowledge.length > 0
+            ? knowledge.map((k, i) => `[${k.type.toUpperCase()}] ${k.content}`).join('\n\n')
+            : 'No factual knowledge base provided.';
 
         const schema: Schema = {
             type: SchemaType.OBJECT,
@@ -431,6 +459,9 @@ Return ONLY valid JSON:
         const prompt = `You are MetaPunish — the world's most advanced competitive fighting game intelligence system. You produce matchup analysis that goes beyond anything on Dustloop, SuperCombo, or YouTube breakdown videos. Your reports synthesise competitive psychology, frame-level decision theory, and high-level match patterns.
 
 Write a ${skillLevel}-level matchup theory for ${charA} vs ${charB} in ${gameId}.
+
+FACTUAL KNOWLEDGE BASE (USE THIS TO PREVENT HALLUCINATIONS):
+${knowledgeText}
 
 ${hasScenarios ? `${scenarios.length} real high-level match scenarios:\n${scenarioText}` : `No match data loaded yet — generate theory from expert knowledge of both characters' design, frame data, and competitive history. This theory will be refined as match data is ingested.`}
 

@@ -35,3 +35,17 @@ coverage/
 *.tsbuildinfo
 
 dist/
+
+# Scratch/debug scripts — frequently contain hardcoded live credentials for quick local checks
+scratch/
+scratch-*.ts
+scratch-*.js
+database_backup/
+atlas_search_indexes_backup.json
+
+database_backup/
+backup/
+atlas_search_indexes_backup.json
+scratch_*.js
+backup-vector-indexes.js
+tsc_errors.log

@@ -180,6 +180,56 @@ export function formatCharacterMovesetForAI(
 }
 
 /**
+ * Builds a hard move-name constraint (not descriptive prose) from a character's
+ * encyclopedia moveset. Used to stop Gemini from inventing move names that don't
+ * exist for the character (e.g. "cr.LK" on a character that has no such move).
+ */
+export function formatMoveWhitelistForAI(
+  p1Encyclopedia: ICharacterEncyclopedia | null | undefined,
+  p2Encyclopedia: ICharacterEncyclopedia | null | undefined,
+  p1Label: string = 'Player 1',
+  p2Label: string = 'Player 2'
+): string {
+  const collectMoveNames = (encyclopedia: ICharacterEncyclopedia | null | undefined): string[] => {
+    if (!encyclopedia?.moveset) return [];
+    const { normals, specials, ex_moves, supers, assists, dhc, team_supers } = encyclopedia.moveset as any;
+    const categories = [normals, specials, ex_moves, supers, assists, dhc, team_supers];
+    const names: string[] = [];
+    for (const category of categories) {
+      if (!category?.length) continue;
+      for (const move of category) {
+        if (move?.name) names.push(move.name);
+      }
+    }
+    return names;
+  };
+
+  const p1Names = collectMoveNames(p1Encyclopedia);
+  const p2Names = collectMoveNames(p2Encyclopedia);
+
+  if (p1Names.length === 0 && p2Names.length === 0) return '';
+
+  const parts: string[] = [
+    '═══ MOVE NAME CONSTRAINT (MANDATORY) ═══',
+    'You MUST set move_used to EXACTLY one of the listed names for that character.',
+    'If no listed move matches what you observe, set move_used to "unlisted_move" and explain in the description — never invent a name.',
+  ];
+
+  if (p1Names.length > 0) {
+    parts.push(`\n${p1Label.toUpperCase()} — VALID MOVE NAMES:`);
+    p1Names.forEach(n => parts.push(`- ${n}`));
+  }
+  if (p2Names.length > 0) {
+    parts.push(`\n${p2Label.toUpperCase()} — VALID MOVE NAMES:`);
+    p2Names.forEach(n => parts.push(`- ${n}`));
+  }
+
+  parts.push('═══ END CONSTRAINT ═══');
+
+  return parts.join('\n');
+}
+
+/**
  * Format full game context for AI prompt
  * Combines game metadata and character rules into a single formatted string
  */

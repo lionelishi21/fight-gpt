@@ -46,14 +46,19 @@ else
     pm2 save
 fi
 
-# 7. Health check
+# 7. Health check — hits /api/health (verifies Gemini connectivity, not just "server is up")
 echo "→ Health check..."
 sleep 5
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/)
-if [ "$STATUS" = "200" ]; then
-    echo "✓ API is healthy (HTTP $STATUS)"
+HEALTH_BODY=$(curl -s http://localhost:3000/api/health)
+HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health)
+if [ "$HEALTH_STATUS" = "200" ]; then
+    echo "✓ API is healthy (HTTP $HEALTH_STATUS): $HEALTH_BODY"
 else
-    echo "✗ Health check failed (HTTP $STATUS) — check logs:"
+    echo "✗ Health check failed (HTTP $HEALTH_STATUS): $HEALTH_BODY"
+    echo "  Rolling back to previous commit..."
+    git reset --hard HEAD~1
+    npm run build
+    pm2 restart ecosystem.config.js --env production
     echo "  pm2 logs fightgpt-api --lines 50"
     exit 1
 fi

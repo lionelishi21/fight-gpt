@@ -77,6 +77,7 @@ import { GameRepository } from './repositories/GameRepository';
 import { GameMetadataRepository } from './repositories/GameMetadataRepository';
 import { CharacterEncyclopediaRepository } from './repositories/CharacterEncyclopediaRepository';
 import { VectorRepository } from './repositories/VectorRepository';
+import { PlayerTendencyRepository } from './repositories/PlayerTendencyRepository';
 import { MetaRepository } from './repositories/MetaRepository';
 import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
@@ -139,6 +140,7 @@ export class App {
     const gameMetadataRepository = AppConfig.MONGODB_URI ? new GameMetadataRepository() : null as any;
     const characterEncyclopediaRepository = AppConfig.MONGODB_URI ? new CharacterEncyclopediaRepository() : null as any;
     const vectorRepository = AppConfig.MONGODB_URI ? new VectorRepository() : null as any;
+    const playerTendencyRepository = AppConfig.MONGODB_URI ? new PlayerTendencyRepository() : null as any;
     const metaRepository = AppConfig.MONGODB_URI ? new MetaRepository() : null as any;
     const ingestionRepository = AppConfig.MONGODB_URI ? new IngestionRepository() : null as any;
     const theoryRepository = AppConfig.MONGODB_URI ? new TheoryRepository() : null as any;
@@ -155,7 +157,8 @@ export class App {
       AppConfig.GEMINI_MODEL,
       gameMetadataService,
       characterEncyclopediaService,
-      vectorRepository
+      vectorRepository,
+      playerTendencyRepository
     ) : null as any;
     // Premium model (2.5 Pro) — used for paid user uploads (higher quality, higher cost)
     const premiumAiService = AppConfig.MONGODB_URI ? new AiService(
@@ -163,7 +166,8 @@ export class App {
       AppConfig.GEMINI_MODEL_PREMIUM,
       gameMetadataService,
       characterEncyclopediaService,
-      vectorRepository
+      vectorRepository,
+      playerTendencyRepository
     ) : null as any;
     const characterService = AppConfig.MONGODB_URI ? new CharacterService(characterRepository, gameRepository) : null as any;
     const analysisService = AppConfig.MONGODB_URI ? new AnalysisService(
@@ -176,6 +180,7 @@ export class App {
       notificationService,
       rivalRepository,
       premiumAiService,
+      playerTendencyRepository,
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;
@@ -664,6 +669,24 @@ if (require.main === module) {
     Logger.info('SIGINT received, shutting down gracefully...');
     await app.stop();
     process.exit(0);
+  });
+
+  // Without these, an async crash outside Express (a stray promise in Socket.io,
+  // a timer callback, BullMQ internals) bypasses both Sentry's Express handler
+  // and our error middleware entirely, and PM2 sees a silent hang or zombie
+  // process instead of a clean crash-and-restart.
+  process.on('unhandledRejection', (reason) => {
+    Logger.error('Unhandled promise rejection', reason as any);
+    const { Sentry } = require('./helpers/sentry');
+    Sentry.captureException(reason, { level: 'fatal', tags: { type: 'unhandledRejection' } });
+    process.exit(1);
+  });
+
+  process.on('uncaughtException', (error) => {
+    Logger.error('Uncaught exception', error);
+    const { Sentry } = require('./helpers/sentry');
+    Sentry.captureException(error, { level: 'fatal', tags: { type: 'uncaughtException' } });
+    process.exit(1);
   });
 }
 

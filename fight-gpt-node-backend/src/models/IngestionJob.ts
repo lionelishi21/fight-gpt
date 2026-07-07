@@ -9,7 +9,7 @@ export interface IIngestionJob {
     video_title?: string;
     channel_name?: string;
     search_query: string;
-    source: 'scheduled' | 'manual' | 'tournament' | 'pro_scout' | 'startgg' | 'twitch';
+    source: 'scheduled' | 'manual' | 'manual_seed' | 'tournament' | 'pro_scout' | 'startgg' | 'twitch';
     video_platform?: 'youtube' | 'twitch';
     // Pre-labeled metadata from start.gg or other sources (skips AI guessing)
     p1_name?: string;
@@ -39,7 +39,7 @@ const IngestionJobSchema = new Schema<IIngestionJobDocument>({
     video_title: { type: String },
     channel_name: { type: String },
     search_query: { type: String, required: true },
-    source: { type: String, enum: ['scheduled', 'manual', 'tournament', 'pro_scout', 'startgg', 'twitch'], default: 'scheduled' },
+    source: { type: String, enum: ['scheduled', 'manual', 'manual_seed', 'tournament', 'pro_scout', 'startgg', 'twitch'], default: 'scheduled' },
     video_platform: { type: String, enum: ['youtube', 'twitch'] },
     p1_name: { type: String },
     p2_name: { type: String },

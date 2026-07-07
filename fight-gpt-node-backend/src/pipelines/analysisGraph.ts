@@ -1,31 +1,29 @@
 /**
  * LangGraph pipeline for the 3-stage Gemini analysis.
  *
- * Replaces the nested try/catch waterfall in AiService.generateAnalysis() with
- * an explicit state graph that LangSmith can trace end-to-end:
- *
  *   screen → (not gameplay) → END
  *   screen → (gameplay)     → flash
  *   flash  → (≥5 events)   → END
  *   flash  → (<5 events)   → pro → END
  *
- * Usage — drop into AiService:
- *   const graph = createAnalysisGraph({ vectorRepository, generateEmbedding, apiKey, modelName });
- *   const state = await graph.invoke({ request, videoUri });
- *   if (state.stage === "rejected") throw NotGameplayError;
- *   return state.analysis;
+ * Uses raw @google/generative-ai SDK (YouTube URL support) wrapped in
+ * traceable() so every Gemini call appears as an LLM span in LangSmith.
  */
 
 import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { HumanMessage } from "@langchain/core/messages";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { traceable } from "langsmith/traceable";
 import { VersionResolver } from "../helpers/VersionResolver";
 import { IVectorRepository } from "../repositories/VectorRepository";
 import { AnalysisRequest, AnalysisResponse } from "../types";
 import { Logger } from "../helpers/logger";
+import { buildFewShotExamples } from "../helpers/fewShotRanker";
+import { formatFullGameContextForAI, formatMoveWhitelistForAI } from "../helpers/aiContextHelper";
+import { ICharacterEncyclopediaService } from "../services/CharacterEncyclopediaService";
+import { IGameMetadataService } from "../services/GameMetadataService";
+import { IPlayerTendencyRepository } from "../repositories/PlayerTendencyRepository";
 
-// ── Screen result shape ────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface ScreenResult {
   is_gameplay: boolean;
   game_detected: string;
@@ -35,17 +33,16 @@ interface ScreenResult {
   rejection_reason: string;
 }
 
-// ── Usage record (lightweight — token counts come from LangSmith) ─────────────
 interface UsageRecord {
   stage: string;
   model: string;
   events?: number;
 }
 
-// ── State annotation ───────────────────────────────────────────────────────────
+// ── State ──────────────────────────────────────────────────────────────────────
 const AnalysisAnnotation = Annotation.Root({
   request:      Annotation<AnalysisRequest>,
-  videoUri:     Annotation<string | null>,  // null = use request.youtube_url
+  videoUri:     Annotation<string | null>,
 
   stage: Annotation<"screen" | "flash" | "pro" | "done" | "rejected">({
     reducer: (_, next) => next,
@@ -55,6 +52,18 @@ const AnalysisAnnotation = Annotation.Root({
   screenResult: Annotation<ScreenResult | null>({
     reducer: (_, next) => next,
     default: () => null,
+  }),
+
+  // Populated by groundNode once real characters are known (post-screen) —
+  // encyclopedia movesets + character-filtered, patch-ranked few-shot examples.
+  groundedContext: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => "",
+  }),
+
+  resolvedCharacters: Annotation<{ p1?: string; p2?: string }>({
+    reducer: (_, next) => next,
+    default: () => ({}),
   }),
 
   analysis: Annotation<AnalysisResponse | null>({
@@ -70,56 +79,37 @@ const AnalysisAnnotation = Annotation.Root({
 
 export type AnalysisState = typeof AnalysisAnnotation.State;
 
-// ── Build video content part for LangChain messages ───────────────────────────
-function videoContent(state: AnalysisState): object {
+// ── Video content parts (raw SDK format, supports GCS + YouTube URLs) ─────────
+function videoParts(state: AnalysisState): any[] {
   if (state.videoUri?.startsWith("gs://")) {
     const mimeType = state.videoUri.endsWith(".webm") ? "video/webm" : "video/mp4";
-    return { type: "media", fileUri: state.videoUri, mimeType };
+    return [{ fileData: { mimeType, fileUri: state.videoUri } }];
   }
   if (state.request.youtube_url) {
-    return { type: "media", fileUri: state.request.youtube_url };
+    return [{ fileData: { fileUri: state.request.youtube_url } }];
   }
   throw new Error("[AnalysisGraph] No video source in state");
 }
 
-// ── Few-shot block from vector DB (same logic as AiService.buildFewShotBlock) ─
-const buildFewShotBlock = traceable(
-  async (
-    request: AnalysisRequest,
-    vectorRepository: IVectorRepository,
-    generateEmbedding: (text: string) => Promise<number[]>,
-  ): Promise<string> => {
-    try {
-      const gameId = request.game_id || "sf6";
-      const characters = [request.p1_character_id, request.p2_character_id].filter(Boolean) as string[];
-      const contextText = characters.length
-        ? `${gameId} match: ${characters.join(" vs ")}`
-        : `${gameId} high level tournament match`;
+// ── JSON parse helper ─────────────────────────────────────────────────────────
+function parseJson(text: string): any {
+  return JSON.parse(text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+}
 
-      const embedding = await generateEmbedding(contextText);
-      const scenarios = await vectorRepository.findSimilarScenarios(embedding, gameId, 3);
-      if (!scenarios.length) return "";
-
-      const examples = scenarios
-        .map((s, i) => {
-          const chars = s.characters_involved?.join(" vs ") || "unknown";
-          const tags  = s.tags?.join(", ") || "";
-          return `Example ${i + 1} [${chars}${tags ? ` | ${tags}` : ""}]:\n  Context: ${s.context}\n  Description: ${s.description}`;
-        })
-        .join("\n\n");
-
-      return `REFERENCE SCENARIOS FROM PRO MATCH DATABASE (use as calibration examples):\n\n${examples}\n\n---`;
-    } catch {
-      return "";
-    }
-  },
-  { name: "build_few_shot_block", run_type: "retriever" },
-);
+// ── 429 check ─────────────────────────────────────────────────────────────────
+function is429(err: any): boolean {
+  return (
+    err?.status === 429 ||
+    err?.message?.includes("429") ||
+    err?.message?.includes("prepayment credits") ||
+    err?.message?.includes("Too Many Requests")
+  );
+}
 
 // ── Screen prompt ──────────────────────────────────────────────────────────────
 const SCREEN_PROMPT = `You are a fighting game video classifier. Watch this video and answer ONLY:
 
-Return exactly this JSON:
+Return exactly this JSON (no markdown):
 {
   "is_gameplay": true/false,
   "game_detected": "sf6 | tekken8 | mk1 | ggst | dbfz | mvc3 | other | unknown",
@@ -130,67 +120,63 @@ Return exactly this JSON:
 }
 
 is_gameplay = true ONLY if two players actively fight in a versus match with rounds and health bars.
-NOT gameplay: combo tutorials, tier lists, patch notes, story mode, interviews.
-
-Return ONLY the JSON. No markdown.`;
-
-// ── Key-aware invoke — retries with fallback key on quota exhaustion ──────────
-function is429(err: any): boolean {
-  return (
-    err?.status === 429 ||
-    err?.message?.includes('429') ||
-    err?.message?.includes('prepayment credits') ||
-    err?.message?.includes('Too Many Requests')
-  );
-}
-
-async function invokeWithFallback(
-  primaryKey: string,
-  fallbackKey: string | undefined,
-  modelId: string,
-  opts: Record<string, unknown>,
-  messages: any[]
-): Promise<any> {
-  const primary = new ChatGoogleGenerativeAI({ model: modelId, apiKey: primaryKey, ...opts });
-  try {
-    return await primary.invoke(messages);
-  } catch (err: any) {
-    if (is429(err) && fallbackKey) {
-      Logger.warn(`[AnalysisGraph] Primary key quota depleted — switching to fallback key for ${modelId}`);
-      const fallback = new ChatGoogleGenerativeAI({ model: modelId, apiKey: fallbackKey, ...opts });
-      return await fallback.invoke(messages);
-    }
-    throw err;
-  }
-}
+NOT gameplay: combo tutorials, tier lists, patch notes, story mode, interviews.`;
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 export function createAnalysisGraph(deps: {
   vectorRepository?: IVectorRepository;
   generateEmbedding: (text: string) => Promise<number[]>;
   apiKey: string;
-  fallbackApiKey?: string;  // antigravity / secondary Gemini key
+  fallbackApiKey?: string;
   modelName: string;
+  characterEncyclopediaService?: ICharacterEncyclopediaService;
+  gameMetadataService?: IGameMetadataService;
+  playerTendencyRepository?: IPlayerTendencyRepository;
 }) {
-  const { vectorRepository, generateEmbedding, apiKey, fallbackApiKey, modelName } = deps;
+  const {
+    vectorRepository, generateEmbedding, apiKey, fallbackApiKey, modelName,
+    characterEncyclopediaService, gameMetadataService, playerTendencyRepository,
+  } = deps;
 
-  // ── Node 1: Screen ──────────────────────────────────────────────────────────
-  // Cheap Flash call — rejects non-gameplay before any expensive call runs.
+  // Traceable Gemini call — shows as LLM span in LangSmith
+  const callGemini = traceable(
+    async (key: string, model: string, parts: any[], config?: any): Promise<string> => {
+      const genAI   = new GoogleGenerativeAI(key);
+      const gemini  = genAI.getGenerativeModel({ model });
+      const result  = await gemini.generateContent({
+        contents: [{ role: "user", parts }],
+        ...(config || {}),
+      });
+      return result.response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    },
+    { name: "gemini_generate", run_type: "llm" }
+  );
+
+  // Retry with fallback key on 429
+  async function generate(model: string, parts: any[], config?: any): Promise<string> {
+    try {
+      return await callGemini(apiKey, model, parts, config);
+    } catch (err: any) {
+      if (is429(err) && fallbackApiKey) {
+        Logger.warn(`[AnalysisGraph] Primary key quota hit — switching to fallback for ${model}`);
+        return await callGemini(fallbackApiKey, model, parts, config);
+      }
+      throw err;
+    }
+  }
+
+  // ── Node 1: Screen ───────────────────────────────────────────────────────────
   async function screenNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
-    const msg = new HumanMessage({
-      content: [videoContent(state), { type: "text", text: SCREEN_PROMPT }] as any,
-    });
-
     let screenResult: ScreenResult;
     try {
-      const result = await invokeWithFallback(apiKey, fallbackApiKey, "gemini-2.5-flash", { temperature: 0 }, [msg]);
-      const text = typeof result.content === "string"
-        ? result.content
-        : JSON.stringify(result.content);
-      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      screenResult = JSON.parse(cleaned);
+      const text = await generate(
+        "gemini-2.5-flash",
+        [...videoParts(state), { text: SCREEN_PROMPT }],
+        { generationConfig: { responseMimeType: "application/json" } }
+      );
+      screenResult = parseJson(text);
     } catch (err) {
-      Logger.warn("[AnalysisGraph] Screen parse failed, defaulting to gameplay=true");
+      Logger.warn("[AnalysisGraph] Screen failed, defaulting to gameplay=true");
       screenResult = {
         is_gameplay: true,
         game_detected: state.request.game_id || "unknown",
@@ -211,13 +197,114 @@ export function createAnalysisGraph(deps: {
     };
   }
 
-  // ── Node 2: Flash + thinking ────────────────────────────────────────────────
-  // Full structured analysis. Escalates to Pro only if timeline is thin (< 5 events).
+  // ── Node 1.5: Ground (encyclopedia + character-filtered few-shot, post-screen) ─
+  // Runs after screenNode has identified the real characters. If the caller already
+  // supplied both character IDs upfront (start.gg pre-label) and the upstream
+  // enrichment already built ai_context for those exact characters, reuse it instead
+  // of re-fetching — avoids a redundant duplicate fetch in the already-correct path.
+  const groundContext = traceable(
+    async (
+      gameId: string,
+      p1: string | undefined,
+      p2: string | undefined,
+      queryText: string,
+      userId: string | undefined,
+    ): Promise<string> => {
+      let context = "";
+
+      if (characterEncyclopediaService) {
+        try {
+          const [p1Rules, p2Rules, p1Enc, p2Enc] = await Promise.all([
+            p1 ? characterEncyclopediaService.getGameRules(gameId, p1) : Promise.resolve(null),
+            p2 ? characterEncyclopediaService.getGameRules(gameId, p2) : Promise.resolve(null),
+            p1 ? characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(gameId, p1) : Promise.resolve(null),
+            p2 ? characterEncyclopediaService.getCurrentEncyclopediaByGameAndCharacter(gameId, p2) : Promise.resolve(null),
+          ]);
+          const gameMetadataRes = gameMetadataService
+            ? await gameMetadataService.getCurrentGameMetadataByGameId(gameId).catch(() => null)
+            : null;
+
+          const p1EncData = p1Enc && (p1Enc as any).success ? (p1Enc as any).data : null;
+          const p2EncData = p2Enc && (p2Enc as any).success ? (p2Enc as any).data : null;
+
+          context += formatFullGameContextForAI(
+            gameMetadataRes?.success ? gameMetadataRes.data || null : null,
+            p1Rules && (p1Rules as any).success ? (p1Rules as any).data : null,
+            p2Rules && (p2Rules as any).success ? (p2Rules as any).data : null,
+            p1EncData,
+            p2EncData,
+          );
+
+          const moveWhitelist = formatMoveWhitelistForAI(p1EncData, p2EncData, 'Player 1', 'Player 2');
+          if (moveWhitelist) context += `\n\n${moveWhitelist}`;
+        } catch (err: any) {
+          Logger.warn(`[AnalysisGraph] Encyclopedia grounding failed: ${err?.message}`);
+        }
+      }
+
+      if (vectorRepository) {
+        try {
+          const currentPatch = gameMetadataService
+            ? await gameMetadataService.getCurrentGameMetadataByGameId(gameId)
+              .then(r => r.success ? r.data?.patch_version : null).catch(() => null)
+            : null;
+
+          // Look up this user's tendency profile for whichever of p1/p2 they've
+          // actually been recorded playing before — most users only ever play one
+          // side, so at most one of these will have an accumulated profile.
+          let tendencyVector: number[] | undefined;
+          if (playerTendencyRepository && userId) {
+            const profiles = await Promise.all([
+              p1 ? playerTendencyRepository.findByOwnerAndCharacter('user', userId, gameId, p1) : Promise.resolve(null),
+              p2 ? playerTendencyRepository.findByOwnerAndCharacter('user', userId, gameId, p2) : Promise.resolve(null),
+            ]);
+            const withVector = profiles.find(p => p?.tendency_vector?.length);
+            tendencyVector = withVector?.tendency_vector;
+          }
+
+          const fewShot = await buildFewShotExamples({
+            vectorRepository,
+            generateEmbedding,
+            gameId,
+            characters: [p1, p2].filter(Boolean) as string[],
+            currentPatchVersion: currentPatch,
+            queryText,
+            tendencyVector,
+          });
+          if (fewShot) context += fewShot;
+        } catch (err: any) {
+          Logger.warn(`[AnalysisGraph] Few-shot grounding failed: ${err?.message}`);
+        }
+      }
+
+      return context;
+    },
+    { name: "ground_context_build", run_type: "retriever" },
+  );
+
+  async function groundNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
+    const gameId = state.request.game_id || "sf6";
+    const p1 = state.request.p1_character_id || state.screenResult?.p1_character || undefined;
+    const p2 = state.request.p2_character_id || state.screenResult?.p2_character || undefined;
+
+    const wasPreLabeled = !!(state.request.p1_character_id && state.request.p2_character_id);
+    if (wasPreLabeled && state.request.ai_context) {
+      // Upstream enrichment already grounded this against the correct, known characters.
+      return { resolvedCharacters: { p1, p2 }, groundedContext: state.request.ai_context };
+    }
+
+    const queryText = [gameId.toUpperCase(), p1, p2, state.request.video_title].filter(Boolean).join(" — ");
+    const groundedContext = await groundContext(gameId, p1, p2, queryText, (state.request as any).userId);
+
+    return { resolvedCharacters: { p1, p2 }, groundedContext };
+  }
+
+  // ── Node 2: Flash + thinking ─────────────────────────────────────────────────
   async function flashNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
     const enrichedRequest: AnalysisRequest = {
       ...state.request,
-      p1_character_id: state.request.p1_character_id || state.screenResult?.p1_character || undefined,
-      p2_character_id: state.request.p2_character_id || state.screenResult?.p2_character || undefined,
+      p1_character_id: state.resolvedCharacters.p1,
+      p2_character_id: state.resolvedCharacters.p2,
     };
 
     const basePrompt = VersionResolver.resolvePromptForGame(
@@ -228,50 +315,37 @@ export function createAnalysisGraph(deps: {
     );
     const notation = VersionResolver.getMoveNotationGuide(enrichedRequest.game_id || "sf6");
 
-    const fewShot = vectorRepository
-      ? await buildFewShotBlock(enrichedRequest, vectorRepository, generateEmbedding)
-      : "";
-
-    let fullPrompt = fewShot ? fewShot + "\n\n" + basePrompt : basePrompt;
-    if (enrichedRequest.ai_context)  fullPrompt += `\n\nContext:\n${enrichedRequest.ai_context}`;
+    let fullPrompt = basePrompt;
+    if (state.groundedContext)       fullPrompt += `\n\nContext:\n${state.groundedContext}`;
     if (enrichedRequest.video_title) fullPrompt += `\n\nVideo Title: ${enrichedRequest.video_title}`;
     fullPrompt += notation;
 
-    const msg = new HumanMessage({
-      content: [videoContent(state), { type: "text", text: fullPrompt }] as any,
-    });
-
     let analysis: AnalysisResponse;
     try {
-      const result = await invokeWithFallback(
-        apiKey, fallbackApiKey, "gemini-2.5-flash",
-        { temperature: 0, maxOutputTokens: 8192 },
-        [msg]
+      const text = await generate(
+        "gemini-2.5-flash",
+        [...videoParts(state), { text: fullPrompt }],
+        {
+          generationConfig: {
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 1024 },
+            maxOutputTokens: 8192,
+          },
+        }
       );
-
-      const text = typeof result.content === "string"
-        ? result.content
-        : JSON.stringify(result.content);
-      analysis = JSON.parse(text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+      analysis = parseJson(text);
     } catch (err: any) {
       Logger.warn(`[AnalysisGraph] Flash failed: ${err?.message} — escalating to Pro`);
-      return {
-        stage: "pro",
-        usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }],
-      };
+      return { stage: "pro", usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }] };
     }
 
     if ((analysis as any).is_gameplay_video === false || (analysis as any).status === "not_gameplay") {
-      const reason = (analysis as any).reason || "Not gameplay";
-      Logger.info(`[AnalysisGraph] Flash rejected: ${reason}`);
-      return {
-        stage: "rejected",
-        usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }],
-      };
+      Logger.info(`[AnalysisGraph] Flash rejected: ${(analysis as any).reason || "not gameplay"}`);
+      return { stage: "rejected", usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }] };
     }
 
     const timelineLength = analysis.timeline?.length ?? 0;
-    Logger.info(`[AnalysisGraph] Flash: ${timelineLength} timeline events → ${timelineLength >= 5 ? "done" : "escalating to Pro"}`);
+    Logger.info(`[AnalysisGraph] Flash: ${timelineLength} events → ${timelineLength >= 5 ? "done" : "escalating to Pro"}`);
 
     return {
       analysis,
@@ -280,8 +354,7 @@ export function createAnalysisGraph(deps: {
     };
   }
 
-  // ── Node 3: Pro escalation ──────────────────────────────────────────────────
-  // Rare path — runs only when Flash returns < 5 timeline events.
+  // ── Node 3: Pro escalation ───────────────────────────────────────────────────
   async function proNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
     Logger.info("[AnalysisGraph] Pro escalation running");
 
@@ -292,61 +365,43 @@ export function createAnalysisGraph(deps: {
       state.request.p2_team,
     );
 
-    const fewShot = vectorRepository
-      ? await buildFewShotBlock(state.request, vectorRepository, generateEmbedding)
-      : "";
-
-    let fullPrompt = fewShot ? fewShot + "\n\n" + basePrompt : basePrompt;
-    if (state.request.ai_context)  fullPrompt += `\n\nContext:\n${state.request.ai_context}`;
+    let fullPrompt = basePrompt;
+    if (state.groundedContext)     fullPrompt += `\n\nContext:\n${state.groundedContext}`;
     if (state.request.video_title) fullPrompt += `\n\nVideo Title: ${state.request.video_title}`;
 
-    const msg = new HumanMessage({
-      content: [videoContent(state), { type: "text", text: fullPrompt }] as any,
-    });
-
-    const result = await invokeWithFallback(
-      apiKey, fallbackApiKey, modelName,
-      { temperature: 0, maxOutputTokens: 16384 },
-      [msg]
+    const text = await generate(
+      modelName,
+      [...videoParts(state), { text: fullPrompt }],
+      { generationConfig: { responseMimeType: "application/json", maxOutputTokens: 16384 } }
     );
-    const text = typeof result.content === "string"
-      ? result.content
-      : JSON.stringify(result.content);
 
-    const analysis = JSON.parse(
-      text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
-    ) as AnalysisResponse;
+    const analysis = parseJson(text) as AnalysisResponse;
 
     if ((analysis as any).is_gameplay_video === false || (analysis as any).status === "not_gameplay") {
-      return {
-        stage: "rejected",
-        usage: [{ stage: "pro", model: modelName }],
-      };
+      return { stage: "rejected", usage: [{ stage: "pro", model: modelName }] };
     }
 
-    return {
-      analysis,
-      stage: "done",
-      usage: [{ stage: "pro", model: modelName }],
-    };
+    return { analysis, stage: "done", usage: [{ stage: "pro", model: modelName }] };
   }
 
-  // ── Conditional routing ─────────────────────────────────────────────────────
-  function afterScreen(state: AnalysisState): "flash" | typeof END {
-    return state.stage === "rejected" ? END : "flash";
+  // ── Routing ───────────────────────────────────────────────────────────────────
+  function afterScreen(state: AnalysisState): "ground" | typeof END {
+    return state.stage === "rejected" ? END : "ground";
   }
 
   function afterFlash(state: AnalysisState): "pro" | typeof END {
     return state.stage === "pro" ? "pro" : END;
   }
 
-  // ── Compile ──────────────────────────────────────────────────────────────────
+  // ── Compile ───────────────────────────────────────────────────────────────────
   return new StateGraph(AnalysisAnnotation)
     .addNode("screen", screenNode)
+    .addNode("ground", groundNode)
     .addNode("flash",  flashNode)
     .addNode("pro",    proNode)
     .addEdge(START, "screen")
     .addConditionalEdges("screen", afterScreen)
+    .addEdge("ground", "flash")
     .addConditionalEdges("flash",  afterFlash)
     .addEdge("pro", END)
     .compile();
