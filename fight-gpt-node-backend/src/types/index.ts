@@ -58,6 +58,7 @@ export interface AnalysisRequest {
   force?: boolean; // Force re-analysis and bypass cache
   analysis_id?: string; // Original analysis ID for overwriting on reprocess
   userId?: string; // Consumer who uploaded this video — used to personalize retrieval via PlayerTendencyProfile
+  analysis_type?: 'video' | 'meta_query' | 'encyclopedia_lookup'; // Type of analysis request
 }
 
 /**

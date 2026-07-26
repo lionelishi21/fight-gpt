@@ -16,9 +16,6 @@ import IORedis from 'ioredis';
 // Import configuration
 import { AppConfig } from './config/app';
 import { Database } from './config/database';
-import { EngagementService } from './services/EngagementService';
-import { EngagementController } from './controllers/EngagementController';
-import { EngagementRoutes } from './routes/engagementRoutes';
 import { Logger } from './helpers/logger';
 import { SystemInitializer } from './helpers/SystemInitializer';
 
@@ -33,10 +30,10 @@ import { GameController } from './controllers/GameController';
 import { GameMetadataController } from './controllers/GameMetadataController';
 import { CharacterEncyclopediaController } from './controllers/CharacterEncyclopediaController';
 import { ChatController } from './controllers/ChatController';
+import { CharacterGPTController } from './controllers/CharacterGPTController';
 import { MetaController } from './controllers/MetaController';
 import { TheoryController } from './controllers/TheoryController';
 import { NotificationController } from './controllers/NotificationController';
-import { RivalController } from './controllers/RivalController';
 import { UserController } from './controllers/UserController';
 import { AdminController } from './controllers/AdminController';
 import { PaymentController } from './controllers/PaymentController';
@@ -50,24 +47,21 @@ import { GameService } from './services/GameService';
 import { GameMetadataService } from './services/GameMetadataService';
 import { CharacterEncyclopediaService } from './services/CharacterEncyclopediaService';
 import { ChatService } from './services/ChatService';
+import { CharacterGPTService } from './services/CharacterGPTService';
 import { MetaService } from './services/MetaService';
 import { IngestionService } from './services/IngestionService';
 import { TheoryService } from './services/TheoryService';
 import { TournamentService } from './services/TournamentService';
 import { TwitchDiscoveryService } from './services/TwitchDiscoveryService';
-import { LobbyService } from './services/LobbyService';
 import { NotificationService } from './services/NotificationService';
 import { AutoResearchService } from './services/AutoResearchService';
-import { RivalService } from './services/RivalService';
 import { UserService } from './services/UserService';
 import { AdminService } from './services/AdminService';
 import { TrendAnalysisService, ITrendAnalysisService } from './services/TrendAnalysisService';
 import { TrainingService } from './services/TrainingService';
 import { PaymentService } from './services/PaymentService';
 import { RosterSyncService } from './services/RosterSyncService';
-import { ScraperService } from './services/ScraperService';
 import { EmailService } from './services/EmailService';
-import { DripService } from './services/DripService';
 
 // Import repositories
 import { AnalysisRepository } from './repositories/AnalysisRepository';
@@ -82,9 +76,9 @@ import { MetaRepository } from './repositories/MetaRepository';
 import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
 import { NotificationRepository } from './repositories/NotificationRepository';
-import { RivalRepository } from './repositories/RivalRepository';
 import { GameSearchStrategyRepository } from './repositories/GameSearchStrategyRepository';
 import { TournamentRepository } from './repositories/TournamentRepository';
+import { KnowledgeRepository } from './repositories/KnowledgeRepository';
 
 // Import middleware
 import { errorMiddleware } from './middleware/errorMiddleware';
@@ -105,7 +99,6 @@ export class App {
   private rosterSyncService: RosterSyncService | null = null;
   private trainingService: TrainingService | null = null;
   private trendAnalysisService: ITrendAnalysisService | null = null;
-  private lobbyService: LobbyService;
 
   constructor() {
     // Validate configuration
@@ -124,6 +117,9 @@ export class App {
         credentials: true,
       }
     });
+
+    // Make io available globally for the meta ticker and other services
+    (global as any).io = this.io;
 
     // Initialize Socket.io events
     this.setupSocketEvents();
@@ -144,8 +140,8 @@ export class App {
     const metaRepository = AppConfig.MONGODB_URI ? new MetaRepository() : null as any;
     const ingestionRepository = AppConfig.MONGODB_URI ? new IngestionRepository() : null as any;
     const theoryRepository = AppConfig.MONGODB_URI ? new TheoryRepository() : null as any;
+    const knowledgeRepository = AppConfig.MONGODB_URI ? new KnowledgeRepository() : null as any;
     const notificationRepository = AppConfig.MONGODB_URI ? new NotificationRepository() : null as any;
-    const rivalRepository = AppConfig.MONGODB_URI ? new RivalRepository() : null as any;
     // Only initialize services that need MongoDB if MongoDB is available
     const gameMetadataService = AppConfig.MONGODB_URI ? new GameMetadataService(gameMetadataRepository) : null as any;
     const characterEncyclopediaService = AppConfig.MONGODB_URI ? new CharacterEncyclopediaService(characterEncyclopediaRepository) : null as any;
@@ -178,7 +174,6 @@ export class App {
       characterService,
       vectorRepository,
       notificationService,
-      rivalRepository,
       premiumAiService,
       playerTendencyRepository,
     ) : null as any;
@@ -186,13 +181,10 @@ export class App {
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;
     const searchStrategyRepository = AppConfig.MONGODB_URI ? new GameSearchStrategyRepository() : null as any;
     this.ingestionService = AppConfig.MONGODB_URI ? new IngestionService(ingestionRepository, analysisService, metaService, searchStrategyRepository, notificationService) : null;
-    const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
-    const rivalService = AppConfig.MONGODB_URI ? new RivalService(rivalRepository) : null as any;
+    const theoryService = AppConfig.MONGODB_URI ? new TheoryService(theoryRepository, vectorRepository, knowledgeRepository, AppConfig.GEMINI_API_KEY, notificationService) : null as any;
     const userService = AppConfig.MONGODB_URI ? new UserService() : null as any;
     const adminService = AppConfig.MONGODB_URI ? new AdminService() : null as any;
-    const scraperService = AppConfig.MONGODB_URI ? new ScraperService(characterEncyclopediaService) : null as any;
-    this.rosterSyncService = AppConfig.MONGODB_URI ? new RosterSyncService(scraperService) : null as any;
-    this.lobbyService = new LobbyService();
+    this.rosterSyncService = AppConfig.MONGODB_URI ? new RosterSyncService(gameRepository, characterRepository) : null as any;
     const autoResearchService = AppConfig.MONGODB_URI
         ? new AutoResearchService(theoryService, notificationService)
         : null;
@@ -205,6 +197,7 @@ export class App {
         : null;
 
     const chatService = new ChatService();
+    const characterGPTService = AppConfig.MONGODB_URI ? new CharacterGPTService(characterRepository, characterEncyclopediaRepository) : null as any;
 
     // Initialize controllers (ChatController works without MongoDB)
     const analysisController = AppConfig.MONGODB_URI ? new AnalysisController(analysisService, auditLogRepository) : null as any;
@@ -219,14 +212,14 @@ export class App {
     const chatController = new ChatController(
       chatService,
       auditLogRepository || null as any,
-      rivalRepository || undefined,
+      undefined,
       gameRepository || undefined,
       analysisRepository || undefined,
     );
+    const characterGPTController = AppConfig.MONGODB_URI ? new CharacterGPTController(characterGPTService) : null as any;
     const metaController = AppConfig.MONGODB_URI ? new MetaController(metaService, this.ingestionService!) : null;
     const theoryController = AppConfig.MONGODB_URI ? new TheoryController(theoryService) : null;
     const notificationController = AppConfig.MONGODB_URI ? new NotificationController(notificationRepository) : null;
-    const rivalController = AppConfig.MONGODB_URI ? new RivalController(rivalService, auditLogRepository) : null;
     const userController = AppConfig.MONGODB_URI ? new UserController(userService, auditLogRepository) : null;
     const adminController = AppConfig.MONGODB_URI ? new AdminController(
       adminService, 
@@ -249,10 +242,6 @@ export class App {
 
 
     // Setup routes
-    const engagementService = new EngagementService(theoryService);
-    const engagementController = new EngagementController(engagementService);
-    const engagementRoutes = new EngagementRoutes(engagementController);
-
     const tournamentRepository = AppConfig.MONGODB_URI ? new TournamentRepository() : null as any;
     this.tournamentService = AppConfig.MONGODB_URI ? new TournamentService(
       tournamentRepository,
@@ -272,12 +261,11 @@ export class App {
       metaController,
       theoryController,
       notificationController,
-      rivalController,
       userController,
       adminController,
       paymentController,
-      engagementController,
       tournamentController,
+      characterGPTController,
     );
     
 
@@ -491,71 +479,6 @@ export class App {
         Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
       });
     });
-
-    // Lobby Namespace for real-time Dojo interaction
-    const lobbyNamespace = this.io.of('/lobby');
-    lobbyNamespace.on('connection', (socket: any) => {
-      Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
-
-      socket.on('join_lobby', async (data: { lobbyId: string; userId: string }) => {
-        try {
-          const { lobbyId, userId } = data;
-          if (!lobbyId || !userId) return;
-          socket.join(`lobby_${lobbyId}`);
-          socket.lobbyId = lobbyId;
-          await this.lobbyService.updateActiveCount(lobbyId, 1);
-          // Broadcast updated room size to everyone in the room
-          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 1;
-          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
-          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
-          Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId} (${roomSize} operators)`);
-        } catch (err) {
-          Logger.error('DOJO_LOBBY: join_lobby error', err);
-        }
-      });
-
-      socket.on('send_message', async (data: {
-        lobbyId: string;
-        userId: string;
-        content: string;
-        intelLink?: any
-      }) => {
-        try {
-          if (!data.lobbyId || !data.userId || !data.content?.trim()) return;
-          Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}`);
-          const message = await this.lobbyService.saveMessage(data);
-          if (message) {
-            lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
-          }
-        } catch (err) {
-          Logger.error('DOJO_LOBBY: send_message error', err);
-        }
-      });
-
-      socket.on('leave_lobby', async (data: { lobbyId: string; userId: string }) => {
-        try {
-          const { lobbyId, userId } = data;
-          socket.leave(`lobby_${lobbyId}`);
-          await this.lobbyService.updateActiveCount(lobbyId, -1);
-          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 0;
-          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
-          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
-        } catch (err) {
-          Logger.error('DOJO_LOBBY: leave_lobby error', err);
-        }
-      });
-
-      socket.on('disconnect', async () => {
-        try {
-          if (socket.lobbyId) {
-            await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
-          }
-          Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
-        } catch (err) {
-          Logger.error('DOJO_LOBBY: disconnect error', err);
-        }
-      });
-    });
   }
 
   /**
@@ -594,7 +517,7 @@ export class App {
       }
 
       // Start onboarding drip email scheduler (every 4 hours)
-      new DripService().startScheduler();
+      // Removed DripService
 
       // Start Twitch VOD discovery (every 6 hours, requires TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET)
       new TwitchDiscoveryService().startScheduler();
@@ -616,7 +539,7 @@ export class App {
       }
 
       // Seed default lobbies for active games (non-blocking)
-      this.lobbyService.seedDefaultLobbies().catch(() => {});
+      // Removed LobbyService
 
       // Start server
       this.server.listen(AppConfig.PORT, () => {

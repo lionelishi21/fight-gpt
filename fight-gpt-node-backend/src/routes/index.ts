@@ -6,19 +6,18 @@ import { GameRoutes } from './gameRoutes';
 import { GameMetadataRoutes } from './gameMetadataRoutes';
 import { CharacterEncyclopediaRoutes } from './characterEncyclopediaRoutes';
 import { ChatRoutes } from './chatRoutes';
+import { CharacterGPTRoutes } from './characterGPTRoutes';
 import { AuthRoutes } from './authRoutes';
 import { OnboardingRoutes } from './onboardingRoutes';
-import { GamificationRoutes } from './gamificationRoutes';
 import { TrainingRoutes } from './trainingRoutes';
+import { PublicRoutes } from './publicRoutes';
+import { DiscordRoutes } from './discordRoutes';
 import { MetaRoutes, IngestionRoutes } from './metaRoutes';
 import { TheoryRoutes } from './theoryRoutes';
 import { NotificationRoutes } from './notificationRoutes';
-import { RivalRoutes } from './rivalRoutes';
 import { UserRoutes } from './userRoutes';
-import { LobbyRoutes } from './lobbyRoutes';
 import { AdminRoutes } from './adminRoutes';
 import { PaymentRoutes } from './paymentRoutes';
-import { EngagementRoutes } from './engagementRoutes';
 import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
@@ -35,13 +34,12 @@ import { GameController } from '../controllers/GameController';
 import { GameMetadataController } from '../controllers/GameMetadataController';
 import { CharacterEncyclopediaController } from '../controllers/CharacterEncyclopediaController';
 import { ChatController } from '../controllers/ChatController';
+import { CharacterGPTController } from '../controllers/CharacterGPTController';
 import { MetaController } from '../controllers/MetaController';
 import { TheoryController } from '../controllers/TheoryController';
 import { NotificationController } from '../controllers/NotificationController';
-import { RivalController } from '../controllers/RivalController';
 import { UserController } from '../controllers/UserController';
 import { PaymentController } from '../controllers/PaymentController';
-import { EngagementController } from '../controllers/EngagementController';
 import { TournamentController } from '../controllers/tournamentController';
 
 /**
@@ -58,20 +56,19 @@ export class Routes {
   private characterEncyclopediaRoutes: CharacterEncyclopediaRoutes | null;
   private chatRoutes: ChatRoutes;
   private authRoutes: AuthRoutes;
+  private publicRoutes: PublicRoutes | null;
+  private discordRoutes: DiscordRoutes | null;
   private onboardingRoutes: OnboardingRoutes;
-  private gamificationRoutes: GamificationRoutes;
   private trainingRoutes: TrainingRoutes;
   private metaRoutes: MetaRoutes | null;
   private ingestionRoutes: IngestionRoutes | null;
   private theoryRoutes: TheoryRoutes | null;
   private notificationRoutes: NotificationRoutes | null;
-  private rivalRoutes: RivalRoutes | null;
   private userRoutes: UserRoutes | null;
-  private lobbyRoutes: LobbyRoutes | null;
   private adminRoutes: AdminRoutes | null;
   private paymentRoutes: PaymentRoutes;
-  private engagementRoutes: EngagementRoutes;
   private tournamentRouter: ReturnType<typeof createTournamentRouter> | null;
+  private characterGPTRoutes: CharacterGPTRoutes | null;
 
   constructor(
     analysisController: AnalysisController | null,
@@ -84,12 +81,11 @@ export class Routes {
     metaController?: MetaController | null,
     theoryController?: TheoryController | null,
     notificationController?: NotificationController | null,
-    rivalController?: RivalController | null,
     userController?: UserController | null,
     adminController?: AdminController | null,
     paymentController?: PaymentController | null,
-    engagementController?: EngagementController | null,
     tournamentController?: TournamentController | null,
+    characterGPTController?: CharacterGPTController | null,
   ) {
     this.router = Router();
     this.analysisRoutes = analysisController ? new AnalysisRoutes(analysisController) : null as any;
@@ -99,21 +95,20 @@ export class Routes {
     this.gameMetadataRoutes = gameMetadataController ? new GameMetadataRoutes(gameMetadataController) : null as any;
     this.characterEncyclopediaRoutes = characterEncyclopediaController ? new CharacterEncyclopediaRoutes(characterEncyclopediaController) : null as any;
     this.chatRoutes = new ChatRoutes(chatController);
+    this.publicRoutes = (analysisController && characterEncyclopediaController && metaController) ? new PublicRoutes(analysisController, characterEncyclopediaController, metaController) : null;
+    this.discordRoutes = metaController ? new DiscordRoutes(metaController) : null;
     this.authRoutes = new AuthRoutes();
     this.onboardingRoutes = new OnboardingRoutes();
-    this.gamificationRoutes = new GamificationRoutes();
     this.trainingRoutes = new TrainingRoutes();
     this.metaRoutes = metaController ? new MetaRoutes(metaController) : null;
     this.ingestionRoutes = metaController ? new IngestionRoutes(metaController) : null;
     this.theoryRoutes = theoryController ? new TheoryRoutes(theoryController) : null;
     this.notificationRoutes = notificationController ? new NotificationRoutes(notificationController) : null;
-    this.rivalRoutes = rivalController ? new RivalRoutes(rivalController) : null;
     this.userRoutes = userController ? new UserRoutes(userController) : null;
-    this.lobbyRoutes = new LobbyRoutes();
     this.adminRoutes = adminController ? new AdminRoutes(adminController) : null;
     this.paymentRoutes = new PaymentRoutes(paymentController!);
-    this.engagementRoutes = new EngagementRoutes(engagementController!);
     this.tournamentRouter = tournamentController ? createTournamentRouter(tournamentController) : null;
+    this.characterGPTRoutes = characterGPTController ? new CharacterGPTRoutes(characterGPTController) : null;
     this.setupRoutes();
   }
 
@@ -121,12 +116,18 @@ export class Routes {
    * Setup all routes
    */
   private setupRoutes(): void {
+    // API routes
+    if (this.publicRoutes) {
+      this.router.use('/public', this.publicRoutes.getRouter());
+    }
+    // Discord routes
+    if (this.discordRoutes) {
+      this.router.use('/discord', this.discordRoutes.getRouter());
+    }
     // Auth routes
     this.router.use('/auth', this.authRoutes.getRouter());
     // Onboarding routes
     this.router.use('/onboarding', this.onboardingRoutes.getRouter());
-    // Gamification routes
-    this.router.use('/gamification', this.gamificationRoutes.getRouter());
     // Training routes
     this.router.use('/training', this.trainingRoutes.getRouter());
     // Health check route (optional - may not work without MongoDB)
@@ -163,6 +164,11 @@ export class Routes {
     // Chat routes (works without MongoDB - only needs Gemini API)
     this.router.use('/chat', this.chatRoutes.getRouter());
 
+    // Character GPT routes — per-character AI coaches (requires MongoDB for encyclopedia)
+    if (this.characterGPTRoutes) {
+      this.router.use('/character-gpt', this.characterGPTRoutes.getRouter());
+    }
+
     // Meta intelligence routes (requires MongoDB)
     if (this.metaRoutes) {
       this.router.use('/meta', this.metaRoutes.getRouter());
@@ -183,11 +189,6 @@ export class Routes {
       this.router.use('/notifications', this.notificationRoutes.getRouter());
     }
 
-    // Rival Watch routes
-    if (this.rivalRoutes) {
-      this.router.use('/rivals', this.rivalRoutes.getRouter());
-    }
-
     // User/Slot management routes
     if (this.userRoutes) {
       this.router.use('/users', this.userRoutes.getRouter());
@@ -200,9 +201,6 @@ export class Routes {
 
     // Payment routes
     this.router.use('/payments', this.paymentRoutes.getRouter());
-
-    // Engagement routes
-    this.router.use('/engagement', this.engagementRoutes.router);
 
     // Public invite validation (used on signup page to pre-fill role/email)
     this.router.get('/invites/validate/:token', inviteController.validateInvite);
@@ -226,9 +224,6 @@ export class Routes {
     this.router.use('/org', orgRouter);      // /org/* esports org endpoints
 
     // Dojo Lobby & Theory
-    if (this.lobbyRoutes) {
-      this.router.use('/lobby', this.lobbyRoutes.getRouter());
-    }
     if (this.theoryRoutes) {
       this.router.use('/theory', this.theoryRoutes.getRouter());
     }

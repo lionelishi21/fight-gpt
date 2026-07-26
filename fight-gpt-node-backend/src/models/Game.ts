@@ -21,6 +21,11 @@ const GameSchema: Schema = new Schema(
       lowercase: true, // Store as lowercase for consistency
       trim: true,
     },
+    startgg_id: {
+      type: Number,
+      required: false,
+      index: true,
+    },
     name: {
       type: String,
       required: true,

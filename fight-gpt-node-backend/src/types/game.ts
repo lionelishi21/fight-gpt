@@ -4,6 +4,7 @@
 export interface IGame {
   _id?: string;
   game_id: string; // Unique identifier (e.g., "sf6", "tk8", "ggst")
+  startgg_id?: number; // Start.gg videogame ID (e.g., 43868 for SF6)
   name: string; // Display name (e.g., "Street Fighter 6")
   full_name?: string; // Full title (e.g., "Street Fighter 6")
   publisher?: string; // Game publisher
@@ -27,6 +28,7 @@ export interface IGame {
 export interface CreateGameRequest {
   game_id: string;
   name: string;
+  startgg_id?: number;
   full_name?: string;
   publisher?: string;
   developer?: string;
@@ -46,6 +48,7 @@ export interface CreateGameRequest {
 export interface UpdateGameRequest {
   game_id?: string;
   name?: string;
+  startgg_id?: number;
   full_name?: string;
   publisher?: string;
   developer?: string;

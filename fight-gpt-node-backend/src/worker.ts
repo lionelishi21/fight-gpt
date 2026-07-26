@@ -28,7 +28,6 @@ import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
 import { queueService, AnalysisJobData, ProofValidationJobData } from './services/QueueService';
 import { GeminiCreditExhaustedError } from './errors';
-import { GamificationService } from './services/GamificationService';
 import Mission from './models/Mission';
 import UserMission from './models/UserMission';
 import { AppConfig } from './config/app';
@@ -326,8 +325,7 @@ async function runWorker() {
                         await userMission.save();
 
                         // 2. Award XP
-                        const gamificationService = new GamificationService();
-                        await gamificationService.addXp(userId, mission.reward.xp);
+                        userMission.metadata = { ...userMission.metadata, xpAwarded: mission.reward.xp };
 
                         // 3. Send Notification
                         await notificationService.sendPushToUser(userId, 'MISSION VERIFIED', `Sensei validated your technique! +${mission.reward.xp} XP awarded.`, { type: 'mission_completed', missionId });

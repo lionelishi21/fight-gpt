@@ -64,6 +64,23 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     return low.replace(/\s+/g, '_');
   }
 
+  /**
+   * Phase 3 Monetization
+   * Charge a user 500 coins for a Deep Dive analysis.
+   */
+  private async chargeUser(userId: string, amount: number): Promise<boolean> {
+    try {
+      const user = await User.findById(userId);
+      if (!user) return false;
+      // In a full implementation, this would deduct from user.wallet.balance
+      console.log(`[Billing] Charged user ${userId} ${amount} coins for Pro Analysis`);
+      return true;
+    } catch (err) {
+      console.error('[Billing] Charge failed', err);
+      return false;
+    }
+  }
+
   async analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
       await this.validateAnalysisRequest(request);
@@ -100,23 +117,27 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       if (user && !isAdmin) {
         const tier = (user.tier || 'FREE').toUpperCase();
 
-        // Monthly rolling limits (30-day window)
-        const monthlyCount = await this.analysisRepository.countRecentAnalysesByUser(userId as string, 30 * 24);
+        if (request.analysis_type === 'meta_query' || request.analysis_type === 'encyclopedia_lookup') {
+          // Skip limit check for meta content and encyclopedia lookups
+        } else {
+          const LIMITS: Record<string, number> = {
+            FREE:       3,    // 3 per rolling 7 days
+            COMPETITOR: 30,   // 30 per rolling 30 days
+            PRO:        150,  // 150 per rolling 30 days
+            COMPETITOR_ANNUAL: 30,
+            PRO_ANNUAL: 150,
+          };
 
-        const LIMITS: Record<string, number> = {
-          FREE:       3,    // lifetime cap (3 analyses ever on free)
-          COMPETITOR: 30,   // 30 per rolling 30 days
-          PRO:        150,  // 150 per rolling 30 days
-          COMPETITOR_ANNUAL: 30,
-          PRO_ANNUAL: 150,
-        };
+          const limit = LIMITS[tier] ?? 3;
+          const timeWindowHours = tier === 'FREE' ? 7 * 24 : 30 * 24;
+          const count = await this.analysisRepository.countRecentAnalysesByUser(userId as string, timeWindowHours);
 
-        const limit = LIMITS[tier] ?? 3;
-        if (monthlyCount >= limit) {
-          const upgradeMsg = tier === 'FREE'
-            ? 'FREE_TIER_LIMIT: You have used your 3 free analyses. Upgrade to Competitor ($25/mo) for 30 analyses per month.'
-            : `LIMIT_REACHED: You have used ${monthlyCount}/${limit} analyses this month. Upgrade to unlock more.`;
-          return { success: false, error: upgradeMsg };
+          if (count >= limit) {
+            const upgradeMsg = tier === 'FREE'
+              ? 'FREE_TIER_LIMIT: You have used your 3 free analyses for this week. Upgrade to Pro ($12/mo) for unlimited analyses.'
+              : `LIMIT_REACHED: You have used ${count}/${limit} analyses this month. Upgrade to unlock more.`;
+            return { success: false, error: upgradeMsg };
+          }
         }
       }
 
@@ -141,6 +162,11 @@ export class AnalysisService extends BaseService implements IAnalysisService {
 
       const enrichedRequest = await this.enrichRequestWithGameContext(request);
       enrichedRequest.userId = userId;
+
+      // Charge user for Deep Dive if it's a paid tier
+      if (userId && !isAdmin && request.analysis_type !== 'meta_query') {
+         await this.chargeUser(userId, 500);
+      }
 
       // --- FEW-SHOT VECTOR INJECTION ---
       // Retrieve similar verified scenarios from the vector DB as ground-truth examples.

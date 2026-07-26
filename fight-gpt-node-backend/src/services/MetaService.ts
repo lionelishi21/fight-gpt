@@ -156,6 +156,15 @@ export class MetaService extends BaseService implements IMetaService {
 
             const updated = await this.metaRepository.updateReport(reportId, reportData as any);
 
+            // Phase 3: Meta Ticker - Broadcast the shift
+            if ((global as any).io) {
+                (global as any).io.emit('meta_ticker', {
+                    gameId,
+                    message: `Meta Shift Detected: ${tierListWithTrends.find(c => c.trend === 'rising')?.character_name || 'New top tier'} is rising in win rate!`,
+                    data: updated
+                });
+            }
+
             return {
                 success: true,
                 data: updated as unknown as IMetaReport,

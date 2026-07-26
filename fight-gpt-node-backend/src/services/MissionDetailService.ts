@@ -66,10 +66,8 @@ export class MissionDetailService {
         const user = await User.findById(userId);
         if (!user) throw new Error('User not found');
 
-        const indexedSlot = (user.slots?.length ?? 0) > 0
-            ? user.slots[user.activeSlotIndex ?? 0] ?? user.slots[0]
-            : null;
-        const gameId = indexedSlot?.gameId || user.preferences?.favoriteGames?.[0] || 'sf6';
+        const gameId = (mission as any).gameId || user.preferences?.favoriteGames?.[0] || 'sf6';
+        const indexedSlot = user.slots?.find(s => s.gameId === gameId) || user.slots?.[0];
         const charSlug = indexedSlot?.characterId || user.preferences?.mainCharacter || 'ryu';
 
         const charDoc = await Character.findOne({
