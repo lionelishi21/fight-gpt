@@ -95,9 +95,12 @@ jobs:
 
             # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
+            # We must pull from the git root, not the node backend subfolder
+            cd ..
             git fetch origin
             git reset --hard origin/main
             echo "→ Now on commit: $(git log -1 --oneline)"
+            cd "$APP_DIR"
 
             # 3. Install all deps (including devDeps needed for build)
             echo "→ Installing dependencies..."
