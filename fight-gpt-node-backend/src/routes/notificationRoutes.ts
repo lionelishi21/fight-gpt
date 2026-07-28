@@ -11,7 +11,10 @@ export class NotificationRoutes {
     }
 
     private setupRoutes(): void {
-        // All notification routes require authentication
+        // Public meta ticker endpoint
+        this.router.get('/live', this.notificationController.getRecentAlerts);
+
+        // All other notification routes require authentication
         this.router.use(authMiddleware);
 
         this.router.get('/',            this.notificationController.getMyNotifications);

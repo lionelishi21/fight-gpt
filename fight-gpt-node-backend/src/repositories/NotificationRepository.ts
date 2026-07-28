@@ -8,6 +8,7 @@ export interface INotificationRepository {
     markAsRead(notificationId: string): Promise<INotification | null>;
     markAllRead(userId: string): Promise<void>;
     broadcastToAllUsers(data: Omit<Partial<INotification>, 'userId'>): Promise<void>;
+    getRecentAlerts(gameId: string, limit?: number): Promise<INotification[]>;
 }
 
 export class NotificationRepository extends BaseRepository<INotification> implements INotificationRepository {
@@ -41,6 +42,27 @@ export class NotificationRepository extends BaseRepository<INotification> implem
         const users = await User.find({}, '_id').lean();
         const docs = users.map(u => ({ ...data, userId: u._id }));
         if (docs.length) await this.model.insertMany(docs, { ordered: false });
+    }
+
+    public async getRecentAlerts(gameId: string, limit: number = 10): Promise<INotification[]> {
+        return this.model.aggregate([
+            { 
+                $match: { 
+                    'payload.gameId': gameId, 
+                    createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } 
+                } 
+            },
+            { $sort: { createdAt: -1 } },
+            { 
+                $group: { 
+                    _id: '$payload.title', 
+                    doc: { $first: '$$ROOT' } 
+                }
+            },
+            { $replaceRoot: { newRoot: '$doc' } },
+            { $sort: { createdAt: -1 } },
+            { $limit: limit }
+        ]);
     }
 }
 

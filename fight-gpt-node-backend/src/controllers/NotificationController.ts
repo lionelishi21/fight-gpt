@@ -20,6 +20,21 @@ export class NotificationController extends BaseController {
         }
     };
 
+    public getRecentAlerts = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const gameId = req.query.gameId as string;
+            if (!gameId) {
+                this.sendError(res, 'gameId is required', 400);
+                return;
+            }
+            const limit = parseInt(req.query.limit as string) || 10;
+            const alerts = await this.notificationRepository.getRecentAlerts(gameId, limit);
+            this.sendResponse(res, { success: true, data: alerts });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch recent alerts', 500);
+        }
+    };
+
     public getUnreadCount = async (req: Request, res: Response): Promise<void> => {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.removeHeader('ETag');
