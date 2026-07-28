@@ -28,6 +28,7 @@ jobs:
           port:     22
           timeout:  300s
           script: |
+            set -e
             # Find the backend directory (handles any repo clone location)
             APP_DIR=$(find /home -name "package.json" -path "*/fight-gpt-node-backend/package.json" 2>/dev/null | head -n 1 | xargs dirname)
             echo "→ Backend dir: $APP_DIR"
