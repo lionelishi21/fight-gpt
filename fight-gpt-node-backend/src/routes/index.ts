@@ -95,7 +95,7 @@ export class Routes {
     this.gameMetadataRoutes = gameMetadataController ? new GameMetadataRoutes(gameMetadataController) : null as any;
     this.characterEncyclopediaRoutes = characterEncyclopediaController ? new CharacterEncyclopediaRoutes(characterEncyclopediaController) : null as any;
     this.chatRoutes = new ChatRoutes(chatController);
-    this.publicRoutes = (analysisController && characterController && metaController) ? new PublicRoutes(analysisController, characterController, metaController) : null;
+    this.publicRoutes = (analysisController && characterEncyclopediaController && metaController) ? new PublicRoutes(analysisController, characterEncyclopediaController, metaController) : null;
     this.discordRoutes = metaController ? new DiscordRoutes(metaController) : null;
     this.authRoutes = new AuthRoutes();
     this.onboardingRoutes = new OnboardingRoutes();

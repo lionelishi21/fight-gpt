@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { MetaController } from '../controllers/MetaController';
-import { CharacterController } from '../controllers/CharacterController';
+import { CharacterEncyclopediaController } from '../controllers/CharacterEncyclopediaController';
 import { AnalysisController } from '../controllers/AnalysisController';
 
 export class PublicRoutes {
@@ -8,7 +8,7 @@ export class PublicRoutes {
 
   constructor(
     private analysisController: AnalysisController,
-    private characterController: CharacterController,
+    private characterEncyclopediaController: CharacterEncyclopediaController,
     private metaController: MetaController
   ) {
     this.router = Router();
@@ -18,7 +18,7 @@ export class PublicRoutes {
   private setupRoutes(): void {
     // Phase 2: SEO Engine - Public endpoints without auth
     this.router.get('/meta/:gameId', this.metaController.getLatestMetaReport.bind(this.metaController));
-    this.router.get('/characters/:gameId', this.characterController.getCharactersByGame.bind(this.characterController));
+    this.router.get('/characters/:gameId', this.characterEncyclopediaController.getEncyclopediasByGame.bind(this.characterEncyclopediaController));
     this.router.get('/analysis/:id', this.analysisController.getAnalysis.bind(this.analysisController));
   }
 
