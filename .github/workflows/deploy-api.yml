@@ -103,8 +103,11 @@ jobs:
               git fetch origin
               git reset --hard origin/main
             else
-              echo "❌ ERROR: Not a git repository! You must clone the repo on the server for deploy-api to work."
-              exit 1
+              echo "Initializing git repository since it is missing..."
+              git init
+              git remote add origin https://github.com/lionelishi21/fight-gpt.git
+              git fetch origin
+              git reset --hard origin/main
             fi
             echo "→ Now on commit: $(git log -1 --oneline)"
             cd "$APP_DIR"
@@ -115,6 +118,7 @@ jobs:
 
             # 4. Build TypeScript — dist/ is gitignored, must be compiled on server
             echo "→ Compiling TypeScript..."
+            npm install -D typescript@5.4.5
             npm run build
             echo "→ dist/index.js: $(ls -lh dist/index.js)"
             echo "→ dist/services: $(ls dist/services/*.js 2>/dev/null | wc -l) files"
