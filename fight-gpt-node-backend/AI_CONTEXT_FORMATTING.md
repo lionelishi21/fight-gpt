@@ -214,3 +214,5 @@ Test the formatting with different game types:
 1. **SF6 (1v1, 2D)** - Should show Drive Gauge, Burnout mechanics
 2. **Tekken 8 (1v1, 3D)** - Should show Heat System, Sidestep mechanics
 3. **UMVC3 (Team-based)** - Should show Team Size: 3, Assists, DHC mechanics
+
+

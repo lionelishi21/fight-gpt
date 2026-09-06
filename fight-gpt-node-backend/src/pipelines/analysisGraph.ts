@@ -61,6 +61,12 @@ const AnalysisAnnotation = Annotation.Root({
     default: () => "",
   }),
 
+  // Populated by fgsmNode — mathematical frame-by-frame data directly from Computer Vision
+  fgsmTimeline: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => "",
+  }),
+
   resolvedCharacters: Annotation<{ p1?: string; p2?: string }>({
     reducer: (_, next) => next,
     default: () => ({}),
@@ -299,6 +305,39 @@ export function createAnalysisGraph(deps: {
     return { resolvedCharacters: { p1, p2 }, groundedContext };
   }
 
+  // ── Node 1.75: FGSM Vision Engine (Mathematical Frame Extraction) ─────────────
+  async function fgsmNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
+    if (!state.request.youtube_url) {
+      Logger.info("[AnalysisGraph] FGSM skipped (no youtube_url)");
+      return {};
+    }
+
+    Logger.info("[AnalysisGraph] FGSM Vision Engine extraction running...");
+    let fgsmTimeline = "";
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtube_url: state.request.youtube_url })
+      });
+      
+      if (response.ok) {
+        const jsonResponse = await response.json();
+        if (jsonResponse.success && jsonResponse.timeline) {
+          fgsmTimeline = JSON.stringify(jsonResponse.timeline, null, 2);
+          Logger.info(`[AnalysisGraph] FGSM extracted ${jsonResponse.timeline.length} events successfully.`);
+        }
+      } else {
+        Logger.warn(`[AnalysisGraph] FGSM returned status ${response.status}`);
+      }
+    } catch (err: any) {
+      Logger.warn(`[AnalysisGraph] FGSM engine failed or offline: ${err?.message}`);
+    }
+
+    return { fgsmTimeline };
+  }
+
   // ── Node 2: Flash + thinking ─────────────────────────────────────────────────
   async function flashNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
     const enrichedRequest: AnalysisRequest = {
@@ -317,6 +356,13 @@ export function createAnalysisGraph(deps: {
 
     let fullPrompt = basePrompt;
     if (state.groundedContext)       fullPrompt += `\n\nContext:\n${state.groundedContext}`;
+    
+    if (state.fgsmTimeline) {
+      fullPrompt += `\n\n--- MATHEMATICAL FRAME LOG ---\n`;
+      fullPrompt += `The following is 100% accurate structural data extracted by our Computer Vision engine. Base your analysis completely on this data where available, do not hallucinate visual events that contradict this mathematical log.\n`;
+      fullPrompt += state.fgsmTimeline;
+    }
+    
     if (enrichedRequest.video_title) fullPrompt += `\n\nVideo Title: ${enrichedRequest.video_title}`;
     fullPrompt += notation;
 
@@ -367,6 +413,13 @@ export function createAnalysisGraph(deps: {
 
     let fullPrompt = basePrompt;
     if (state.groundedContext)     fullPrompt += `\n\nContext:\n${state.groundedContext}`;
+    
+    if (state.fgsmTimeline) {
+      fullPrompt += `\n\n--- MATHEMATICAL FRAME LOG ---\n`;
+      fullPrompt += `The following is 100% accurate structural data extracted by our Computer Vision engine. Base your analysis completely on this data where available, do not hallucinate visual events that contradict this mathematical log.\n`;
+      fullPrompt += state.fgsmTimeline;
+    }
+    
     if (state.request.video_title) fullPrompt += `\n\nVideo Title: ${state.request.video_title}`;
 
     const text = await generate(
@@ -397,11 +450,13 @@ export function createAnalysisGraph(deps: {
   return new StateGraph(AnalysisAnnotation)
     .addNode("screen", screenNode)
     .addNode("ground", groundNode)
+    .addNode("fgsm", fgsmNode)
     .addNode("flash",  flashNode)
     .addNode("pro",    proNode)
     .addEdge(START, "screen")
     .addConditionalEdges("screen", afterScreen)
-    .addEdge("ground", "flash")
+    .addEdge("ground", "fgsm")
+    .addEdge("fgsm", "flash")
     .addConditionalEdges("flash",  afterFlash)
     .addEdge("pro", END)
     .compile();

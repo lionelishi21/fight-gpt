@@ -72,5 +72,20 @@ module.exports = {
       watch: false,
       source_map_support: true,
     },
+    {
+      name: 'fgsm-vision-engine',
+      script: '../fgsm-vision-engine/src/api.py',
+      interpreter: '../fgsm-vision-engine/.venv/bin/python',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '2G',
+      out_file: 'logs/fgsm-out.log',
+      error_file: 'logs/fgsm-error.log',
+      merge_logs: true,
+      env_production: {
+        PORT: 8000,
+      }
+    },
   ],
 };

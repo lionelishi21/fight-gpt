@@ -28,6 +28,7 @@ const INVALID_CHARACTER_NAMES = new Set([
     'p1', 'p2', 'player 1', 'player 2', 'player1', 'player2',
 ]);
 
+/** These should be comming from the database */
 const KNOWN_CHARACTERS: Record<string, string[]> = {
     sf6: ['ryu','ken','chun-li','guile','cammy','juri','kimberly','manon','dee_jay','jp',
           'lily','marisa','rashid','aki','ed','akuma','m_bison','bison','terry','honda',

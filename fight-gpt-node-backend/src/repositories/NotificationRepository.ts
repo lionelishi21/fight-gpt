@@ -46,17 +46,17 @@ export class NotificationRepository extends BaseRepository<INotification> implem
 
     public async getRecentAlerts(gameId: string, limit: number = 10): Promise<INotification[]> {
         return this.model.aggregate([
-            { 
-                $match: { 
-                    'payload.gameId': gameId, 
-                    createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } 
-                } 
+            {
+                $match: {
+                    'payload.gameId': gameId,
+                    createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+                }
             },
             { $sort: { createdAt: -1 } },
-            { 
-                $group: { 
-                    _id: '$payload.title', 
-                    doc: { $first: '$$ROOT' } 
+            {
+                $group: {
+                    _id: '$payload.title',
+                    doc: { $first: '$$ROOT' }
                 }
             },
             { $replaceRoot: { newRoot: '$doc' } },
