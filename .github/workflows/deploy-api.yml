@@ -95,6 +95,17 @@ jobs:
             sed -i "s|^AWS_REGION=.*|AWS_REGION=${{ secrets.AWS_REGION }}|" .env || true
             grep -q "^AWS_REGION=" .env || echo "AWS_REGION=${{ secrets.AWS_REGION || 'us-east-1' }}" >> .env
 
+            # MongoDB URIs almost always contain '&' in their query string
+            # (?retryWrites=true&w=majority) - '&' is special on sed's
+            # replacement side (inserts the whole match), so it must be
+            # escaped or the substitution corrupts the URI. This was
+            # previously never injected here at all - it was assumed to be
+            # set once at initial server provisioning, which silently broke
+            # for a freshly-provisioned server that never got a real value.
+            MONGODB_URI_ESCAPED=$(printf '%s' "${{ secrets.MONGODB_URI }}" | sed -e 's/[&\]/\\&/g')
+            sed -i "s|^MONGODB_URI=.*|MONGODB_URI=${MONGODB_URI_ESCAPED}|" .env || true
+            grep -q "^MONGODB_URI=" .env || echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
+
             # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
             # We must pull from the git root, not the node backend subfolder
