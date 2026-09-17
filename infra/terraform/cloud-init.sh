@@ -17,8 +17,15 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
 
 # 3. PM2
+# Piping pm2's own stdout into bash is fragile - its banner/log lines
+# ("Monitor:", "$", box-drawing chars, etc.) get executed as commands and
+# fail, and since this whole script runs under `set -e`, that silently
+# killed cloud-init before it ever reached cloning the repo or starting
+# the app. We're already root here, so pm2 can write the systemd unit
+# directly without needing the copy-paste-able sudo command it prints for
+# non-root users.
 npm install -g pm2
-pm2 startup systemd -u ubuntu --hp /home/ubuntu | bash
+pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
 
 # 4. Log dir
 mkdir -p /var/log/fightgpt
