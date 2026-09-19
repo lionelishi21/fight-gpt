@@ -106,6 +106,14 @@ jobs:
             sed -i "s|^MONGODB_URI=.*|MONGODB_URI=${MONGODB_URI_ESCAPED}|" .env || true
             grep -q "^MONGODB_URI=" .env || echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
 
+            # Same gap as MONGODB_URI: this is read later in this very
+            # workflow (the bulk-queue admin call) and by adminKeyAuth
+            # middleware, but was never actually injected - assumed to
+            # already exist in .env from initial server setup, which a
+            # freshly-provisioned server never has.
+            sed -i "s|^ADMIN_API_SECRET=.*|ADMIN_API_SECRET=${{ secrets.ADMIN_API_SECRET }}|" .env || true
+            grep -q "^ADMIN_API_SECRET=" .env || echo "ADMIN_API_SECRET=${{ secrets.ADMIN_API_SECRET }}" >> .env
+
             # 1. Pull latest code — hard reset to origin/main to handle local modifications
             echo "→ Fetching latest from main..."
             # We must pull from the git root, not the node backend subfolder
