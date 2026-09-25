@@ -12,6 +12,7 @@ import { VersionResolver } from '../helpers/VersionResolver';
 import { formatFullGameContextForAI } from '../helpers/aiContextHelper';
 import { buildFewShotExamples } from '../helpers/fewShotRanker';
 import { IPlayerTendencyRepository } from '../repositories/PlayerTendencyRepository';
+import { IMetaRepository } from '../repositories/MetaRepository';
 import { TendencyOwnerType } from '../models/PlayerTendencyProfile';
 import { AiPromptHelper, CharacterAnalysisData } from '../helpers/aiPromptHelper';
 import { IGameMetadata, GameRule as CharacterGameRule } from '../types/gameMetadata';
@@ -51,8 +52,66 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     private readonly rivalRepository?: IRivalRepository,
     private readonly premiumAiService?: IAiService,
     private readonly playerTendencyRepository?: IPlayerTendencyRepository,
+    private readonly metaRepository?: IMetaRepository,
   ) {
     super();
+  }
+
+  /**
+   * Latest generated meta report, condensed into a prompt section for the
+   * coaching phase so advice reflects the current meta and this specific
+   * matchup instead of only the raw event timeline.
+   */
+  private async buildMetaContext(gameId: string, p1?: string, p2?: string): Promise<string> {
+    if (!this.metaRepository) return '';
+    try {
+      const report = await this.metaRepository.getLatestReport(gameId);
+      if (!report) return '';
+
+      const norm = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const statFor = (c?: string) =>
+        c ? report.tier_list?.find(t => norm(t.character_id) === norm(c) || norm(t.character_name) === norm(c)) : undefined;
+
+      // A report built from a handful of matches yields win rates and "top
+      // characters" that mean nothing. Only inject stats with enough behind
+      // them, and inject nothing at all when there's no real signal, so the
+      // coaching never presents noise as the current meta.
+      const MIN_CHARACTER_SAMPLE = 5;
+      const MIN_MATCHUP_SAMPLE = 3;
+      const lines: string[] = [];
+      let hasSignal = false;
+
+      for (const [label, char] of [['Player 1', p1], ['Player 2', p2]] as const) {
+        const s = statFor(char);
+        if (!s || s.usage_count < MIN_CHARACTER_SAMPLE) continue;
+        hasSignal = true;
+        const strategies = s.top_strategies?.length ? `; common strategies: ${s.top_strategies.join('; ')}` : '';
+        lines.push(`${label} ${s.character_name}: ${s.win_rate}% win rate over ${s.usage_count} matches, trend ${s.trend}${strategies}`);
+      }
+
+      const matchup = report.matchup_insights?.find(m =>
+        (norm(m.character_a) === norm(p1) && norm(m.character_b) === norm(p2)) ||
+        (norm(m.character_a) === norm(p2) && norm(m.character_b) === norm(p1)));
+      if (matchup && matchup.sample_size >= MIN_MATCHUP_SAMPLE) {
+        hasSignal = true;
+        const p1IsA = norm(matchup.character_a) === norm(p1);
+        const p1Rate = p1IsA ? matchup.win_rate_a : 100 - matchup.win_rate_a;
+        lines.push(`Matchup: Player 1 wins ${p1Rate}% of ${matchup.sample_size} analyzed games; dominant strategy: ${matchup.dominant_strategy}`);
+      }
+
+      if (!hasSignal) return '';
+
+      const header = ['### META SNAPSHOT (built from analyzed matches - use only what is stated here, do not invent statistics)'];
+      if (report.dominant_strategies?.length) header.push(`Dominant strategies: ${report.dominant_strategies.slice(0, 5).join('; ')}`);
+      if (report.trending_characters?.rising?.length) header.push(`Rising: ${report.trending_characters.rising.slice(0, 5).join(', ')}`);
+      if (report.trending_characters?.falling?.length) header.push(`Falling: ${report.trending_characters.falling.slice(0, 5).join(', ')}`);
+      header.push(`Data basis: ${report.source_scenario_count ?? 0} analyzed scenarios, ${report.source_video_count ?? 0} videos`);
+
+      return `\n\n${[...header, ...lines].join('\n')}`;
+    } catch (e) {
+      console.warn('[AnalysisService] Meta context injection failed:', e instanceof Error ? e.message : e);
+      return '';
+    }
   }
 
   private sanitizeAiString(val: any): string | null {
@@ -210,6 +269,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           const p1Character = analysisResponse.p1_character || enrichedRequest.p1_character_id;
           const p2Character = analysisResponse.p2_character || enrichedRequest.p2_character_id;
 
+          const coachingContext = (enrichedRequest.ai_context || '') +
+            await this.buildMetaContext(request.game_id || 'sf6', p1Character, p2Character);
+
           try {
             const p1Coaching = await activeService.generatePerspectiveCoaching(
               analysisResponse.raw_events,
@@ -217,7 +279,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               request.game_id || 'sf6',
               p1Character,
               p2Character,
-              enrichedRequest.ai_context
+              coachingContext
             );
             analysisResponse.analysis_p1 = p1Coaching;
           } catch (e) {
@@ -231,7 +293,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               request.game_id || 'sf6',
               p2Character,
               p1Character,
-              enrichedRequest.ai_context
+              coachingContext
             );
             analysisResponse.analysis_p2 = p2Coaching;
           } catch (e) {

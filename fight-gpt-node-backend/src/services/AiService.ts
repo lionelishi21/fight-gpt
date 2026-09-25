@@ -315,6 +315,9 @@ ${context ? 'Game Context:\n' + context + '\n\n' : ''}
 Timeline Events:
 ${JSON.stringify(rawEvents, null, 2)}
 
+Go beyond describing what happened. Each tip and each piece of event advice should say what to do differently and why.${context && context.includes('META SNAPSHOT') ? `
+A META SNAPSHOT is provided above. Tie at least two of the three tips to it: the matchup plan against ${opponentCharacter || 'the opponent'}, what the current meta rewards or punishes for ${character || 'this character'}, and how the player's choices in the timeline compare with the common strategies listed. Only cite numbers and strategies that appear in the snapshot; if the sample is small, say so instead of overstating it.` : ''}
+
 Return ONLY valid JSON in the following format:
 {
   "top_3_tips": ["Tip 1", "Tip 2", "Tip 3"],

@@ -73,6 +73,7 @@ import { CharacterEncyclopediaRepository } from './repositories/CharacterEncyclo
 import { VectorRepository } from './repositories/VectorRepository';
 import { PlayerTendencyRepository } from './repositories/PlayerTendencyRepository';
 import { MetaRepository } from './repositories/MetaRepository';
+import { RivalRepository } from './repositories/RivalRepository';
 import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
 import { NotificationRepository } from './repositories/NotificationRepository';
@@ -174,8 +175,10 @@ export class App {
       characterService,
       vectorRepository,
       notificationService,
+      AppConfig.MONGODB_URI ? new RivalRepository() : undefined,
       premiumAiService,
       playerTendencyRepository,
+      metaRepository,
     ) : null as any;
     const gameService = AppConfig.MONGODB_URI ? new GameService(gameRepository, characterRepository) : null as any;
     const metaService = AppConfig.MONGODB_URI ? new MetaService(metaRepository, vectorRepository, AppConfig.GEMINI_API_KEY, characterRepository) : null as any;

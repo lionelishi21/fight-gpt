@@ -307,6 +307,12 @@ export function createAnalysisGraph(deps: {
 
   // ── Node 1.75: FGSM Vision Engine (Mathematical Frame Extraction) ─────────────
   async function fgsmNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
+    // Off by default: the FGSM service only returns real detections once its
+    // trained models are wired in. Its log is presented to Gemini as ground
+    // truth, so feeding it placeholder data would actively corrupt analyses.
+    if (process.env.FGSM_ENABLED !== "true") {
+      return {};
+    }
     if (!state.request.youtube_url) {
       Logger.info("[AnalysisGraph] FGSM skipped (no youtube_url)");
       return {};

@@ -26,6 +26,7 @@ import { PlayerTendencyRepository } from './repositories/PlayerTendencyRepositor
 import { NotificationService } from './services/NotificationService';
 import { NotificationRepository } from './repositories/NotificationRepository';
 import { RivalRepository } from './repositories/RivalRepository';
+import { MetaRepository } from './repositories/MetaRepository';
 import { queueService, AnalysisJobData, ProofValidationJobData } from './services/QueueService';
 import { GeminiCreditExhaustedError } from './errors';
 import Mission from './models/Mission';
@@ -165,7 +166,8 @@ async function runWorker() {
             notificationService,
             rivalRepo,
             undefined,
-            playerTendencyRepo
+            playerTendencyRepo,
+            new MetaRepository()
         );
 
         // 4. Setup BullMQ Worker
