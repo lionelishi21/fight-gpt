@@ -11,6 +11,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # 1. System
 apt-get update -y && apt-get upgrade -y
 apt-get install -y git nginx certbot python3-certbot-nginx curl build-essential
+# The analysis/ingestion queue (BullMQ) and rate limiter need Redis on localhost.
+# The AWS migration's provisioning omitted it, leaving the worker unable to
+# process any job. redis-server binds to 127.0.0.1 by default.
+apt-get install -y redis-server
+systemctl enable --now redis-server
 
 # 2. Node.js 20 LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
