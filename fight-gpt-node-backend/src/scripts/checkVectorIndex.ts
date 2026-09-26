@@ -114,7 +114,6 @@ async function run() {
                         game_id: 1,
                         description: { $substr: ['$description', 0, 80] },
                         score: { $meta: 'vectorSearchScore' },
-                        embedding: 0,
                     },
                 },
             ]).exec();

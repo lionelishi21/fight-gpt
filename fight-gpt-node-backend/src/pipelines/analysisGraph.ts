@@ -112,6 +112,33 @@ function is429(err: any): boolean {
   );
 }
 
+// ── Model selection ───────────────────────────────────────────────────────────
+// Model names come from the environment so a model that a key can no longer use
+// (e.g. "no longer available to new users") is a config change, not a deploy.
+const FLASH_MODEL = process.env.GEMINI_FLASH_MODEL || 'gemini-2.5-flash';
+// Tried in order after the requested model fails with a capacity/permission error.
+const FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function errorText(err: any): string {
+  return String(err?.message || err || '');
+}
+
+// Overloaded ("high demand") responses are usually gone within seconds.
+function isOverloaded(err: any): boolean {
+  const s = err?.status;
+  return s === 503 || s === 500 || s === 504 || /\b(503|500|504)\b|high demand|overloaded|UNAVAILABLE/i.test(errorText(err));
+}
+
+// Errors that are specific to one model: try the next model instead of giving up.
+function isModelSpecific(err: any): boolean {
+  const s = err?.status;
+  return isOverloaded(err) || is429(err) || s === 403 || s === 404 ||
+    /\b(403|404)\b|no longer available|PERMISSION_DENIED|not found/i.test(errorText(err));
+}
+
 // ── Screen prompt ──────────────────────────────────────────────────────────────
 const SCREEN_PROMPT = `You are a fighting game video classifier. Watch this video and answer ONLY:
 
@@ -158,8 +185,8 @@ export function createAnalysisGraph(deps: {
     { name: "gemini_generate", run_type: "llm" }
   );
 
-  // Retry with fallback key on 429
-  async function generate(model: string, parts: any[], config?: any): Promise<string> {
+  // One model: retry with the fallback key on 429
+  async function generateWithKeys(model: string, parts: any[], config?: any): Promise<string> {
     try {
       return await callGemini(apiKey, model, parts, config);
     } catch (err: any) {
@@ -171,12 +198,41 @@ export function createAnalysisGraph(deps: {
     }
   }
 
+  // Requested model first (with short retries while it is overloaded), then each
+  // GEMINI_FALLBACK_MODELS entry in order. Only model-specific errors move on.
+  async function generate(model: string, parts: any[], config?: any): Promise<string> {
+    const candidates = [model, ...FALLBACK_MODELS.filter(m => m !== model)];
+    const overloadRetryDelaysMs = [2000, 6000];
+    let lastErr: any;
+
+    for (const candidate of candidates) {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const text = await generateWithKeys(candidate, parts, config);
+          if (candidate !== model) Logger.info(`[AnalysisGraph] Served by fallback model ${candidate} (requested ${model})`);
+          return text;
+        } catch (err: any) {
+          lastErr = err;
+          if (isOverloaded(err) && attempt < overloadRetryDelaysMs.length) {
+            Logger.warn(`[AnalysisGraph] ${candidate} overloaded — retry ${attempt + 1} in ${overloadRetryDelaysMs[attempt] / 1000}s`);
+            await sleep(overloadRetryDelaysMs[attempt]);
+            continue;
+          }
+          if (!isModelSpecific(err)) throw err;
+          Logger.warn(`[AnalysisGraph] ${candidate} failed (${errorText(err).slice(0, 120)}) — trying next model`);
+          break;
+        }
+      }
+    }
+    throw lastErr;
+  }
+
   // ── Node 1: Screen ───────────────────────────────────────────────────────────
   async function screenNode(state: AnalysisState): Promise<Partial<AnalysisState>> {
     let screenResult: ScreenResult;
     try {
       const text = await generate(
-        "gemini-2.5-flash",
+        FLASH_MODEL,
         [...videoParts(state), { text: SCREEN_PROMPT }],
         { generationConfig: { responseMimeType: "application/json" } }
       );
@@ -199,7 +255,7 @@ export function createAnalysisGraph(deps: {
     return {
       screenResult,
       stage: screenResult.is_gameplay ? "flash" : "rejected",
-      usage: [{ stage: "screen", model: "gemini-2.5-flash" }],
+      usage: [{ stage: "screen", model: FLASH_MODEL }],
     };
   }
 
@@ -375,7 +431,7 @@ export function createAnalysisGraph(deps: {
     let analysis: AnalysisResponse;
     try {
       const text = await generate(
-        "gemini-2.5-flash",
+        FLASH_MODEL,
         [...videoParts(state), { text: fullPrompt }],
         {
           generationConfig: {
@@ -388,12 +444,12 @@ export function createAnalysisGraph(deps: {
       analysis = parseJson(text);
     } catch (err: any) {
       Logger.warn(`[AnalysisGraph] Flash failed: ${err?.message} — escalating to Pro`);
-      return { stage: "pro", usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }] };
+      return { stage: "pro", usage: [{ stage: "flash", model: FLASH_MODEL, events: 0 }] };
     }
 
     if ((analysis as any).is_gameplay_video === false || (analysis as any).status === "not_gameplay") {
       Logger.info(`[AnalysisGraph] Flash rejected: ${(analysis as any).reason || "not gameplay"}`);
-      return { stage: "rejected", usage: [{ stage: "flash", model: "gemini-2.5-flash", events: 0 }] };
+      return { stage: "rejected", usage: [{ stage: "flash", model: FLASH_MODEL, events: 0 }] };
     }
 
     const timelineLength = analysis.timeline?.length ?? 0;
@@ -402,7 +458,7 @@ export function createAnalysisGraph(deps: {
     return {
       analysis,
       stage: timelineLength >= 5 ? "done" : "pro",
-      usage: [{ stage: "flash", model: "gemini-2.5-flash", events: timelineLength }],
+      usage: [{ stage: "flash", model: FLASH_MODEL, events: timelineLength }],
     };
   }
 

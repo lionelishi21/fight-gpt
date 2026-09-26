@@ -243,7 +243,7 @@ export class AiService extends BaseService implements IAiService {
 
     let result: boolean;
     try {
-      const pingModel = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const pingModel = this.genAI.getGenerativeModel({ model: this.modelName });
       const response = await pingModel.generateContent({
         contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
         generationConfig: { maxOutputTokens: 5 },
@@ -335,10 +335,22 @@ Return ONLY valid JSON in the following format:
 }
 Note: The keys in coaching_by_event must exactly match the node_id from the timeline events.`;
 
-    const result = await this.model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json' },
-    });
+    // Overload (503 "high demand") is usually gone within seconds; retry briefly
+    // so a spike doesn't drop the coaching for an otherwise finished analysis.
+    let result;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        result = await this.model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        break;
+      } catch (err: any) {
+        const overloaded = err?.status === 503 || /\b503\b|high demand|UNAVAILABLE/i.test(String(err?.message || err));
+        if (!overloaded || attempt >= 2) throw err;
+        await new Promise(resolve => setTimeout(resolve, [2000, 6000][attempt]));
+      }
+    }
 
     const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const sanitizedJson = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
