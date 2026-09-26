@@ -11,6 +11,7 @@ import { UuidHelper } from '../helpers/uuidHelper';
 import { VersionResolver } from '../helpers/VersionResolver';
 import { formatFullGameContextForAI } from '../helpers/aiContextHelper';
 import { buildFewShotExamples } from '../helpers/fewShotRanker';
+import { resolveUnlistedEvents, scrubUnlisted } from '../helpers/unlistedMoves';
 import { IPlayerTendencyRepository } from '../repositories/PlayerTendencyRepository';
 import { IMetaRepository } from '../repositories/MetaRepository';
 import { TendencyOwnerType } from '../models/PlayerTendencyProfile';
@@ -262,6 +263,9 @@ export class AnalysisService extends BaseService implements IAnalysisService {
         const activeService = (isUserUpload && this.premiumAiService) ? this.premiumAiService : this.aiService;
         analysisResponse = await activeService.analyzeVideo(enrichedRequest);
 
+        // Before coaching sees the timeline: no "unlisted_move" placeholders in what users read.
+        await this.resolveUnlistedMoves(analysisResponse, request.game_id || 'sf6');
+
         // --- PHASE 2: TWO-WAY CHARACTER COACHING ---
         if (analysisResponse.timeline && analysisResponse.timeline.length > 0) {
           analysisResponse.raw_events = [...analysisResponse.timeline];
@@ -281,7 +285,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               p2Character,
               coachingContext
             );
-            analysisResponse.analysis_p1 = p1Coaching;
+            analysisResponse.analysis_p1 = scrubUnlisted(p1Coaching);
           } catch (e) {
             console.warn('[AnalysisService] Failed to generate P1 coaching:', e);
           }
@@ -295,7 +299,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
               p1Character,
               coachingContext
             );
-            analysisResponse.analysis_p2 = p2Coaching;
+            analysisResponse.analysis_p2 = scrubUnlisted(p2Coaching);
           } catch (e) {
             console.warn('[AnalysisService] Failed to generate P2 coaching:', e);
           }
@@ -440,7 +444,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       // has youtube_url, game_id, analysis_id etc. for video playback and linking.
       return {
         success: true,
-        data: {
+        data: this.presentAnalysis({
           _id: analysis._id,
           analysis_id: analysis.analysis_id,
           youtube_url: analysis.youtube_url,
@@ -448,7 +452,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
           game_id: analysis.game_id,
           created_at: analysis.created_at,
           ...(analysis.analysis || {}),
-        },
+        }),
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -460,7 +464,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       const analyses = await this.analysisRepository.getRecentAnalyses(limit, userId, gameId);
       return {
         success: true,
-        data: analyses.map(a => ({
+        data: analyses.map(a => this.presentAnalysis({
           _id: a._id,
           analysis_id: a.analysis_id,
           youtube_url: a.youtube_url,
@@ -484,7 +488,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       const analyses = await this.analysisRepository.getDiscoveryAnalyses(limit, gameId, p1Char, p2Char);
       return {
         success: true,
-        data: analyses.map(a => ({
+        data: analyses.map(a => this.presentAnalysis({
           _id: a._id,
           analysis_id: a.analysis_id,
           youtube_url: a.youtube_url,
@@ -597,6 +601,48 @@ ${formatted.join('\n\n')}
 
 KEY LESSON: If you see a situation that resembles any correction above, apply the corrected logic, not the original mistaken logic.
 ═══ END CORRECTIONS ═══\n`;
+  }
+
+  /** Canonical move names (original casing) for a character, from the encyclopedia. */
+  private async loadCanonicalMoves(gameId: string, charName: string): Promise<string[]> {
+    try {
+      const res = await this.characterEncyclopediaService.getEncyclopediaByGameAndCharacter(
+        gameId, charName.toLowerCase().replace(/\s+/g, '_'));
+      const moveset: any = res.success ? res.data?.moveset : null;
+      if (!moveset) return [];
+      return [
+        ...(moveset.normals || []), ...(moveset.specials || []), ...(moveset.ex_moves || []),
+        ...(moveset.supers || []), ...(moveset.throws || []),
+      ].map((m: any) => m?.name).filter((n: any): n is string => typeof n === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Analyses saved before the fix still hold the "unlisted_move" placeholder. Clean it as
+   * they are read, so every client (mobile, web, admin) shows readable text without a
+   * database migration. Works on a copy; the stored document is untouched.
+   */
+  private presentAnalysis<T extends Record<string, any>>(view: T): T {
+    const out: Record<string, any> = { ...view };
+    for (const key of ['timeline', 'raw_events']) {
+      if (Array.isArray(out[key])) {
+        out[key] = JSON.parse(JSON.stringify(out[key]));
+        resolveUnlistedEvents(out[key], () => []);
+      }
+    }
+    for (const key of ['analysis_p1', 'analysis_p2', 'top_3_tips', 'daily_mission']) {
+      if (out[key] != null) out[key] = scrubUnlisted(JSON.parse(JSON.stringify(out[key])));
+    }
+    return out as T;
+  }
+
+  private async resolveUnlistedMoves(response: AnalysisResponse, gameId: string): Promise<void> {
+    if (!response.timeline?.some(e => /^unlisted/i.test(e.move_used || ''))) return;
+    const p1Moves = response.p1_character ? await this.loadCanonicalMoves(gameId, response.p1_character) : [];
+    const p2Moves = response.p2_character ? await this.loadCanonicalMoves(gameId, response.p2_character) : [];
+    resolveUnlistedEvents(response.timeline, e => (e.actor === 'p2' ? p2Moves : p1Moves));
   }
 
   /**

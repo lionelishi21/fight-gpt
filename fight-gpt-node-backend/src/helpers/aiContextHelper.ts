@@ -184,16 +184,26 @@ export function formatCharacterMovesetForAI(
  * encyclopedia moveset. Used to stop Gemini from inventing move names that don't
  * exist for the character (e.g. "cr.LK" on a character that has no such move).
  */
+// Moves every character can do. They belong to no one's kit, so a per-character list
+// never contains them and the model had no valid name to give (it fell back to "unlisted_move").
+export const SYSTEM_MOVES_BY_GAME: Record<string, string[]> = {
+  sf6: [
+    'Drive Impact', 'Drive Parry', 'Perfect Parry', 'Drive Rush', 'Drive Reversal',
+    'Throw', 'Forward Throw', 'Back Throw', 'Throw Tech', 'Forward Dash', 'Back Dash',
+  ],
+};
+
 export function formatMoveWhitelistForAI(
   p1Encyclopedia: ICharacterEncyclopedia | null | undefined,
   p2Encyclopedia: ICharacterEncyclopedia | null | undefined,
   p1Label: string = 'Player 1',
-  p2Label: string = 'Player 2'
+  p2Label: string = 'Player 2',
+  systemMoves: string[] = [],
 ): string {
   const collectMoveNames = (encyclopedia: ICharacterEncyclopedia | null | undefined): string[] => {
     if (!encyclopedia?.moveset) return [];
-    const { normals, specials, ex_moves, supers, assists, dhc, team_supers } = encyclopedia.moveset as any;
-    const categories = [normals, specials, ex_moves, supers, assists, dhc, team_supers];
+    const { normals, specials, ex_moves, supers, throws, assists, dhc, team_supers } = encyclopedia.moveset as any;
+    const categories = [normals, specials, ex_moves, supers, throws, assists, dhc, team_supers];
     const names: string[] = [];
     for (const category of categories) {
       if (!category?.length) continue;
@@ -212,7 +222,8 @@ export function formatMoveWhitelistForAI(
   const parts: string[] = [
     '═══ MOVE NAME CONSTRAINT (MANDATORY) ═══',
     'You MUST set move_used to EXACTLY one of the listed names for that character.',
-    'If no listed move matches what you observe, set move_used to "unlisted_move" and explain in the description — never invent a name.',
+    'If no listed move matches what you observe, set move_used to "unlisted_move", and ALSO add a "move_guess" field with a short plain-language description of what you saw (for example "crouching medium kick into a fireball") — never invent a name.',
+    'Walking, jumping in place and blocking are not moves: leave move_used empty for those instead of "unlisted_move".',
   ];
 
   if (p1Names.length > 0) {
@@ -222,6 +233,11 @@ export function formatMoveWhitelistForAI(
   if (p2Names.length > 0) {
     parts.push(`\n${p2Label.toUpperCase()} — VALID MOVE NAMES:`);
     p2Names.forEach(n => parts.push(`- ${n}`));
+  }
+
+  if (systemMoves.length > 0) {
+    parts.push('\nSYSTEM MOVES — VALID FOR EITHER PLAYER:');
+    systemMoves.forEach(n => parts.push(`- ${n}`));
   }
 
   parts.push('═══ END CONSTRAINT ═══');

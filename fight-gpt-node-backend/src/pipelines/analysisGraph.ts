@@ -18,7 +18,7 @@ import { IVectorRepository } from "../repositories/VectorRepository";
 import { AnalysisRequest, AnalysisResponse } from "../types";
 import { Logger } from "../helpers/logger";
 import { buildFewShotExamples } from "../helpers/fewShotRanker";
-import { formatFullGameContextForAI, formatMoveWhitelistForAI } from "../helpers/aiContextHelper";
+import { formatFullGameContextForAI, formatMoveWhitelistForAI, SYSTEM_MOVES_BY_GAME } from "../helpers/aiContextHelper";
 import { ICharacterEncyclopediaService } from "../services/CharacterEncyclopediaService";
 import { IGameMetadataService } from "../services/GameMetadataService";
 import { IPlayerTendencyRepository } from "../repositories/PlayerTendencyRepository";
@@ -297,7 +297,7 @@ export function createAnalysisGraph(deps: {
             p2EncData,
           );
 
-          const moveWhitelist = formatMoveWhitelistForAI(p1EncData, p2EncData, 'Player 1', 'Player 2');
+          const moveWhitelist = formatMoveWhitelistForAI(p1EncData, p2EncData, 'Player 1', 'Player 2', SYSTEM_MOVES_BY_GAME[gameId] || []);
           if (moveWhitelist) context += `\n\n${moveWhitelist}`;
         } catch (err: any) {
           Logger.warn(`[AnalysisGraph] Encyclopedia grounding failed: ${err?.message}`);
