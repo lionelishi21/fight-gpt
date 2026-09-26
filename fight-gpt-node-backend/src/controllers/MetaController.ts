@@ -110,4 +110,18 @@ export class MetaController extends BaseController {
             this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
         }
     };
+    /**
+     * GET /api/ingestion/feed?gameId=sf6&limit=30
+     * What the analysis pipeline has been working on, plus queue totals.
+     */
+    getIngestionFeed = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const gameId = typeof req.query.gameId === 'string' && req.query.gameId ? req.query.gameId.toLowerCase() : undefined;
+            const limit = req.query.limit ? parseInt(String(req.query.limit), 10) || 30 : 30;
+            const result = await this.ingestionService.getFeed(gameId, limit);
+            this.sendResponse(res, result);
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Unknown error');
+        }
+    };
 }

@@ -55,6 +55,29 @@ export interface IIngestionService {
     processQueue(gameId?: string, batchSize?: number): Promise<ApiResponse<{ processed: number; failed: number }>>;
     startScheduler(intervalMs?: number): void;
     stopScheduler(): void;
+    getFeed(gameId?: string, limit?: number): Promise<ApiResponse<IngestionFeed>>;
+}
+
+export type FeedStatus = 'processing' | 'completed' | 'failed' | 'skipped';
+
+export interface IngestionFeedItem {
+    job_id: string;
+    game_id: string;
+    title: string;
+    channel?: string;
+    tournament?: string;
+    platform: 'youtube' | 'twitch';
+    status: FeedStatus;
+    scenarios: number | null;
+    analysis_id?: string;
+    url: string;
+    at: string;
+    note?: string;
+}
+
+export interface IngestionFeed {
+    stats: { queued: number; processing: number; completed: number; failed: number; skipped: number; scenarios: number };
+    items: IngestionFeedItem[];
 }
 
 export class IngestionService extends BaseService implements IIngestionService {
@@ -413,6 +436,60 @@ export class IngestionService extends BaseService implements IIngestionService {
 
         Logger.info(`[IngestionService] Bulk queue complete — ${result.queued} queued, ${result.skipped} skipped`);
         return result;
+    }
+
+    /**
+     * Read-only activity feed for the app. Internal details (search queries, raw
+     * error text) stay server-side; failures are reduced to a short reason.
+     */
+    async getFeed(gameId?: string, limit: number = 30): Promise<ApiResponse<IngestionFeed>> {
+        try {
+            const safeLimit = Math.min(Math.max(limit, 1), 100);
+            const [jobs, counts] = await Promise.all([
+                this.ingestionRepository.getFeed(gameId, safeLimit),
+                this.ingestionRepository.getStatusCounts(gameId),
+            ]);
+
+            const stats = { queued: 0, processing: 0, completed: 0, failed: 0, skipped: 0, scenarios: 0 };
+            for (const c of counts) {
+                if (c.status === 'pending') stats.queued += c.count;
+                else if (c.status === 'processing') stats.processing += c.count;
+                else if (c.status === 'completed') { stats.completed += c.count; stats.scenarios += c.scenarios; }
+                else if (c.status === 'failed') stats.failed += c.count;
+                else if (c.status.startsWith('skipped')) stats.skipped += c.count;
+            }
+
+            const items: IngestionFeedItem[] = jobs.map((j: any) => {
+                const status: FeedStatus = j.status === 'processing' || j.status === 'completed' || j.status === 'failed'
+                    ? j.status : 'skipped';
+                return {
+                    job_id: j.job_id,
+                    game_id: j.game_id,
+                    title: j.video_title || 'Untitled video',
+                    channel: j.channel_name || undefined,
+                    tournament: j.tournament_name || undefined,
+                    platform: j.video_platform === 'twitch' ? 'twitch' : 'youtube',
+                    status,
+                    scenarios: typeof j.scenario_count === 'number' ? j.scenario_count : null,
+                    analysis_id: j.analysis_id || undefined,
+                    url: j.youtube_url,
+                    at: new Date(j.processed_at || j.updated_at || j.created_at || Date.now()).toISOString(),
+                    note: status === 'failed' ? IngestionService.failureNote(j.error_message) : undefined,
+                };
+            });
+
+            return { success: true, data: { stats, items } };
+        } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to load ingestion feed' };
+        }
+    }
+
+    private static failureNote(message?: string): string {
+        const m = message || '';
+        if (/gameplay|patch notes|tier list|tutorial/i.test(m)) return 'Not match footage';
+        if (/quota|429|rate limit/i.test(m)) return 'Analysis limit reached - will retry';
+        if (/unavailable|private|removed|deleted/i.test(m)) return 'Video unavailable';
+        return 'Analysis failed';
     }
 
     /**

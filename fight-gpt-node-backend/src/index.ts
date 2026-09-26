@@ -73,6 +73,7 @@ import { CharacterEncyclopediaRepository } from './repositories/CharacterEncyclo
 import { VectorRepository } from './repositories/VectorRepository';
 import { PlayerTendencyRepository } from './repositories/PlayerTendencyRepository';
 import { MetaRepository } from './repositories/MetaRepository';
+import { LobbyService } from './services/LobbyService';
 import { RivalRepository } from './repositories/RivalRepository';
 import { IngestionRepository } from './repositories/IngestionRepository';
 import { TheoryRepository } from './repositories/TheoryRepository';
@@ -100,6 +101,7 @@ export class App {
   private rosterSyncService: RosterSyncService | null = null;
   private trainingService: TrainingService | null = null;
   private trendAnalysisService: ITrendAnalysisService | null = null;
+  private lobbyService: LobbyService;
 
   constructor() {
     // Validate configuration
@@ -121,6 +123,9 @@ export class App {
 
     // Make io available globally for the meta ticker and other services
     (global as any).io = this.io;
+
+    // Real-time Dojo lobby (chat rooms) used by the mobile app
+    this.lobbyService = new LobbyService();
 
     // Initialize Socket.io events
     this.setupSocketEvents();
@@ -482,6 +487,71 @@ export class App {
         Logger.info(`SOCKET_LINK: Client disconnected [${socket.id}]`);
       });
     });
+
+    // Lobby Namespace for real-time Dojo interaction
+    const lobbyNamespace = this.io.of('/lobby');
+    lobbyNamespace.on('connection', (socket: any) => {
+      Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
+
+      socket.on('join_lobby', async (data: { lobbyId: string; userId: string }) => {
+        try {
+          const { lobbyId, userId } = data;
+          if (!lobbyId || !userId) return;
+          socket.join(`lobby_${lobbyId}`);
+          socket.lobbyId = lobbyId;
+          await this.lobbyService.updateActiveCount(lobbyId, 1);
+          // Broadcast updated room size to everyone in the room
+          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 1;
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_joined', { userId });
+          Logger.info(`DOJO_LOBBY: User ${userId} joined room lobby_${lobbyId} (${roomSize} operators)`);
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: join_lobby error', err);
+        }
+      });
+
+      socket.on('send_message', async (data: {
+        lobbyId: string;
+        userId: string;
+        content: string;
+        intelLink?: any
+      }) => {
+        try {
+          if (!data.lobbyId || !data.userId || !data.content?.trim()) return;
+          Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}`);
+          const message = await this.lobbyService.saveMessage(data);
+          if (message) {
+            lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
+          }
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: send_message error', err);
+        }
+      });
+
+      socket.on('leave_lobby', async (data: { lobbyId: string; userId: string }) => {
+        try {
+          const { lobbyId, userId } = data;
+          socket.leave(`lobby_${lobbyId}`);
+          await this.lobbyService.updateActiveCount(lobbyId, -1);
+          const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 0;
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });
+          lobbyNamespace.to(`lobby_${lobbyId}`).emit('operator_left', { userId });
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: leave_lobby error', err);
+        }
+      });
+
+      socket.on('disconnect', async () => {
+        try {
+          if (socket.lobbyId) {
+            await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+          }
+          Logger.info(`DOJO_LOBBY: Operator disconnected [${socket.id}]`);
+        } catch (err) {
+          Logger.error('DOJO_LOBBY: disconnect error', err);
+        }
+      });
+    });
   }
 
   /**
@@ -542,7 +612,7 @@ export class App {
       }
 
       // Seed default lobbies for active games (non-blocking)
-      // Removed LobbyService
+      this.lobbyService.seedDefaultLobbies().catch(() => {});
 
       // Start server
       this.server.listen(AppConfig.PORT, () => {

@@ -18,6 +18,7 @@ import { NotificationRoutes } from './notificationRoutes';
 import { UserRoutes } from './userRoutes';
 import { AdminRoutes } from './adminRoutes';
 import { PaymentRoutes } from './paymentRoutes';
+import { LobbyRoutes } from './lobbyRoutes';
 import { AdminController } from '../controllers/AdminController';
 import { inviteController } from '../controllers/InviteController';
 import { authMiddleware } from '../middleware/auth';
@@ -55,6 +56,7 @@ export class Routes {
   private gameMetadataRoutes: GameMetadataRoutes | null;
   private characterEncyclopediaRoutes: CharacterEncyclopediaRoutes | null;
   private chatRoutes: ChatRoutes;
+  private lobbyRoutes: LobbyRoutes;
   private authRoutes: AuthRoutes;
   private publicRoutes: PublicRoutes | null;
   private discordRoutes: DiscordRoutes | null;
@@ -95,6 +97,7 @@ export class Routes {
     this.gameMetadataRoutes = gameMetadataController ? new GameMetadataRoutes(gameMetadataController) : null as any;
     this.characterEncyclopediaRoutes = characterEncyclopediaController ? new CharacterEncyclopediaRoutes(characterEncyclopediaController) : null as any;
     this.chatRoutes = new ChatRoutes(chatController);
+    this.lobbyRoutes = new LobbyRoutes();
     this.publicRoutes = new PublicRoutes(analysisController as any, characterEncyclopediaController as any, metaController as any);
     this.discordRoutes = metaController ? new DiscordRoutes(metaController) : null;
     this.authRoutes = new AuthRoutes();
@@ -183,6 +186,9 @@ export class Routes {
     if (this.theoryRoutes) {
       this.router.use('/theory', this.theoryRoutes.getRouter());
     }
+
+    // Dojo lobby (chat rooms) used by the mobile app
+    this.router.use('/lobby', this.lobbyRoutes.getRouter());
 
     // Notification routes (requires MongoDB)
     if (this.notificationRoutes) {

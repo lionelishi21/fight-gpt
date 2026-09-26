@@ -10,6 +10,8 @@ export interface IIngestionRepository {
     getRecentJobs(gameId: string, limit?: number): Promise<IIngestionJobDocument[]>;
     updateStuckJobs(): Promise<number>;
     deleteJob(jobId: string): Promise<boolean>;
+    getFeed(gameId: string | undefined, limit: number): Promise<IIngestionJobDocument[]>;
+    getStatusCounts(gameId?: string): Promise<{ status: string; count: number; scenarios: number }[]>;
 }
 
 export class IngestionRepository extends BaseRepository<IIngestionJobDocument> implements IIngestionRepository {
@@ -63,6 +65,22 @@ export class IngestionRepository extends BaseRepository<IIngestionJobDocument> i
             this.model.countDocuments({ game_id: gameId, status: 'pending' }),
         ]);
         return { total, completed, failed, pending };
+    }
+
+    // Jobs the pipeline has actually worked on, newest activity first.
+    async getFeed(gameId: string | undefined, limit: number): Promise<IIngestionJobDocument[]> {
+        const filter: Record<string, unknown> = { status: { $ne: 'pending' } };
+        if (gameId) filter.game_id = gameId;
+        return this.model.find(filter).sort({ updated_at: -1 }).limit(limit).exec();
+    }
+
+    async getStatusCounts(gameId?: string): Promise<{ status: string; count: number; scenarios: number }[]> {
+        const match = gameId ? { game_id: gameId } : {};
+        const rows = await this.model.aggregate([
+            { $match: match },
+            { $group: { _id: '$status', count: { $sum: 1 }, scenarios: { $sum: { $ifNull: ['$scenario_count', 0] } } } },
+        ]).exec();
+        return rows.map((r: any) => ({ status: String(r._id), count: r.count, scenarios: r.scenarios }));
     }
 
     async getRecentJobs(gameId: string, limit: number = 20): Promise<IIngestionJobDocument[]> {

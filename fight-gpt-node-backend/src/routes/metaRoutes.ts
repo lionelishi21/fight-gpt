@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { MetaController } from '../controllers/MetaController';
-import { authMiddleware, premiumMiddleware } from '../middleware/auth';
+import { authMiddleware, adminMiddleware, premiumMiddleware } from '../middleware/auth';
 
 export class MetaRoutes {
     private router: Router;
@@ -38,8 +38,10 @@ export class IngestionRoutes {
     }
 
     private setupRoutes(): void {
-        this.router.post('/trigger', this.metaController.triggerIngestion);
-        this.router.post('/process', this.metaController.processQueue);
+        this.router.get('/feed', authMiddleware, this.metaController.getIngestionFeed);
+        // These start paid video analysis; they were reachable without logging in.
+        this.router.post('/trigger', authMiddleware, adminMiddleware, this.metaController.triggerIngestion);
+        this.router.post('/process', authMiddleware, adminMiddleware, this.metaController.processQueue);
     }
 
     public getRouter(): Router {
