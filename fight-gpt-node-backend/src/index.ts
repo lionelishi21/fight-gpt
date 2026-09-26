@@ -532,6 +532,7 @@ export class App {
         try {
           const { lobbyId, userId } = data;
           socket.leave(`lobby_${lobbyId}`);
+          socket.lobbyId = undefined; // already counted out; don't decrement again on disconnect
           await this.lobbyService.updateActiveCount(lobbyId, -1);
           const roomSize = lobbyNamespace.adapter.rooms.get(`lobby_${lobbyId}`)?.size ?? 0;
           lobbyNamespace.to(`lobby_${lobbyId}`).emit('room_size', { lobbyId, count: roomSize });

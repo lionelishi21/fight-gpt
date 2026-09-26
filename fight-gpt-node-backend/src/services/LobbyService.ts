@@ -66,7 +66,11 @@ export class LobbyService {
      * Update active user count
      */
     public async updateActiveCount(lobbyId: string, increment: number): Promise<void> {
-        await Lobby.findByIdAndUpdate(lobbyId, { $inc: { active_users: increment } });
+        // Never let the counter drop below zero: a leave followed by a disconnect used to
+        // decrement twice, leaving lobbies showing negative "operators online".
+        const filter: Record<string, unknown> = { _id: lobbyId };
+        if (increment < 0) filter.active_users = { $gt: 0 };
+        await Lobby.findOneAndUpdate(filter, { $inc: { active_users: increment } });
     }
 
     /**
