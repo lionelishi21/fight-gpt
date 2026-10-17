@@ -94,6 +94,14 @@ jobs:
             grep -q "^AWS_SECRET_ACCESS_KEY=" .env || echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
             sed -i "s|^AWS_REGION=.*|AWS_REGION=${{ secrets.AWS_REGION }}|" .env || true
             grep -q "^AWS_REGION=" .env || echo "AWS_REGION=${{ secrets.AWS_REGION || 'us-east-1' }}" >> .env
+            # The FGSM vision engine runs on its own EC2 instance. Only touch
+            # .env when the secret is set, so an unset secret leaves the
+            # existing value alone instead of blanking it.
+            FGSM_URL_CLEAN=$(echo "${{ secrets.PYTHON_AI_SERVICE_URL }}" | tr -d "\r\n")
+            if [ -n "$FGSM_URL_CLEAN" ]; then
+              sed -i "s|^PYTHON_AI_SERVICE_URL=.*|PYTHON_AI_SERVICE_URL=${FGSM_URL_CLEAN}|" .env || true
+              grep -q "^PYTHON_AI_SERVICE_URL=" .env || echo "PYTHON_AI_SERVICE_URL=${FGSM_URL_CLEAN}" >> .env
+            fi
 
             # MongoDB URIs almost always contain '&' in their query string
             # (?retryWrites=true&w=majority) - '&' is special on sed's

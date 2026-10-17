@@ -55,7 +55,7 @@ NODE_ENV=production
 PORT=3000
 MONGODB_URI=YOUR_MONGODB_ATLAS_URI
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-PYTHON_AI_SERVICE_URL=http://localhost:8000
+PYTHON_AI_SERVICE_URL=http://YOUR_FGSM_VISION_EC2_HOST:8000
 ENVEOF
 echo "⚠️  Edit .env with real values: nano /home/ubuntu/fight-gpt-ai-project/fight-gpt-node-backend/.env"
 
