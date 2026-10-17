@@ -378,7 +378,8 @@ export function createAnalysisGraph(deps: {
     let fgsmTimeline = "";
     
     try {
-      const response = await fetch("http://localhost:8000/api/analyze", {
+      const fgsmServiceUrl = process.env.PYTHON_AI_SERVICE_URL || "http://localhost:8000";
+      const response = await fetch(`${fgsmServiceUrl}/api/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ youtube_url: state.request.youtube_url })
