@@ -28,6 +28,33 @@ import { AnalysisCorrection } from '../models/AnalysisCorrection';
 import { Character } from '../models/Character';
 import { CharacterEncyclopedia } from '../models/CharacterEncyclopedia';
 
+// SF6 mechanics every character has, which no character's encyclopedia
+// moveset lists. Compared against move_used lowercased with non-letters
+// removed: by prefix, so "Drive Rush cancel" and "Back throw (corner)" match,
+// except jump/block, which must match exactly so "Jumping Heavy Kick" is
+// still checked against the character's normals.
+const SF6_SYSTEM_MOVE_PREFIXES = [
+  'driverush', 'driveparry', 'perfectparry', 'driveimpact', 'drivereversal',
+  'throw', 'forwardthrow', 'backthrow', 'throwtech', 'parry',
+  'dash', 'forwarddash', 'backdash',
+];
+const SF6_SYSTEM_MOVES_EXACT = ['jump', 'neutraljump', 'forwardjump', 'backjump', 'block'];
+
+// Community names the AI uses that differ from the encyclopedia's official
+// ones. A move counts as known if any listed official name is in the
+// character's moveset, so a shared alias like "dp" stays character-correct.
+const MOVE_ALIASES: Record<string, string[]> = {
+  'flash kick': ['somersault kick'],
+  'dp': ['shoryuken', 'somersault kick', 'rising uppercut', 'cannon spike'],
+  'tatsu': ['tatsumaki senpukyaku'],
+  'boom': ['sonic boom'],
+  'spd': ['spinning pile driver'],
+  'blanka ball': ['rolling attack'],
+  'electricity': ['electric thunder'],
+  'hands': ['hundred hand slap'],
+  'lightning legs': ['hundred lightning kicks'],
+};
+
 export interface IAnalysisService {
   analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
@@ -648,8 +675,9 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
   /**
    * Cross-checks every move_used in the timeline against the CharacterEncyclopedia.
    * If a move name can't be found for that character, confidence is set to 'low'
-   * and a note is appended to the description so the user knows it's uncertain.
-   * This catches hallucinated move names without blocking the analysis.
+   * (shown as "needs review"). This catches hallucinated move names without
+   * blocking the analysis. Universal system mechanics and common community
+   * names (see SF6_SYSTEM_MOVES / MOVE_ALIASES) count as known.
    */
   private async validateMoveNames(response: AnalysisResponse, gameId: string): Promise<void> {
     if (!response.timeline) return;
@@ -701,13 +729,20 @@ KEY LESSON: If you see a situation that resembles any correction above, apply th
       const knownMoves = await getKnownMoves(charName);
       if (knownMoves.size === 0) continue; // No encyclopedia data for this character
 
-      const moveLower = event.move_used.toLowerCase().replace(/\s+/g, '');
-      const found = [...knownMoves].some(m => m.replace(/\s+/g, '') === moveLower || m.includes(moveLower) || moveLower.includes(m));
+      const used = event.move_used.toLowerCase();
+      // Drive Rush, throws, dashes etc. belong to every character but aren't in
+      // any character's moveset.
+      const letters = used.replace(/[^a-z]/g, '');
+      if (gameId === 'sf6' && (SF6_SYSTEM_MOVE_PREFIXES.some(m => letters.startsWith(m)) || SF6_SYSTEM_MOVES_EXACT.includes(letters))) continue;
 
-      if (!found) {
-        event.move_confidence = 'low';
-        event.description = `[Move name uncertain — "${event.move_used}" not found in ${charName}'s known moveset] ${event.description}`;
-      }
+      const matches = (name: string) => {
+        const n = name.replace(/\s+/g, '');
+        return [...knownMoves].some(m => m.replace(/\s+/g, '') === n || m.includes(n) || n.includes(m));
+      };
+      const aliasKey = Object.keys(MOVE_ALIASES).find(a => new RegExp(`\\b${a}\\b`).test(used));
+      const found = matches(used) || (!!aliasKey && MOVE_ALIASES[aliasKey].some(matches));
+
+      if (!found) event.move_confidence = 'low';
     }
   }
 
