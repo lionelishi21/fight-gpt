@@ -31,6 +31,8 @@ export interface IUser extends Document {
     };
     onboardingCompleted: boolean;
     tier: 'FREE' | 'COMPETITOR' | 'PRO';
+    /** Set when the tier came from an in-app purchase, so only RevenueCat revokes it. */
+    tierSource?: 'revenuecat';
     role: 'user' | 'admin';
     activeSlotIndex: number;
     slots: ISlot[];
@@ -88,6 +90,7 @@ const UserSchema: Schema = new Schema(
             enum: ['FREE', 'COMPETITOR', 'PRO'],
             default: 'FREE',
         },
+        tierSource: { type: String, enum: ['revenuecat'] },
         role: {
             type: String,
             enum: ['user', 'admin'],
