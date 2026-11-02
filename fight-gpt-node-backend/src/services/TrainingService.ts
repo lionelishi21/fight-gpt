@@ -1,4 +1,6 @@
 import { IAnalysis, Analysis } from '../models/Analysis';
+import { awardXp } from './GamificationService';
+import { XP_REWARDS } from '../helpers/progression';
 import Mission from '../models/Mission';
 import UserMission from '../models/UserMission';
 import { TimelineEvent } from '../types';
@@ -247,17 +249,13 @@ export class TrainingService {
         userMission.completedAt = new Date();
         await userMission.save();
 
-        // Award XP
         const mission = userMission.mission as any;
-        const xpToAdd = mission.reward?.xp || 100;
+        const xpToAdd = mission.reward?.xp || XP_REWARDS.mission;
 
         const User = mongoose.model('User');
         const user = await User.findById(userId);
         if (user) {
             const g = (user as any).gamification;
-            const newXp = (g.xp || 0) + xpToAdd;
-            g.xp = newXp;
-            g.level = Math.floor(newXp / 1000) + 1;
 
             // Streak logic — increment if last completion was yesterday, reset if gap > 1 day
             const today = new Date();
@@ -284,6 +282,7 @@ export class TrainingService {
             g.longestStreak = Math.max(g.longestStreak || 0, g.missionStreak);
 
             await user.save();
+            await awardXp(userId, xpToAdd, 'mission', String(userMission._id));
         }
 
         return userMission;

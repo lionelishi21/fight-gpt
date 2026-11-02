@@ -1,4 +1,5 @@
 import User, { IUser, ISlot } from '../models/User';
+import { progressionFor } from '../helpers/progression';
 import { BaseService } from './BaseService';
 import { ApiResponse } from '../types';
 
@@ -114,9 +115,15 @@ export class UserService extends BaseService implements IUserService {
             const topUsers = await User.find({})
                 .sort({ 'gamification.xp': -1 })
                 .limit(limit)
-                .select('name avatar tier gamification.xp gamification.level gamification.rank');
+                .select('name avatar tier gamification.xp gamification.level gamification.rank')
+                .lean();
 
-            return { success: true, data: topUsers };
+            // Level and rank come from XP, so users whose stored values predate the ladder show correctly
+            const data = topUsers.map((u: any) => {
+                const { level, rank } = progressionFor(Number(u.gamification?.xp) || 0);
+                return { ...u, gamification: { ...u.gamification, level, rank } };
+            });
+            return { success: true, data };
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch leaderboard' };
         }

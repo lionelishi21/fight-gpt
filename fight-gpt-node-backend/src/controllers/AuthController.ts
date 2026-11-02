@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { awardXp } from '../services/GamificationService';
+import { XP_REWARDS } from '../helpers/progression';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { BaseController } from './BaseController';
@@ -123,8 +125,8 @@ export class AuthController extends BaseController {
             if (referrer) {
                 referrer.referralCount = (referrer.referralCount || 0) + 1;
                 referrer.referralCredits = (referrer.referralCredits || 0) + 1;
-                referrer.gamification.xp = (referrer.gamification?.xp || 0) + 100;
                 await referrer.save();
+                await awardXp(String(referrer._id), XP_REWARDS.referral, 'referral', String(user._id));
             }
 
             // Send welcome email (non-blocking)

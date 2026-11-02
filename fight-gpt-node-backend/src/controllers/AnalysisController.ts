@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import { awardXp } from '../services/GamificationService';
+import { XP_REWARDS } from '../helpers/progression';
 import { AnalysisRequest, ApiResponse, AnalysisResponse } from '../types';
 import { BaseController } from './BaseController';
 import { IAnalysisService } from '../services/AnalysisService';
@@ -45,6 +47,11 @@ export class AnalysisController extends BaseController implements IAnalysisContr
       // Call service — pass userId so the analysis is tagged to the requesting user
       const userId = (req as any).user?.id;
       const result = await this.analysisService.analyzeVideo(request, userId);
+      const analysisId = result.data?.analysis_id;
+      if (result.success && userId && analysisId) {
+        awardXp(userId, XP_REWARDS.analysis, 'analysis', String(analysisId))
+          .catch((e) => console.error('[AnalysisController] XP award failed', e));
+      }
 
       // Calculate response time
       const responseTime = Date.now() - startTime;

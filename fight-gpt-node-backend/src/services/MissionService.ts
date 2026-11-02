@@ -1,5 +1,5 @@
 import { IAnalysis } from '../models/Analysis';
-import { levelForXp } from '../helpers/progression';
+import { awardXp } from './GamificationService';
 import User from '../models/User';
 
 /**
@@ -41,7 +41,10 @@ export class MissionService {
       const rewardXp = 50;
       const skillToUp = this.determineSkillUp(mission.goal || '');
 
-      await this.applyRewards(userId, rewardXp, skillToUp);
+      // Once per analysis: verifying the same analysis again pays nothing
+      const award = await awardXp(userId, rewardXp, 'mission', `verified:${analysis._id}`);
+      if (!award) return { success: true, reward_xp: 0 };
+      await this.applySkillUp(userId, skillToUp);
 
       return { 
         success: true, 
@@ -66,40 +69,14 @@ export class MissionService {
   }
 
   /**
-   * Apply XP and Skill upgrades to the user document.
+   * Raise the skill a verified mission trained. XP is granted separately by awardXp.
    */
-  private static async applyRewards(userId: string, xp: number, skill: string) {
+  private static async applySkillUp(userId: string, skill: string) {
     const user = await User.findById(userId);
-    if (!user) return;
+    if (!user?.gamification) return;
 
-    if (!user.gamification) {
-      user.gamification = {
-        level: 1,
-        xp: 0,
-        rank: 'ROOKIE',
-        missionStreak: 0,
-        longestStreak: 0,
-        stats: {
-          defense: 50,
-          execution: 50,
-          neutral: 50,
-          knowledge: 50,
-          resourceManagement: 50
-        },
-        heatmap: []
-      };
-    }
-
-    // Update XP
-    user.gamification.xp += xp;
-
-    const newLevel = levelForXp(user.gamification.xp);
-    if (newLevel > user.gamification.level) {
-        user.gamification.level = newLevel;
-    }
-
-    // Update specific skill
-    const currentStats = user.gamification.stats;
+    const currentStats = user.gamification.stats
+      || { defense: 50, execution: 50, neutral: 50, knowledge: 50, resourceManagement: 50 };
     const skillKey = skill as keyof typeof currentStats;
     const currentVal = (currentStats as any)[skillKey] || 50;
     (currentStats as any)[skillKey] = Math.min(100, currentVal + 5);
