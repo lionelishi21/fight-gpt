@@ -103,6 +103,14 @@ jobs:
               grep -q "^PYTHON_AI_SERVICE_URL=" .env || echo "PYTHON_AI_SERVICE_URL=${FGSM_URL_CLEAN}" >> .env
             fi
 
+            # Shared secret RevenueCat sends in the Authorization header of its
+            # webhooks; same only-when-set rule as above.
+            RC_WEBHOOK_AUTH_CLEAN=$(echo "${{ secrets.REVENUECAT_WEBHOOK_AUTH }}" | tr -d "\r\n")
+            if [ -n "$RC_WEBHOOK_AUTH_CLEAN" ]; then
+              sed -i "s|^REVENUECAT_WEBHOOK_AUTH=.*|REVENUECAT_WEBHOOK_AUTH=${RC_WEBHOOK_AUTH_CLEAN}|" .env || true
+              grep -q "^REVENUECAT_WEBHOOK_AUTH=" .env || echo "REVENUECAT_WEBHOOK_AUTH=${RC_WEBHOOK_AUTH_CLEAN}" >> .env
+            fi
+
             # MongoDB URIs almost always contain '&' in their query string
             # (?retryWrites=true&w=majority) - '&' is special on sed's
             # replacement side (inserts the whole match), so it must be
