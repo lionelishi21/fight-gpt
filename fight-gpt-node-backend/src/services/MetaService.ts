@@ -59,6 +59,18 @@ function extractCharactersFromText(text: string, gameId: string, knownChars?: st
     return Array.from(found);
 }
 
+/**
+ * Scenario context is a search blob ("Game: sf6. Matchup: A vs B. Situation: ... Advice: ...").
+ * Pull out the advice so reports show a strategy rather than the raw blob.
+ */
+export function strategyFromContext(context?: string): string | null {
+    if (!context) return null;
+    if (!/^Game:\s/i.test(context)) return context.trim() || null;
+    const advice = context.match(/Advice:\s*(.+?)\.(?:\s+[A-Z][\w ]*:|\s*$)/)?.[1]?.trim();
+    if (!advice || /^no advice$/i.test(advice)) return null;
+    return advice;
+}
+
 export class MetaService extends BaseService implements IMetaService {
     private genAI: GoogleGenerativeAI;
 
@@ -350,10 +362,9 @@ Provide a direct, actionable answer focused on the current meta. Mention specifi
                 }
             }
 
-            // Collect dominant strategies from context
-            if (scenario.context) {
-                allStrategies.push(scenario.context);
-            }
+            // Collect dominant strategies from the advice inside each scenario's context
+            const strategy = strategyFromContext(scenario.context);
+            if (strategy) allStrategies.push(strategy);
         }
 
         // Build tier list
