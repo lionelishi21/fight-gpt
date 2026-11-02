@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 // Load environment variables before other imports
 dotenv.config();
 
@@ -490,13 +491,30 @@ export class App {
 
     // Lobby Namespace for real-time Dojo interaction
     const lobbyNamespace = this.io.of('/lobby');
+    // Clients used to send any userId they liked; the user now comes from the login token
+    lobbyNamespace.use((socket: any, next: (err?: Error) => void) => {
+      try {
+        const secret = process.env.JWT_SECRET || 'fight-gpt-secret-key-change-in-prod';
+        const decoded = jwt.verify(String(socket.handshake.auth?.token || ''), secret) as any;
+        socket.userId = String(decoded.user.id);
+        next();
+      } catch {
+        next(new Error('unauthorized'));
+      }
+    });
     lobbyNamespace.on('connection', (socket: any) => {
       Logger.info(`DOJO_LOBBY: Operator connected [${socket.id}]`);
 
-      socket.on('join_lobby', async (data: { lobbyId: string; userId: string }) => {
+      socket.on('join_lobby', async (data: { lobbyId: string }) => {
         try {
-          const { lobbyId, userId } = data;
-          if (!lobbyId || !userId) return;
+          const lobbyId = data?.lobbyId;
+          const userId = socket.userId;
+          if (!lobbyId || socket.lobbyId === lobbyId) return;
+          if (socket.lobbyId) {
+            // Switching rooms without leaving: count this socket out of the old one
+            socket.leave(`lobby_${socket.lobbyId}`);
+            await this.lobbyService.updateActiveCount(socket.lobbyId, -1);
+          }
           socket.join(`lobby_${lobbyId}`);
           socket.lobbyId = lobbyId;
           await this.lobbyService.updateActiveCount(lobbyId, 1);
@@ -512,14 +530,14 @@ export class App {
 
       socket.on('send_message', async (data: {
         lobbyId: string;
-        userId: string;
         content: string;
         intelLink?: any
       }) => {
         try {
-          if (!data.lobbyId || !data.userId || !data.content?.trim()) return;
-          Logger.info(`DOJO_LOBBY: Message from ${data.userId} to ${data.lobbyId}`);
-          const message = await this.lobbyService.saveMessage(data);
+          // Only into the room this socket joined, as the token's user
+          if (!data?.lobbyId || data.lobbyId !== socket.lobbyId || !data.content?.trim()) return;
+          const content = data.content.trim().slice(0, 1000);
+          const message = await this.lobbyService.saveMessage({ ...data, content, userId: socket.userId });
           if (message) {
             lobbyNamespace.to(`lobby_${data.lobbyId}`).emit('new_message', message);
           }
@@ -528,9 +546,11 @@ export class App {
         }
       });
 
-      socket.on('leave_lobby', async (data: { lobbyId: string; userId: string }) => {
+      socket.on('leave_lobby', async (data: { lobbyId: string }) => {
         try {
-          const { lobbyId, userId } = data;
+          const lobbyId = data?.lobbyId;
+          const userId = socket.userId;
+          if (!lobbyId || socket.lobbyId !== lobbyId) return;
           socket.leave(`lobby_${lobbyId}`);
           socket.lobbyId = undefined; // already counted out; don't decrement again on disconnect
           await this.lobbyService.updateActiveCount(lobbyId, -1);
