@@ -1,4 +1,5 @@
 import { IAnalysis } from '../models/Analysis';
+import { levelForXp } from '../helpers/progression';
 import User from '../models/User';
 
 /**
@@ -92,8 +93,7 @@ export class MissionService {
     // Update XP
     user.gamification.xp += xp;
 
-    // Handle Level Up - Simple XP growth (Levels are every 500 XP)
-    const newLevel = Math.floor(user.gamification.xp / 500) + 1;
+    const newLevel = levelForXp(user.gamification.xp);
     if (newLevel > user.gamification.level) {
         user.gamification.level = newLevel;
     }

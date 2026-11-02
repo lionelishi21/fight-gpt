@@ -10,6 +10,9 @@ import { CharacterGPTRoutes } from './characterGPTRoutes';
 import { AuthRoutes } from './authRoutes';
 import { OnboardingRoutes } from './onboardingRoutes';
 import { TrainingRoutes } from './trainingRoutes';
+import { RivalRoutes } from './rivalRoutes';
+import { EngagementRoutes } from './engagementRoutes';
+import { GamificationRoutes } from './gamificationRoutes';
 import { PublicRoutes } from './publicRoutes';
 import { DiscordRoutes } from './discordRoutes';
 import { MetaRoutes, IngestionRoutes } from './metaRoutes';
@@ -62,6 +65,9 @@ export class Routes {
   private discordRoutes: DiscordRoutes | null;
   private onboardingRoutes: OnboardingRoutes;
   private trainingRoutes: TrainingRoutes;
+  private rivalRoutes: RivalRoutes;
+  private engagementRoutes: EngagementRoutes;
+  private gamificationRoutes: GamificationRoutes;
   private metaRoutes: MetaRoutes | null;
   private ingestionRoutes: IngestionRoutes | null;
   private theoryRoutes: TheoryRoutes | null;
@@ -103,6 +109,9 @@ export class Routes {
     this.authRoutes = new AuthRoutes();
     this.onboardingRoutes = new OnboardingRoutes();
     this.trainingRoutes = new TrainingRoutes();
+    this.rivalRoutes = new RivalRoutes();
+    this.engagementRoutes = new EngagementRoutes();
+    this.gamificationRoutes = new GamificationRoutes();
     this.metaRoutes = metaController ? new MetaRoutes(metaController) : null;
     this.ingestionRoutes = metaController ? new IngestionRoutes(metaController) : null;
     this.theoryRoutes = theoryController ? new TheoryRoutes(theoryController) : null;
@@ -133,6 +142,9 @@ export class Routes {
     this.router.use('/onboarding', this.onboardingRoutes.getRouter());
     // Training routes
     this.router.use('/training', this.trainingRoutes.getRouter());
+    this.router.use('/rivals', this.rivalRoutes.getRouter());
+    this.router.use('/engagement', this.engagementRoutes.getRouter());
+    this.router.use('/gamification', this.gamificationRoutes.getRouter());
     // Health check route (optional - may not work without MongoDB)
     if (this.healthRoutes) {
       this.router.use('/health', this.healthRoutes.getRouter());

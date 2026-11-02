@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type EngagementTargetType = 'scenario' | 'theory' | 'match';
+export type EngagementTargetType = 'scenario' | 'theory' | 'match' | 'analysis';
 
 export interface IEngagement extends Document {
     userId: mongoose.Types.ObjectId;
@@ -19,7 +19,7 @@ const EngagementSchema: Schema = new Schema(
         targetId: { type: String, required: true, index: true },
         targetType: { 
             type: String, 
-            enum: ['scenario', 'theory', 'match'], 
+            enum: ['scenario', 'theory', 'match', 'analysis'], 
             required: true,
             index: true
         },
