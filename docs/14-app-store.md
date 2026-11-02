@@ -9,7 +9,7 @@
 ## App Store (iOS)
 
 ### Requirements
-- [ ] Apple Developer account ($99/year) — `com.metapunish.app`
+- [ ] Apple Developer account ($99/year) — `com.aibridix.metapunish`
 - [ ] App icon 1024×1024 — ✅ done (`assets/icon/icon-1024-rounded.png`)
 - [ ] Screenshots for 6.7" iPhone (required), 5.5" (optional), iPad (optional)
 - [ ] Privacy policy URL — `https://metapunish.com/privacy`
