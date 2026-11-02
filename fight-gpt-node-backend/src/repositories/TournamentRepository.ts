@@ -10,6 +10,8 @@ export interface ITournamentRepository {
     findPendingVodIngestion(): Promise<ITournamentDocument[]>;
     markVodsIngested(tournamentId: string, vodUrls: string[]): Promise<void>;
     updateResults(tournamentId: string, results: ITournamentDocument['results']): Promise<void>;
+    refreshStatuses(now?: Date): Promise<{ completed: number; live: number }>;
+    findCompletedWithoutResults(limit: number): Promise<ITournamentDocument[]>;
 }
 
 export class TournamentRepository extends BaseRepository<ITournamentDocument> implements ITournamentRepository {
@@ -56,6 +58,36 @@ export class TournamentRepository extends BaseRepository<ITournamentDocument> im
         if (gameId) filter.game_id = gameId;
         return this.model
             .find(filter)
+            .sort({ start_at: -1 })
+            .limit(limit)
+            .lean()
+            .exec() as unknown as ITournamentDocument[];
+    }
+
+    /**
+     * Status is set when a tournament is synced, so without this an event stays "upcoming"
+     * forever. Ended events (or ones with no end date that started 3+ days ago) become
+     * completed; started ones become live.
+     */
+    async refreshStatuses(now = new Date()): Promise<{ completed: number; live: number }> {
+        const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+        const completed = await this.model.updateMany(
+            {
+                status: { $ne: 'completed' },
+                $or: [{ end_at: { $lt: now } }, { end_at: null, start_at: { $lt: threeDaysAgo } }],
+            },
+            { $set: { status: 'completed' } }
+        );
+        const live = await this.model.updateMany(
+            { status: 'upcoming', start_at: { $lte: now } },
+            { $set: { status: 'live' } }
+        );
+        return { completed: completed.modifiedCount, live: live.modifiedCount };
+    }
+
+    async findCompletedWithoutResults(limit: number): Promise<ITournamentDocument[]> {
+        return this.model
+            .find({ status: 'completed', results: { $size: 0 } })
             .sort({ start_at: -1 })
             .limit(limit)
             .lean()

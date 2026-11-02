@@ -596,6 +596,20 @@ export class App {
       // Start Twitch VOD discovery (every 6 hours, requires TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET)
       new TwitchDiscoveryService().startScheduler();
 
+      // Tournaments: new upcoming events, status changes and top-8 results (every 6 hours)
+      if (AppConfig.MONGODB_URI && AppConfig.START_GG_TOKEN && this.tournamentService) {
+        const tournamentSync = async () => {
+          try {
+            const r = await this.tournamentService!.syncAll();
+            Logger.info(`[Scheduler] Tournaments: ${r.synced} synced, ${r.completed} completed, ${r.resultsFetched} results fetched`);
+          } catch (e: any) {
+            Logger.error('[Scheduler] Tournament sync failed:', e.message);
+          }
+        };
+        tournamentSync();
+        setInterval(tournamentSync, 6 * 60 * 60 * 1000);
+      }
+
       // Start start.gg direct VOD sync (every 6 hours — pulls sets with YouTube VODs attached)
       if (AppConfig.MONGODB_URI && AppConfig.START_GG_TOKEN && this.tournamentService) {
         const sgVodSync = async () => {

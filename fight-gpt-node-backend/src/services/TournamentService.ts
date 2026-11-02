@@ -28,6 +28,7 @@ export interface ITournamentService {
     getResults(tournamentId: string): Promise<ApiResponse<ITournamentDocument>>;
     syncFromStartGg(gameIds?: string[]): Promise<ApiResponse<{ synced: number; errors: string[] }>>;
     syncResults(tournamentId: string): Promise<ApiResponse<{ placements: number }>>;
+    syncAll(): Promise<{ synced: number; completed: number; resultsFetched: number }>;
     queueTournamentVods(tournamentId: string): Promise<ApiResponse<{ queued: number }>>;
     syncStartGgVods(gameIds?: string[]): Promise<ApiResponse<{ queued: number; skipped: number; errors: string[] }>>;
 }
@@ -43,6 +44,7 @@ export class TournamentService extends BaseService implements ITournamentService
 
     async getUpcoming(gameId?: string): Promise<ApiResponse<ITournamentDocument[]>> {
         try {
+            await this.tournamentRepository.refreshStatuses();
             const dbResults = await this.tournamentRepository.findUpcoming(gameId);
             if (dbResults.length > 0) {
                 return { success: true, data: dbResults };
@@ -58,6 +60,7 @@ export class TournamentService extends BaseService implements ITournamentService
 
     async getCompleted(gameId?: string): Promise<ApiResponse<ITournamentDocument[]>> {
         try {
+            await this.tournamentRepository.refreshStatuses();
             const results = await this.tournamentRepository.findCompleted(gameId);
             return { success: true, data: results };
         } catch (error) {
@@ -175,6 +178,23 @@ export class TournamentService extends BaseService implements ITournamentService
         } catch (error) {
             throw this.handleError(error, 'syncFromStartGg');
         }
+    }
+
+    /**
+     * Scheduled refresh: pull new upcoming events, move ended ones to completed, then fetch
+     * top-8 results for a few completed events that don't have them yet (a few per run, to
+     * stay inside Start.gg's rate limit; the rest are picked up on later runs).
+     */
+    async syncAll(): Promise<{ synced: number; completed: number; resultsFetched: number }> {
+        const sync = await this.syncFromStartGg();
+        const { completed } = await this.tournamentRepository.refreshStatuses();
+
+        let resultsFetched = 0;
+        for (const t of await this.tournamentRepository.findCompletedWithoutResults(5)) {
+            const r = await this.syncResults(t.tournament_id).catch(() => null);
+            if (r?.success) resultsFetched++;
+        }
+        return { synced: sync.data?.synced ?? 0, completed, resultsFetched };
     }
 
     /**
