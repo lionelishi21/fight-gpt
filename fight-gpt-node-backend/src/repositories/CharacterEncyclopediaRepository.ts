@@ -33,12 +33,29 @@ export interface ICharacterEncyclopediaRepository {
  * Follows Single Responsibility Principle - handles only character encyclopedia data operations
  * Follows Dependency Inversion Principle - depends on BaseRepository abstraction
  */
+/**
+ * Stored ids are inconsistent ("chunli" / "chun-li", "e_honda" / "e._honda"), so after an exact
+ * miss we match ignoring punctuation: "chun-li" → /^c[^a-z0-9]*h[^a-z0-9]*u.../.
+ */
+export function looseCharacterIdPattern(characterId: string): RegExp | null {
+  const key = characterId.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return key ? new RegExp(`^${key.split('').join('[^a-z0-9]*')}$`, 'i') : null;
+}
+
 export class CharacterEncyclopediaRepository
   extends BaseRepository<ICharacterEncyclopediaDocument>
   implements ICharacterEncyclopediaRepository
 {
   constructor() {
     super(CharacterEncyclopedia);
+  }
+
+  /** Exact character_id first, then the punctuation-insensitive match. */
+  private async findOneLoose(filter: Record<string, unknown>, characterId: string) {
+    const exact = await this.findOne({ ...filter, character_id: characterId });
+    if (exact) return exact;
+    const pattern = looseCharacterIdPattern(characterId);
+    return pattern ? this.findOne({ ...filter, character_id: pattern }) : null;
   }
 
   /**
@@ -51,10 +68,7 @@ export class CharacterEncyclopediaRepository
     try {
       const normalizedGameId = gameId.toLowerCase().trim();
       const normalizedCharacterId = characterId.toLowerCase().trim();
-      return await this.findOne({
-        game_id: normalizedGameId,
-        character_id: normalizedCharacterId,
-      });
+      return await this.findOneLoose({ game_id: normalizedGameId }, normalizedCharacterId);
     } catch (error) {
       throw this.handleError(error, 'findByGameIdAndCharacterId');
     }
@@ -71,11 +85,7 @@ export class CharacterEncyclopediaRepository
     try {
       const normalizedGameId = gameId.toLowerCase().trim();
       const normalizedCharacterId = characterId.toLowerCase().trim();
-      return await this.findOne({
-        game_id: normalizedGameId,
-        character_id: normalizedCharacterId,
-        is_current_patch: true,
-      });
+      return await this.findOneLoose({ game_id: normalizedGameId, is_current_patch: true }, normalizedCharacterId);
     } catch (error) {
       throw this.handleError(error, 'findCurrentByGameIdAndCharacterId');
     }
@@ -92,11 +102,7 @@ export class CharacterEncyclopediaRepository
     try {
       const normalizedGameId = gameId.toLowerCase().trim();
       const normalizedCharacterId = characterId.toLowerCase().trim();
-      return await this.findOne({
-        game_id: normalizedGameId,
-        character_id: normalizedCharacterId,
-        patch_version: version.trim(),
-      });
+      return await this.findOneLoose({ game_id: normalizedGameId, patch_version: version.trim() }, normalizedCharacterId);
     } catch (error) {
       throw this.handleError(error, 'findByGameIdAndCharacterIdAndVersion');
     }
