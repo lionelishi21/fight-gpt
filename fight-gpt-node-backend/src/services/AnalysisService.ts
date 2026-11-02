@@ -1,4 +1,8 @@
 import { AnalysisRequest, AnalysisResponse, ApiResponse, TimelineEvent } from '../types';
+import { consumeQuota } from './DailyQuota';
+
+/** Free analyses per week for signed-out visitors, counted per IP. */
+const ANON_ANALYSES_PER_WEEK = 1;
 import User from '../models/User';
 import { ProPlayer } from '../models/ProPlayer';
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
@@ -56,7 +60,7 @@ const MOVE_ALIASES: Record<string, string[]> = {
 };
 
 export interface IAnalysisService {
-  analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>>;
+  analyzeVideo(request: AnalysisRequest, userId?: string, clientIp?: string): Promise<ApiResponse<AnalysisResponse>>;
   getAnalysis(analysisId: string): Promise<ApiResponse<AnalysisResponse>>;
   getRecentAnalyses(limit: number, userId?: string, gameId?: string): Promise<ApiResponse<any[]>>;
   getDiscoveryAnalyses(limit?: number, gameId?: string, p1Char?: string, p2Char?: string): Promise<ApiResponse<any[]>>;
@@ -168,7 +172,7 @@ export class AnalysisService extends BaseService implements IAnalysisService {
     }
   }
 
-  async analyzeVideo(request: AnalysisRequest, userId?: string): Promise<ApiResponse<AnalysisResponse>> {
+  async analyzeVideo(request: AnalysisRequest, userId?: string, clientIp?: string): Promise<ApiResponse<AnalysisResponse>> {
     try {
       await this.validateAnalysisRequest(request);
 
@@ -200,6 +204,14 @@ export class AnalysisService extends BaseService implements IAnalysisService {
       const user = userId ? await User.findById(userId) : null;
       const isAdmin = user?.role === 'admin';
       const isUserUpload = !!userId; // true = paid user upload → use premium model
+
+      // Signed-out requests skipped every limit; give them a taste, per IP
+      if (!user && request.analysis_type !== 'meta_query' && request.analysis_type !== 'encyclopedia_lookup') {
+        const quota = await consumeQuota(`analyze:ip:${clientIp || 'unknown'}`, ANON_ANALYSES_PER_WEEK, 'analysis', 'week');
+        if (!quota.allowed) {
+          return { success: false, error: 'SIGN_IN_REQUIRED: Create a free account to analyze more matches.' };
+        }
+      }
 
       if (user && !isAdmin) {
         const tier = (user.tier || 'FREE').toUpperCase();

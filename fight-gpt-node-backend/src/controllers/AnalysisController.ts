@@ -46,7 +46,7 @@ export class AnalysisController extends BaseController implements IAnalysisContr
 
       // Call service — pass userId so the analysis is tagged to the requesting user
       const userId = (req as any).user?.id;
-      const result = await this.analysisService.analyzeVideo(request, userId);
+      const result = await this.analysisService.analyzeVideo(request, userId, req.ip);
       const analysisId = result.data?.analysis_id;
       if (result.success && userId && analysisId) {
         awardXp(userId, XP_REWARDS.analysis, 'analysis', String(analysisId))
