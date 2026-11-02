@@ -6,6 +6,10 @@ import { IRivalRepository } from '../repositories/RivalRepository';
 import { IGameRepository } from '../repositories/GameRepository';
 import { IAnalysisRepository } from '../repositories/AnalysisRepository';
 import User from '../models/User';
+import { consumeDailyQuota } from '../services/DailyQuota';
+
+/** Free (and signed-out) users get this many Ask AI questions per day; Pro is unlimited. */
+export const FREE_ASK_AI_PER_DAY = 5;
 
 export class ChatController extends BaseController {
   private io: any;
@@ -60,6 +64,26 @@ export class ChatController extends BaseController {
       const conversationHistory: ChatMessage[] = history || [];
       const userId = (req as any).user?.id;
 
+      // planType isn't stored on users (only /auth/me computes it), so go by tier
+      const account = userId ? await User.findById(userId).select('tier role').lean() : null;
+      const isPremium = !!account && ((account.tier || 'FREE').toUpperCase() !== 'FREE' || account.role === 'admin');
+
+      if (!isPremium) {
+        const quota = await consumeDailyQuota(
+          account ? `ask:user:${account._id}` : `ask:ip:${req.ip}`,
+          FREE_ASK_AI_PER_DAY,
+          'ask_ai',
+        );
+        if (!quota.allowed) {
+          this.sendResponse(res, {
+            success: false,
+            error: `You've used your ${FREE_ASK_AI_PER_DAY} free questions today. Upgrade to Pro for unlimited Ask AI.`,
+            code: 'FREE_LIMIT_REACHED',
+          } as any, 429);
+          return;
+        }
+      }
+
       let response: SmartChatResponse;
       let ctx: UserChatContext | undefined;
 
@@ -74,7 +98,7 @@ export class ChatController extends BaseController {
 
           // Fetch player analyses for tracked rivals (only for premium users)
           let playerAnalyses: UserChatContext['playerAnalyses'] = [];
-          if ((user as any)?.planType === 'premium' && this.analysisRepository && rivals.length > 0) {
+          if (isPremium && this.analysisRepository && rivals.length > 0) {
             const recentAnalyses = await this.analysisRepository.getRecentAnalyses(50);
             playerAnalyses = recentAnalyses
               .filter((a: any) => a.analysis?.p1_name || a.analysis?.p2_name)
@@ -88,7 +112,7 @@ export class ChatController extends BaseController {
           }
 
           ctx = {
-            planType: (user as any)?.planType === 'premium' ? 'premium' : 'free',
+            planType: isPremium ? 'premium' : 'free',
             slots: (user as any)?.slots || [],
             rivals: rivals.map((r: any) => ({ name: r.targetName, gameId: r.gameId, characterId: r.characterId })),
             games: (games as any[]).map((g: any) => ({ name: g.name, game_id: g.game_id, aliases: g.aliases || [] })),
@@ -98,7 +122,7 @@ export class ChatController extends BaseController {
           response = await this.chatService.sendContextualMessage(message.trim(), conversationHistory, ctx);
         } catch (ctxErr) {
           console.error('[ChatController] Context fetch failed, falling back:', ctxErr);
-          response = await this.chatService.sendMessage(message.trim(), conversationHistory, ctx?.planType === 'premium');
+          response = await this.chatService.sendMessage(message.trim(), conversationHistory, isPremium);
         }
       } else {
         response = await this.chatService.sendMessage(message.trim(), conversationHistory);
