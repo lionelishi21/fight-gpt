@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import FreeTierUsage from '../models/FreeTierUsage';
 import { BaseService } from './BaseService';
 import { AppConfig } from '../config/app';
 import { ICharacterEncyclopediaRepository } from '../repositories/CharacterEncyclopediaRepository';
@@ -185,6 +186,7 @@ export interface ICharacterGPTService {
         history: ChatMessage[],
         userSkillLevel: string,
         isPremium: boolean,
+        usageKey?: string,
     ): Promise<CharacterGPTResponse>;
 
     getAvailableCharacters(gameId: string): Promise<Array<{
@@ -200,8 +202,6 @@ export interface ICharacterGPTService {
 const FREE_CHARACTERS_PER_DAY = 1;
 const FREE_MESSAGES_PER_DAY = 5;
 
-// Track free tier usage (in production, use Redis or DB)
-const freeTierUsage = new Map<string, { character: string; count: number; date: string }>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Service Implementation
@@ -241,12 +241,13 @@ export class CharacterGPTService extends BaseService implements ICharacterGPTSer
         history: ChatMessage[] = [],
         userSkillLevel: string = 'intermediate',
         isPremium: boolean = false,
+        usageKey?: string,
     ): Promise<CharacterGPTResponse> {
         const charSlug = characterId.toLowerCase().replace(/[\s-]+/g, '_');
 
         // Free tier gating
         if (!isPremium) {
-            const gateResult = this.checkFreeTierLimits(charSlug, 'anonymous');
+            const gateResult = await this.checkFreeTierLimits(charSlug, usageKey);
             if (gateResult) return gateResult;
         }
 
@@ -296,7 +297,7 @@ export class CharacterGPTService extends BaseService implements ICharacterGPTSer
 
             // Track free tier usage
             if (!isPremium) {
-                this.trackFreeTierUsage(charSlug, 'anonymous');
+                await this.trackFreeTierUsage(charSlug, usageKey);
             }
 
             return {
@@ -437,10 +438,9 @@ RULES:
     /**
      * Check free tier rate limits
      */
-    private checkFreeTierLimits(charSlug: string, userId: string): CharacterGPTResponse | null {
+    private async checkFreeTierLimits(charSlug: string, usageKey = 'anonymous'): Promise<CharacterGPTResponse | null> {
         const today = new Date().toISOString().split('T')[0];
-        const key = `${userId}:${today}`;
-        const usage = freeTierUsage.get(key);
+        const usage = await FreeTierUsage.findOne({ key: usageKey, date: today }).lean();
 
         if (usage) {
             // Already used a different character today
@@ -472,20 +472,12 @@ RULES:
     /**
      * Track free tier usage
      */
-    private trackFreeTierUsage(charSlug: string, userId: string): void {
+    private async trackFreeTierUsage(charSlug: string, usageKey = 'anonymous'): Promise<void> {
         const today = new Date().toISOString().split('T')[0];
-        const key = `${userId}:${today}`;
-        const usage = freeTierUsage.get(key);
-
-        if (usage) {
-            usage.count++;
-        } else {
-            freeTierUsage.set(key, { character: charSlug, count: 1, date: today });
-        }
-
-        // Cleanup old entries (simple garbage collection)
-        for (const [k, v] of freeTierUsage) {
-            if (v.date !== today) freeTierUsage.delete(k);
-        }
+        await FreeTierUsage.updateOne(
+            { key: usageKey, date: today },
+            { $inc: { count: 1 }, $setOnInsert: { character: charSlug } },
+            { upsert: true },
+        );
     }
 }

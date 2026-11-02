@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import User from '../models/User';
 import { BaseController } from './BaseController';
 import { ICharacterGPTService } from '../services/CharacterGPTService';
 import { ChatMessage } from '../services/ChatService';
@@ -33,14 +34,15 @@ export class CharacterGPTController extends BaseController {
                 return;
             }
 
-            // Get user context
+            // The token only carries the user id, so load tier/role/preferences from the DB
             // @ts-ignore - user is attached by auth middleware
-            const user = req.user;
-            const userId = user?.id || 'anonymous';
+            const userId: string | undefined = req.user?.id;
+            const user = userId ? await User.findById(userId).select('tier role preferences').lean() : null;
 
-            // Determine premium status from user tier
-            const userTier = user?.tier || 'FREE';
+            const userTier = (user?.tier || 'FREE').toUpperCase();
             const isPremium = userTier !== 'FREE' || user?.role === 'admin';
+            // Signed-out visitors are limited per IP
+            const usageKey = user ? `user:${user._id}` : `ip:${req.ip}`;
 
             // Determine skill level from user profile
             const skillLevel = user?.preferences?.skillLevel || 'intermediate';
@@ -52,6 +54,7 @@ export class CharacterGPTController extends BaseController {
                 history || [],
                 skillLevel,
                 isPremium,
+                usageKey,
             );
 
             this.sendResponse(res, {
