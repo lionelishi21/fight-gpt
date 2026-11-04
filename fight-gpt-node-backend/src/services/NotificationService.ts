@@ -344,11 +344,14 @@ export class NotificationService extends BaseService {
         type: NotificationType,
         title: string,
         body: string,
-        data?: Record<string, any>
+        data?: Record<string, any>,
+        /** Extra user filter, e.g. only the players who can open what's being announced */
+        audience?: Record<string, unknown>
     ): Promise<void> {
         try {
             const User = (await import('../models/User')).default;
             const users = await User.find({
+                ...(audience || {}),
                 pushTokens: { $exists: true, $ne: [] },
             }).select('_id pushTokens preferences').lean() as any[];
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { TheoryController } from '../controllers/TheoryController';
-import { authMiddleware, premiumMiddleware } from '../middleware/auth';
+import { authMiddleware, premiumMiddleware, characterTheoryAccessMiddleware } from '../middleware/auth';
 
 export class TheoryRoutes {
     private router: Router;
@@ -11,22 +11,22 @@ export class TheoryRoutes {
     }
 
     private setupRoutes(): void {
-        // All theory routes are premium
+        // Theory is Pro, except that free accounts can read their own character's theory
         this.router.use(authMiddleware);
-        this.router.use(premiumMiddleware);
+        const pro = premiumMiddleware;
 
         // Direct ID lookup
-        this.router.get('/id/:id', this.theoryController.getTheoryById);
+        this.router.get('/id/:id', pro, this.theoryController.getTheoryById);
 
         // Character theory
-        this.router.get('/:gameId', this.theoryController.getAllCharacterTheories);
-        this.router.get('/:gameId/characters', this.theoryController.getAllCharacterTheories);
-        this.router.get('/:gameId/characters/:characterId', this.theoryController.getCharacterTheory);
-        this.router.post('/:gameId/characters/:characterId/generate', this.theoryController.generateCharacterTheory);
+        this.router.get('/:gameId', pro, this.theoryController.getAllCharacterTheories);
+        this.router.get('/:gameId/characters', pro, this.theoryController.getAllCharacterTheories);
+        this.router.get('/:gameId/characters/:characterId', characterTheoryAccessMiddleware, this.theoryController.getCharacterTheory);
+        this.router.post('/:gameId/characters/:characterId/generate', pro, this.theoryController.generateCharacterTheory);
 
         // Matchup theory
-        this.router.get('/:gameId/matchups/:charA/vs/:charB', this.theoryController.getMatchupTheory);
-        this.router.post('/:gameId/matchups/:charA/vs/:charB/generate', this.theoryController.generateMatchupTheory);
+        this.router.get('/:gameId/matchups/:charA/vs/:charB', pro, this.theoryController.getMatchupTheory);
+        this.router.post('/:gameId/matchups/:charA/vs/:charB/generate', pro, this.theoryController.generateMatchupTheory);
     }
 
     public getRouter(): Router {

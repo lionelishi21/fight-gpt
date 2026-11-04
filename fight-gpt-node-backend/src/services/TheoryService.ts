@@ -7,6 +7,9 @@ import { ITheoryDocument } from '../models/TheoryDocument';
 import { ApiResponse } from '../types';
 import { UuidHelper } from '../helpers/uuidHelper';
 import { NotificationService } from './NotificationService';
+import { theoryPushAudience } from '../helpers/theoryAccess';
+import { looseCharacterIdPattern } from '../repositories/CharacterEncyclopediaRepository';
+import { Character } from '../models/Character';
 import { Game } from '../models/Game';
 
 export type SkillLevel = 'Rookie' | 'Intermediate' | 'Pro';
@@ -92,14 +95,20 @@ export class TheoryService extends BaseService implements ITheoryService {
                 description: `[${targetSkillLevel}] ${summary}`,
             }).catch(() => {});
 
-            // Expo push broadcast to all users of this game
-            this.notificationService?.broadcastToGame(
-                gameId,
-                'CHARACTER_THEORY',
-                `${charId.replace(/_/g, ' ')} theory updated — ${gameId.toUpperCase()}`,
-                summary.slice(0, 100),
-                { type: 'theory', gameId, characterId: charId }
-            ).catch(() => {});
+            // Push to players of this game who can open it. Research regenerates each character at
+            // three skill levels, so push once (for Intermediate), not three times.
+            if (targetSkillLevel === 'Intermediate' && this.notificationService) {
+                const charDocs = await Character.find({ game_id: gameId, name: looseCharacterIdPattern(charId) as any })
+                    .select('_id').lean().catch(() => []);
+                this.notificationService.broadcastToGame(
+                    gameId,
+                    'CHARACTER_THEORY',
+                    `${charId.replace(/_/g, ' ')} theory updated — ${gameId.toUpperCase()}`,
+                    summary.slice(0, 100),
+                    { type: 'theory', gameId, characterId: charId },
+                    theoryPushAudience(gameId, charId, (charDocs as any[]).map((c) => String(c._id)))
+                ).catch(() => {});
+            }
 
             return { success: true, data: saved as unknown as ITheoryDocument };
         } catch (error) {

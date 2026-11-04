@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { Character } from '../models/Character';
+import { canReadCharacterTheory, isObjectIdLike, isPremiumAccount } from '../helpers/theoryAccess';
 
 interface JwtPayload {
     user: {
@@ -75,7 +77,48 @@ export const adminMiddleware = async (req: Request, res: Response, next: NextFun
  * Middleware to check if user has a premium tier (COMPETITOR or PRO)
  * Must be used AFTER authMiddleware
  */
-export const premiumMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+/**
+ * Character theory: Pro reads every character, free accounts read the character in their slot.
+ * Needs :gameId and :characterId route params, so attach it to the route, not router.use().
+ */
+export const characterTheoryAccessMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        // @ts-ignore
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, error: 'Not authorized' });
+            return;
+        }
+        const user = await User.findById(userId);
+        if (!user) {
+            res.status(404).json({ success: false, error: 'User not found' });
+            return;
+        }
+        // Slots hold Character _ids; look up their names to compare with the theory's character
+        const slotIds = ((user as any).slots || [])
+            .map((s: any) => s?.characterId)
+            .filter(isObjectIdLike);
+        const namesById: Record<string, string> = {};
+        if (slotIds.length && !isPremiumAccount(user as any)) {
+            const chars = await Character.find({ _id: { $in: slotIds } }).select('name').lean();
+            for (const c of chars as any[]) namesById[String(c._id)] = c.name;
+        }
+        if (canReadCharacterTheory(user as any, req.params.gameId, req.params.characterId, namesById)) {
+            (req as any).user = user;
+            next();
+            return;
+        }
+        res.status(403).json({
+            success: false,
+            error: 'Theory for this character is part of Pro. Your own main character is free.',
+            code: 'PREMIUM_REQUIRED'
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Tier validation error' });
+    }
+};
+
+export const premiumMiddleware = async(req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         // @ts-ignore
         const userId = req.user?.id;
