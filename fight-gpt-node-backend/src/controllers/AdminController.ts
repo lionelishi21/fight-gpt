@@ -22,6 +22,7 @@ import { ResearchLog } from '../models/ResearchLog';
 import { SystemSettings } from '../models/SystemSettings';
 import fs from 'fs';
 import path from 'path';
+import { subscriberSource, summarizeSubscribers } from '../helpers/subscriptions';
 
 export class AdminController extends BaseController {
     private readonly onboardingService: GameOnboardingService;
@@ -511,6 +512,35 @@ export class AdminController extends BaseController {
      * GET /api/admin/users
      * List all users with tier, role, slots, gamification
      */
+    /** GET /api/admin/subscribers — everyone on a paid tier, with plan details and totals */
+    getSubscribers = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const users = await User.find({ tier: { $in: ['PRO', 'COMPETITOR'] }, role: { $ne: 'admin' } })
+                .select('name email tier tierSource stripeSubscriptionId subscription createdAt')
+                .sort({ 'subscription.startedAt': -1, createdAt: -1 })
+                .lean();
+
+            const subscribers = (users as any[]).map((u) => ({
+                id: String(u._id),
+                name: u.name,
+                email: u.email,
+                tier: u.tier,
+                source: subscriberSource(u),
+                period: u.subscription?.period ?? null,
+                productId: u.subscription?.productId ?? null,
+                renewsAt: u.subscription?.renewsAt ?? null,
+                willRenew: u.subscription?.willRenew ?? null,
+                since: u.subscription?.startedAt ?? null,
+                sandbox: !!u.subscription?.sandbox,
+                joinedAt: u.createdAt,
+            }));
+
+            this.sendResponse(res, { success: true, data: { summary: summarizeSubscribers(users as any[]), subscribers } });
+        } catch (error) {
+            this.sendError(res, error instanceof Error ? error.message : 'Failed to fetch subscribers');
+        }
+    };
+
     getUsers = async (req: Request, res: Response): Promise<void> => {
         try {
             const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import UserGame from '../models/UserGame';
 import { Logger } from '../helpers/logger';
+import { subscriptionFromRevenueCat } from '../helpers/subscriptions';
 
 /** RevenueCat entitlement that unlocks paid features in the app. */
 export const PRO_ENTITLEMENT = 'metapunish_pro';
@@ -19,6 +20,9 @@ export interface RevenueCatEvent {
     transferred_from?: string[];
     transferred_to?: string[];
     environment?: 'SANDBOX' | 'PRODUCTION';
+    store?: string;
+    product_id?: string;
+    purchased_at_ms?: number | null;
 }
 
 export type TierChange = { userIds: string[]; grant: boolean };
@@ -64,10 +68,12 @@ export async function applyRevenueCatEvent(event: RevenueCatEvent): Promise<void
             if (grant) {
                 user.tier = ENTITLED_TIER;
                 user.tierSource = 'revenuecat';
+                user.subscription = subscriptionFromRevenueCat(event, user.subscription);
             } else if (user.tierSource === 'revenuecat') {
                 // Only take back what RevenueCat gave; leave web subscribers alone
                 user.tier = 'FREE';
                 user.tierSource = undefined;
+                user.subscription = undefined;
             } else {
                 continue;
             }

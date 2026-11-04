@@ -282,7 +282,7 @@ export class AuthController extends BaseController {
                 return;
             }
 
-            const { stripeCustomerId, stripeSubscriptionId, tier, email } = req.body;
+            const { stripeCustomerId, stripeSubscriptionId, tier, email, subscription } = req.body;
 
             if (!tier || (!stripeCustomerId && !email)) {
                 this.sendError(res, 'tier and (stripeCustomerId or email) are required', 400);
@@ -312,6 +312,22 @@ export class AuthController extends BaseController {
             user.tier = tier as IUser['tier'];
             if (stripeCustomerId) user.stripeCustomerId = stripeCustomerId;
             if (stripeSubscriptionId) user.stripeSubscriptionId = stripeSubscriptionId;
+            // Web checkout (PayPal) sends the plan details for the admin subscriber list
+            if (tier === 'FREE') {
+                user.subscription = undefined;
+            } else if (subscription && typeof subscription === 'object') {
+                const period = subscription.period === 'yearly' || subscription.period === 'monthly' ? subscription.period : undefined;
+                const renewsAt = subscription.renewsAt ? new Date(subscription.renewsAt) : undefined;
+                user.subscription = {
+                    source: subscription.source === 'stripe' ? 'stripe' : 'paypal',
+                    productId: typeof subscription.productId === 'string' ? subscription.productId : undefined,
+                    period,
+                    renewsAt: renewsAt && !isNaN(renewsAt.getTime()) ? renewsAt : undefined,
+                    willRenew: subscription.willRenew !== false,
+                    startedAt: user.subscription?.startedAt ?? new Date(),
+                    updatedAt: new Date(),
+                };
+            }
             await user.save();
 
             // Sync UserGame.planType so it stays consistent with user.tier

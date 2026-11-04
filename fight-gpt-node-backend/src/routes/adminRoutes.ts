@@ -33,6 +33,7 @@ export class AdminRoutes {
 
         // User Management
         this.router.get('/users', this.adminController.getUsers);
+        this.router.get('/subscribers', this.adminController.getSubscribers);
 
         // Game Management
         this.router.post('/games/onboard', this.adminController.onboardGame);  // one-call new game setup

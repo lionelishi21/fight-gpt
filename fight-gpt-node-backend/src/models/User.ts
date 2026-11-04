@@ -17,6 +17,20 @@ export interface ITeamMain {
     is_active: boolean;
 }
 
+export type SubscriptionSource = 'app_store' | 'play_store' | 'paypal' | 'stripe' | 'promotional' | 'other';
+
+export interface ISubscriptionInfo {
+    source?: SubscriptionSource;
+    productId?: string;
+    period?: 'monthly' | 'yearly';
+    renewsAt?: Date;
+    /** false once cancelled: still Pro until renewsAt, then it lapses */
+    willRenew?: boolean;
+    startedAt?: Date;
+    sandbox?: boolean;
+    updatedAt?: Date;
+}
+
 export interface IUser extends Document {
     name: string;
     email: string;
@@ -33,6 +47,8 @@ export interface IUser extends Document {
     tier: 'FREE' | 'COMPETITOR' | 'PRO';
     /** Set when the tier came from an in-app purchase, so only RevenueCat revokes it. */
     tierSource?: 'revenuecat';
+    /** The paid plan behind `tier`, for the admin subscriber list. Cleared when the tier drops to FREE. */
+    subscription?: ISubscriptionInfo;
     role: 'user' | 'admin';
     activeSlotIndex: number;
     slots: ISlot[];
@@ -91,6 +107,16 @@ const UserSchema: Schema = new Schema(
             default: 'FREE',
         },
         tierSource: { type: String, enum: ['revenuecat'] },
+        subscription: {
+            source: { type: String, enum: ['app_store', 'play_store', 'paypal', 'stripe', 'promotional', 'other'] },
+            productId: { type: String },
+            period: { type: String, enum: ['monthly', 'yearly'] },
+            renewsAt: { type: Date },
+            willRenew: { type: Boolean },
+            startedAt: { type: Date },
+            sandbox: { type: Boolean },
+            updatedAt: { type: Date },
+        },
         role: {
             type: String,
             enum: ['user', 'admin'],
