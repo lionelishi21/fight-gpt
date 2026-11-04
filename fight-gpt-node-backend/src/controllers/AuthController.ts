@@ -276,23 +276,27 @@ export class AuthController extends BaseController {
      */
     public updateTierFromStripe = async (req: Request, res: Response): Promise<void> => {
         try {
+            // Fail closed: without a configured secret nobody may change tiers through this route
             const secret = process.env.INTERNAL_WEBHOOK_SECRET;
-            if (secret && req.headers['x-internal-secret'] !== secret) {
+            if (!secret || req.headers['x-internal-secret'] !== secret) {
                 this.sendError(res, 'Unauthorized', 401);
                 return;
             }
 
-            const { stripeCustomerId, stripeSubscriptionId, tier, email, subscription } = req.body;
+            const { userId, stripeCustomerId, stripeSubscriptionId, tier, email, subscription } = req.body;
 
-            if (!tier || (!stripeCustomerId && !email)) {
-                this.sendError(res, 'tier and (stripeCustomerId or email) are required', 400);
+            if (!tier || (!userId && !stripeCustomerId && !email)) {
+                this.sendError(res, 'tier and (userId, stripeCustomerId or email) are required', 400);
                 return;
             }
 
-            // Find user by stripeCustomerId first, fall back to email
-            let user = stripeCustomerId
-                ? await User.findOne({ stripeCustomerId })
+            // Paddle checkout passes our user id; otherwise match the payment customer id, then email
+            let user = typeof userId === 'string' && /^[a-f0-9]{24}$/i.test(userId)
+                ? await User.findById(userId)
                 : null;
+            if (!user && stripeCustomerId) {
+                user = await User.findOne({ stripeCustomerId });
+            }
 
             if (!user && email) {
                 user = await User.findOne({ email });
@@ -319,7 +323,7 @@ export class AuthController extends BaseController {
                 const period = subscription.period === 'yearly' || subscription.period === 'monthly' ? subscription.period : undefined;
                 const renewsAt = subscription.renewsAt ? new Date(subscription.renewsAt) : undefined;
                 user.subscription = {
-                    source: subscription.source === 'stripe' ? 'stripe' : 'paypal',
+                    source: ['stripe', 'paddle'].includes(subscription.source) ? subscription.source : 'paypal',
                     productId: typeof subscription.productId === 'string' ? subscription.productId : undefined,
                     period,
                     renewsAt: renewsAt && !isNaN(renewsAt.getTime()) ? renewsAt : undefined,

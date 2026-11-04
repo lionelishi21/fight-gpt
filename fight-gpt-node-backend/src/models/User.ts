@@ -17,7 +17,7 @@ export interface ITeamMain {
     is_active: boolean;
 }
 
-export type SubscriptionSource = 'app_store' | 'play_store' | 'paypal' | 'stripe' | 'promotional' | 'other';
+export type SubscriptionSource = 'app_store' | 'play_store' | 'paddle' | 'paypal' | 'stripe' | 'promotional' | 'other';
 
 export interface ISubscriptionInfo {
     source?: SubscriptionSource;
@@ -108,7 +108,7 @@ const UserSchema: Schema = new Schema(
         },
         tierSource: { type: String, enum: ['revenuecat'] },
         subscription: {
-            source: { type: String, enum: ['app_store', 'play_store', 'paypal', 'stripe', 'promotional', 'other'] },
+            source: { type: String, enum: ['app_store', 'play_store', 'paddle', 'paypal', 'stripe', 'promotional', 'other'] },
             productId: { type: String },
             period: { type: String, enum: ['monthly', 'yearly'] },
             renewsAt: { type: Date },
