@@ -31,6 +31,13 @@ describe('subscriptionFromRevenueCat', () => {
         expect(s.startedAt).toEqual(first.startedAt);
     });
 
+    it('records website purchases made through Paddle, reading the plan from the billing length', () => {
+        const paddle = { ...purchase, store: 'PADDLE', product_id: 'pri_01m6ka520ch0skgmzakn0ywdrt' };
+        expect(subscriptionFromRevenueCat(paddle, null, now)).toMatchObject({ source: 'paddle', period: 'yearly' });
+        const monthly = { ...paddle, expiration_at_ms: Date.parse('2026-12-01') };
+        expect(subscriptionFromRevenueCat(monthly, null, now).period).toBe('monthly');
+    });
+
     it('flags sandbox purchases', () => {
         expect(subscriptionFromRevenueCat({ ...purchase, environment: 'SANDBOX' }, null, now).sandbox).toBe(true);
     });

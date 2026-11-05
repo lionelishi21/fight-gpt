@@ -11,12 +11,24 @@ export function periodFromProductId(productId?: string | null): 'monthly' | 'yea
     return undefined;
 }
 
+/**
+ * Paddle price ids (pri_…) say nothing about the period, so fall back to the length of the
+ * billing period the event covers: anything over ~2 months is the yearly plan.
+ */
+function periodFromBillingLength(event: { purchased_at_ms?: number | null; expiration_at_ms?: number | null }): 'monthly' | 'yearly' | undefined {
+    if (!event.purchased_at_ms || !event.expiration_at_ms) return undefined;
+    const days = (event.expiration_at_ms - event.purchased_at_ms) / 86_400_000;
+    if (days <= 0) return undefined;
+    return days > 60 ? 'yearly' : 'monthly';
+}
+
 const STORE_SOURCE: Record<string, SubscriptionSource> = {
     APP_STORE: 'app_store',
     MAC_APP_STORE: 'app_store',
     PLAY_STORE: 'play_store',
     STRIPE: 'stripe',
     RC_BILLING: 'stripe',
+    PADDLE: 'paddle',
     PROMOTIONAL: 'promotional',
 };
 
@@ -44,7 +56,7 @@ export function subscriptionFromRevenueCat(
     return {
         source: (event.store && STORE_SOURCE[event.store]) || previous?.source || 'other',
         productId,
-        period: periodFromProductId(productId) ?? previous?.period,
+        period: periodFromProductId(productId) ?? periodFromBillingLength(event) ?? previous?.period,
         renewsAt: event.expiration_at_ms ? new Date(event.expiration_at_ms) : previous?.renewsAt,
         willRenew,
         startedAt: previous?.startedAt
